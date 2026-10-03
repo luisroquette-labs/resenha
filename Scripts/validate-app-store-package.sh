@@ -11,6 +11,17 @@ fail() { print -u2 "FALHOU: $*"; exit 1; }
 pass() { print "PASS: $*"; }
 
 [[ -f "$metadata" ]] || fail "metadados ausentes"
+store_name="$(sed -n '1s/^# //p' "$metadata")"
+subtitle="$(awk '/^## Subtítulo$/{getline; getline; print; exit}' "$metadata")"
+promotional="$(awk '/^## Texto promocional$/{getline; getline; print; exit}' "$metadata")"
+keywords="$(awk '/^## Palavras-chave$/{getline; getline; print; exit}' "$metadata")"
+(( ${#store_name} <= 30 )) || fail "nome excede 30 caracteres"
+(( ${#subtitle} <= 30 )) || fail "subtítulo excede 30 caracteres"
+(( ${#promotional} <= 170 )) || fail "texto promocional excede 170 caracteres"
+(( ${#keywords} <= 100 )) || fail "palavras-chave excedem 100 caracteres"
+[[ "$keywords" != *" "* ]] || fail "palavras-chave contêm espaços desperdiçados"
+pass "limites de metadados da loja"
+
 [[ "$(find "$screenshots" -maxdepth 1 -name '*.png' | wc -l | tr -d ' ')" == 10 ]] || fail "esperadas 10 screenshots"
 for image in "$screenshots"/*.png; do
   [[ "$(sips -g pixelWidth "$image" 2>/dev/null | awk '/pixelWidth/{print $2}')" == 2880 ]] || fail "largura inválida: ${image:t}"

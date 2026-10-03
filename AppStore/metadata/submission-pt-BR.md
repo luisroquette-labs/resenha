@@ -3,6 +3,7 @@
 ## Identidade
 
 - Nome preferido: `Resenha — Ditado por Voz`
+- Busca pública brasileira em 2/10/2026: nenhum app macOS chamado `Resenha`; a reserva definitiva depende do App Store Connect
 - Bundle ID: `br.com.luisroquette.Resenha`
 - SKU: `resenha-macos-1`
 - Plataforma: macOS

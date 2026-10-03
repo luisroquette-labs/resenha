@@ -41,7 +41,7 @@ Resenha é simples de propósito: fale, solte, continue escrevendo.
 
 ## Palavras-chave
 
-ditado,voz,Whisper,transcrição,produtividade,português,local,privacidade
+texto,transcrição,Whisper,offline,português,atalho,microfone,produtividade,privacidade
 
 ## Categoria
 
