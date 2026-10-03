@@ -22,12 +22,19 @@ Data: 2 de outubro de 2026
 - Screenshots: 10/10 em 2880 × 1800, PNG, sem alpha
 - Credenciais: nenhuma chave privada ou prefixo conhecido nos ativos da loja
 
+## Exportação de distribuição
+
+Após a aceitação do acordo Apple, o Xcode exportou `Resenha.pkg` com sucesso:
+
+- SHA-256: `228fc7771f5838903f5e8cf17506922b962b6412d2c20d72d901c887f3ac9c5d`
+- App: `Cloud Managed Apple Distribution`
+- Installer: `3rd Party Mac Developer Installer`
+- Profile: `Mac Team Store Provisioning Profile: br.com.luisroquette.Resenha`
+- Assinatura e conteúdo do package: verificados pelo `pkgutil`
+
 ## Gate externo atual
 
-`xcodebuild -exportArchive` chegou à Apple e retornou três bloqueios ligados à conta:
-
-1. `PLA Update available` — o titular precisa aceitar o acordo atualizado da Apple.
-2. Certificado `Mac Installer Distribution` ausente.
-3. Provisioning profile de `br.com.luisroquette.Resenha` ausente.
-
-Depois do acordo, Xcode pode criar os dois itens de assinatura com a conta do titular. O archive deve então ser refeito, exportado, validado e enviado antes de vincular o build à versão.
+O upload autenticou no App Store Connect e recebeu HTTP 200, mas retornou
+`IDEDistribution.DistributionAppRecordProviderError.missingApp`. A consulta exata
+por `br.com.luisroquette.Resenha` encontrou zero registros. É necessário criar
+o app record no App Store Connect antes de repetir o mesmo upload.

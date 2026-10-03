@@ -10,5 +10,6 @@
 - [x] Validate Store metadata package, privacy manifest, encryption declaration and an arm64 Release archive.
 - [ ] Produce the final App Store preview video from real UI and approved cinematic plates.
 - [ ] Reserve Store identity and complete localized metadata/privacy questionnaires.
-- [ ] Archive, validate, upload and physically validate the processed build.
+- [x] Archive, export and validate the Apple Distribution package.
+- [ ] Create the App Store Connect record, upload and physically validate the processed build.
 - [ ] Obtain final submission authorization, submit, resolve review and publish.
