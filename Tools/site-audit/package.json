@@ -1,0 +1,11 @@
+{
+  "name": "resenha-local-site-audit",
+  "private": true,
+  "type": "module",
+  "description": "Isolated development-only browser, accessibility and lab performance verification",
+  "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
+    "lighthouse": "13.5.0",
+    "playwright": "1.63.0"
+  }
+}

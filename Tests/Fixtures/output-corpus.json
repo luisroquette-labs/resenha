@@ -1,0 +1,32 @@
+[
+  {
+    "id": "OQ-001",
+    "language": "pt",
+    "text": "Testando o Resenha no meu Mac.",
+    "criticalTerms": ["Resenha", "Mac"]
+  },
+  {
+    "id": "OQ-002",
+    "language": "pt",
+    "text": "Abra um pull request no GitHub, atualize o README, rode o benchmark do whisper.cpp e confira se o build do SwiftUI passou no macOS.",
+    "criticalTerms": ["pull request", "GitHub", "README", "benchmark", "whisper.cpp", "SwiftUI", "macOS"]
+  },
+  {
+    "id": "OQ-003",
+    "language": "pt",
+    "text": "Éric, avise ao Luís que a COESA, a MOVA e a CF Gauss participaram da reunião sobre inteligência artificial com o Carrefour, o Extra, o Pão de Açúcar e também com a Zara.",
+    "criticalTerms": ["Éric", "Luís", "COESA", "MOVA", "CF Gauss", "Carrefour", "Pão de Açúcar", "Zara"]
+  },
+  {
+    "id": "OQ-004",
+    "language": "pt",
+    "text": "A reunião foi para 23 de outubro às 9h45. O pagamento será de R$ 2.356,90, ok?",
+    "criticalTerms": ["23 de outubro", "9h45", "R$ 2.356,90"]
+  },
+  {
+    "id": "OQ-005",
+    "language": "pt",
+    "text": "O feedback do cliente foi positivo, mas precisamos revisar o onboarding, reduzir o loading time e entregar o novo dashboard antes do deadline.",
+    "criticalTerms": ["feedback", "onboarding", "loading time", "dashboard", "deadline"]
+  }
+]

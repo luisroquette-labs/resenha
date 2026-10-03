@@ -1,0 +1,49 @@
+name: WhisperKey
+options:
+  bundleIdPrefix: br.com.luisroquette
+  deploymentTarget:
+    macOS: "14.0"
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MACOSX_DEPLOYMENT_TARGET: "14.0"
+targets:
+  WhisperKey:
+    type: application
+    platform: macOS
+    sources: Sources/WhisperKey
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: br.com.luisroquette.WhisperKey
+        PRODUCT_NAME: Resenha
+        PRODUCT_MODULE_NAME: WhisperKey
+        DEVELOPMENT_TEAM: S3YCFYY8SC
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_IDENTITY: Apple Development
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: Config/WhisperKey-Info.plist
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ENABLE_HARDENED_RUNTIME: YES
+  WhisperKeyTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources: Tests/WhisperKeyTests
+    dependencies:
+      - target: WhisperKey
+    settings:
+      base:
+        DEVELOPMENT_TEAM: S3YCFYY8SC
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_IDENTITY: Apple Development
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Resenha.app/Contents/MacOS/Resenha"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+schemes:
+  WhisperKey:
+    build:
+      targets:
+        WhisperKey: all
+        WhisperKeyTests: [test]
+    test:
+      targets:
+        - WhisperKeyTests

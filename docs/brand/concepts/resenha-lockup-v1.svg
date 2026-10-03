@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="160" viewBox="0 0 640 160" role="img" aria-labelledby="title desc">
+  <title id="title">Resenha</title>
+  <desc id="desc">Símbolo abstrato de voz seguido do nome Resenha.</desc>
+  <g fill="none" stroke="#111111" stroke-width="9" stroke-linecap="round">
+    <path d="M28 52 C43 59 43 101 28 108"/>
+    <path d="M47 38 C72 53 72 107 47 122"/>
+    <path d="M118 52 C103 59 103 101 118 108"/>
+    <path d="M99 38 C74 53 74 107 99 122"/>
+  </g>
+  <rect x="68" y="57" width="10" height="46" rx="5" fill="#111111"/>
+  <text x="154" y="104" fill="#111111"
+        font-family="SF Pro Display, SF Pro Text, -apple-system, BlinkMacSystemFont, Helvetica Neue, Arial, sans-serif"
+        font-size="70" font-weight="650" letter-spacing="-2.5">Resenha</text>
+</svg>

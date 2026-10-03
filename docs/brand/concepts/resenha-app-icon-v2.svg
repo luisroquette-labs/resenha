@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">Resenha</title>
+  <desc id="desc">Icone grafite com duas vozes brancas ao redor de um pulso.</desc>
+  <rect x="64" y="64" width="896" height="896" rx="224" fill="#101114"/>
+  <g transform="translate(192 192) scale(4)" fill="none" stroke="#F7F6F2" stroke-linecap="round">
+    <path d="M50 35 C24 44 17 62 17 80 C17 98 24 116 50 125" stroke-width="10"/>
+    <path d="M68 49 C49 57 44 68 44 80 C44 92 49 103 68 111" stroke-width="11"/>
+    <path d="M110 35 C136 44 143 62 143 80 C143 98 136 116 110 125" stroke-width="10"/>
+    <path d="M92 49 C111 57 116 68 116 80 C116 92 111 103 92 111" stroke-width="11"/>
+  </g>
+  <g transform="translate(192 192) scale(4)" fill="#F7F6F2">
+    <rect x="75" y="44" width="10" height="72" rx="5"/>
+    <circle cx="80" cy="31" r="5"/>
+    <circle cx="80" cy="129" r="5"/>
+  </g>
+</svg>
