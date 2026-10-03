@@ -31,6 +31,10 @@ No AI rewrite, filler removal, history, login, billing, sync, analytics, cloud A
 
 After M0 passed physically, the owner authorized a local recovery buffer of the 10 latest successful transcripts. This supersedes only the M0 history non-goal. Audio remains ephemeral; there is no sync, account, backend or analytics. The app must expose history, copy and clear actions, and must place a completed transcript on the clipboard before attempting cross-app insertion.
 
+## Amendment 002 — Store distribution (2026-10-02)
+
+The owner authorized a free, public Mac App Store edition with full product-quality presentation. Distribution must not weaken the core privacy promise or silently ship a reduced workflow. The Store edition must use App Sandbox, embed every runtime dependency, work without Homebrew/Python/API keys and avoid Accessibility APIs. A sandbox-compatible macOS Service is the preferred insertion boundary: the calling editor receives the transcript through its service pasteboard. The existing direct build remains available until the Store path passes the same physical dictation acceptance test. App Store submission remains an explicit owner authorization gate after the exact binary, metadata, privacy answers, territories and release mode are shown.
+
 ## Definition of done
 
 M0 is done only when a locally launched `.app` completes `hotkey → recording → whisper.cpp → text → insertion` in another application, without network access or manual clipboard action.

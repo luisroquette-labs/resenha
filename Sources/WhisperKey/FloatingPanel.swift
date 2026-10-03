@@ -1,5 +1,7 @@
 import AppKit
+#if !STORE_DISTRIBUTION
 import ApplicationServices
+#endif
 import SwiftUI
 
 struct PanelDismissal {
@@ -159,6 +161,9 @@ final class FloatingPanelController: NSObject {
     }
 
     private func focusedWindowFrame(pid: pid_t?) -> CGRect? {
+#if STORE_DISTRIBUTION
+        nil
+#else
         guard let pid, AXIsProcessTrusted(), let primary = NSScreen.screens.first else { return nil }
         let app = AXUIElementCreateApplication(pid)
         var window: CFTypeRef?
@@ -178,6 +183,7 @@ final class FloatingPanelController: NSObject {
               origin.x.isFinite, origin.y.isFinite, dimensions.width.isFinite, dimensions.height.isFinite,
               dimensions.width > 0, dimensions.height > 0 else { return nil }
         return PanelPlacement.appKitFrame(fromAX: CGRect(origin: origin, size: dimensions), primaryFrame: primary.frame)
+#endif
     }
 
     @objc private func screensChanged() {

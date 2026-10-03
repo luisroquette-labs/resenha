@@ -4,8 +4,8 @@ import SwiftUI
 enum PermissionOnboardingPolicy {
     static let presentedKey = "resenha.permissionOnboarding.presented"
 
-    static func shouldPresent(snapshot: PermissionSnapshot, hasPresented: Bool) -> Bool {
-        !snapshot.isReady && !hasPresented
+    static func shouldPresent(snapshot: PermissionSnapshot, hasPresented: Bool, modelReady: Bool = true) -> Bool {
+        (!snapshot.isReady && !hasPresented) || !modelReady
     }
 }
 
@@ -41,6 +41,22 @@ private struct PermissionOnboardingView: View {
     let requestPermissions: () -> Void
     let openSettings: (RequiredPermission) -> Void
     let close: () -> Void
+    @ObservedObject private var modelManager = WhisperModelManager.shared
+
+    private var modelReady: Bool {
+        if case .ready = modelManager.state { return true }
+        return false
+    }
+
+    private var setupReady: Bool { snapshot.isReady && modelReady }
+
+    private var introText: String {
+#if STORE_DISTRIBUTION
+        "Duas permissões conectam o atalho e o microfone. O áudio nunca sai deste Mac."
+#else
+        "Três permissões conectam o atalho, o microfone e o cursor. O áudio nunca sai deste Mac."
+#endif
+    }
     var body: some View {
         ZStack {
             ResenhaBackdrop().ignoresSafeArea()
@@ -56,7 +72,7 @@ private struct PermissionOnboardingView: View {
                             .accessibilityHidden(true)
                         Text("Sua voz, em qualquer campo.")
                             .font(.system(size: 30, weight: .semibold, design: .serif))
-                        Text("Três permissões conectam o atalho, o microfone e o cursor. O áudio nunca sai deste Mac.")
+                        Text(introText)
                             .font(.body)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -76,16 +92,30 @@ private struct PermissionOnboardingView: View {
                     Divider()
                 }
 
+                HStack(spacing: 14) {
+                    Text("AI")
+                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(modelReady ? ResenhaTheme.success : ResenhaTheme.accent)
+                        .frame(width: 34, alignment: .leading)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Modelo de voz local").fontWeight(.semibold)
+                        Text(modelDescription).font(.callout).foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 12)
+                    modelAction
+                }
+                .padding(.horizontal, 4)
+
                 Spacer(minLength: 0)
 
                 HStack {
                     ResenhaStatusPill(
-                        title: snapshot.isReady ? "Pronto para usar" : "Configuração pendente",
-                        symbol: snapshot.isReady ? "checkmark.circle.fill" : "circle.dotted",
-                        active: snapshot.isReady
+                        title: setupReady ? "Pronto para usar" : "Configuração pendente",
+                        symbol: setupReady ? "checkmark.circle.fill" : "circle.dotted",
+                        active: setupReady
                     )
                     Spacer()
-                    Button(snapshot.isReady ? "Começar a usar" : "Agora não", action: close)
+                    Button(setupReady ? "Começar a usar" : "Agora não", action: close)
                     if !snapshot.isReady {
                         Button(isRequesting ? "Solicitando…" : "Ativar permissões", action: requestPermissions)
                             .buttonStyle(.borderedProminent)
@@ -96,8 +126,35 @@ private struct PermissionOnboardingView: View {
             }
             .padding(30)
         }
-        .frame(width: 680, height: 500)
+        .frame(width: 680, height: 570)
         .tint(ResenhaTheme.signal)
+    }
+
+    private var modelDescription: String {
+        switch modelManager.state {
+        case .missing: "Download único de 181 MB, verificado antes de instalar."
+        case .downloading(let progress): "Baixando… \(progress.formatted(.percent.precision(.fractionLength(0))))"
+        case .verifying: "Verificando a integridade do arquivo…"
+        case .ready: "Instalado, verificado e pronto para transcrever."
+        case .failed(let message): message
+        }
+    }
+
+    @ViewBuilder
+    private var modelAction: some View {
+        switch modelManager.state {
+        case .missing:
+            Button("Baixar") { modelManager.download() }
+        case .downloading(let progress):
+            ProgressView(value: progress).frame(width: 110)
+        case .verifying:
+            ProgressView().controlSize(.small)
+        case .ready:
+            Label("Pronto", systemImage: "checkmark.circle.fill")
+                .font(.callout.weight(.medium)).foregroundStyle(ResenhaTheme.success)
+        case .failed:
+            Button("Tentar novamente") { modelManager.retry() }
+        }
     }
 
     private func permissionRow(_ presentation: PermissionPresentation, index: Int) -> some View {
@@ -158,7 +215,7 @@ final class PermissionOnboardingController: NSObject, NSWindowDelegate {
 
     private func makeWindow() -> NSWindow {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 680, height: 500),
+            contentRect: NSRect(x: 0, y: 0, width: 680, height: 570),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false

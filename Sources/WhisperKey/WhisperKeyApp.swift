@@ -32,6 +32,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         openSettings: { [weak self] permission in self?.openSettings(for: permission) }
     )
     private lazy var settingsController = ProductSettingsWindowController(preferences: preferences)
+#if STORE_DISTRIBUTION
+    private lazy var serviceProvider = ResenhaServiceProvider()
+#endif
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         AudioRecorder.cleanupStaleRecordings()
@@ -56,9 +59,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             language: { [weak preferences] in preferences?.transcriptionLanguage ?? .portuguese },
             glossaryText: { [weak preferences] in preferences?.transcriptionGlossary ?? TranscriptionGlossary.defaultText },
             onRecordingLevel: { [weak self] level in self?.menuController.updateRecordingLevel(level) },
-            onTranscript: { [weak self] text in self?.recordTranscript(text) }
+            onTranscript: { [weak self] text in
+                self?.recordTranscript(text)
+#if STORE_DISTRIBUTION
+                self?.serviceProvider.complete(with: text)
+#endif
+            },
+            onFailure: { [weak self] error in
+#if STORE_DISTRIBUTION
+                self?.serviceProvider.fail(with: error.title)
+#endif
+            }
         ))
+#if STORE_DISTRIBUTION
+        serviceProvider.beginDictation = { [weak self] in
+            guard let self else { return }
+            self.hotkey.armServiceRelease()
+            self.handleHotkeyPress(targetIsSelf: false)
+        }
+        NSApp.servicesProvider = serviceProvider
+        NSUpdateDynamicServices()
+        hotkey.onPress = nil
+#else
         hotkey.onPress = { [weak self] in self?.handleHotkeyPress() }
+#endif
         hotkey.onRelease = { [weak self] in self?.handleHotkeyRelease() }
         configureMenuBar()
         menuController.updateLanguage(preferences.transcriptionLanguage)
@@ -104,7 +128,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard !interaction.isRequestingPermission else { return }
         interaction.isRequestingPermission = true
         updateStatusItem()
+#if !STORE_DISTRIBUTION
         permissions.requestAccessibility()
+#endif
         permissions.requestInputMonitoring()
         Task {
             defer {
@@ -113,6 +139,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
             await permissions.requestMicrophone()
             startHotkeyIfReady()
+            if let missing = permissions.snapshot.missingPermissions.first {
+                openSettings(for: missing)
+            }
         }
     }
 
@@ -266,9 +295,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func presentOnboardingIfNeeded() {
         let defaults = UserDefaults.standard
         let snapshot = permissions.snapshot
+        let modelReady: Bool
+        if case .ready = WhisperModelManager.shared.state { modelReady = true } else { modelReady = false }
         guard PermissionOnboardingPolicy.shouldPresent(
             snapshot: snapshot,
-            hasPresented: defaults.bool(forKey: PermissionOnboardingPolicy.presentedKey)
+            hasPresented: defaults.bool(forKey: PermissionOnboardingPolicy.presentedKey),
+            modelReady: modelReady
         ) else { return }
         defaults.set(true, forKey: PermissionOnboardingPolicy.presentedKey)
         onboardingController.show(snapshot: snapshot, isRequesting: interaction.isRequestingPermission)

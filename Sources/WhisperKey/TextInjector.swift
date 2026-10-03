@@ -1,5 +1,7 @@
 import AppKit
+#if !STORE_DISTRIBUTION
 import ApplicationServices
+#endif
 
 enum TextInjectionError: LocalizedError, Equatable {
     case emptyText
@@ -34,6 +36,9 @@ struct TextInjector {
     }
 
     func insertStaged(into target: NSRunningApplication?, changeCount: Int) async throws {
+#if STORE_DISTRIBUTION
+        throw TextInjectionError.eventCreationFailed
+#else
         guard let target, !target.isTerminated else { throw TextInjectionError.targetUnavailable }
 
         guard target.activate() else {
@@ -61,6 +66,7 @@ struct TextInjector {
         up.flags = .maskCommand
         down.post(tap: .cghidEventTap)
         up.post(tap: .cghidEventTap)
+#endif
     }
 }
 

@@ -2,10 +2,18 @@ import AppKit
 import ApplicationServices
 import AVFoundation
 
-enum RequiredPermission: CaseIterable, Hashable {
+enum RequiredPermission: Hashable {
     case microphone
     case accessibility
     case inputMonitoring
+
+    static var requiredCases: [RequiredPermission] {
+#if STORE_DISTRIBUTION
+        [.microphone, .inputMonitoring]
+#else
+        [.microphone, .accessibility, .inputMonitoring]
+#endif
+    }
 
     var name: String {
         switch self {
@@ -55,7 +63,7 @@ struct PermissionSnapshot: Equatable {
     var isReady: Bool { accessibility && microphone && inputMonitoring }
 
     var presentations: [PermissionPresentation] {
-        RequiredPermission.allCases.map { permission in
+        RequiredPermission.requiredCases.map { permission in
             let granted: Bool
             switch permission {
             case .microphone: granted = microphone
@@ -90,7 +98,13 @@ enum PermissionGate {
 }
 
 struct PermissionService {
-    var isAccessibilityGranted: Bool { AXIsProcessTrusted() }
+    var isAccessibilityGranted: Bool {
+#if STORE_DISTRIBUTION
+        true
+#else
+        AXIsProcessTrusted()
+#endif
+    }
     var isMicrophoneGranted: Bool { AVCaptureDevice.authorizationStatus(for: .audio) == .authorized }
     var isInputMonitoringGranted: Bool { CGPreflightListenEventAccess() }
 
@@ -111,8 +125,10 @@ struct PermissionService {
     }
 
     func requestAccessibility() {
+#if !STORE_DISTRIBUTION
         let key = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
         AXIsProcessTrustedWithOptions([key: true] as CFDictionary)
+#endif
     }
 
     func requestMicrophone() async {

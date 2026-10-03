@@ -152,22 +152,15 @@ final class WhisperKeyTests: XCTestCase {
 
     func testWhisperPathsPreferTurboButRespectExplicitEnvironmentModel() throws {
         let home = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        let bin = home.appendingPathComponent("bin")
         let models = home.appendingPathComponent("Library/Application Support/WhisperKey/Models")
-        try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: models, withIntermediateDirectories: true)
-        let executable = bin.appendingPathComponent("whisper-cli")
-        FileManager.default.createFile(atPath: executable.path, contents: Data())
-        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: executable.path)
         let turbo = models.appendingPathComponent("ggml-large-v3-turbo-q5_0.bin")
         let explicit = models.appendingPathComponent("custom.bin")
         FileManager.default.createFile(atPath: turbo.path, contents: Data())
         FileManager.default.createFile(atPath: explicit.path, contents: Data())
         defer { try? FileManager.default.removeItem(at: home) }
-        XCTAssertEqual(try WhisperPaths.resolve(environment: ["WHISPER_CLI_PATH": executable.path], home: home).model, turbo)
-        XCTAssertEqual(try WhisperPaths.resolve(environment: [
-            "WHISPER_CLI_PATH": executable.path, "WHISPER_MODEL_PATH": explicit.path
-        ], home: home).model, explicit)
+        XCTAssertEqual(try WhisperPaths.resolve(environment: [:], home: home).model, turbo)
+        XCTAssertEqual(try WhisperPaths.resolve(environment: ["WHISPER_MODEL_PATH": explicit.path], home: home).model, explicit)
     }
 
     @MainActor
@@ -886,8 +879,8 @@ final class WhisperKeyTests: XCTestCase {
     func testKnownErrorsMapToSafeCauseAndAllowedDiagnostics() {
         let cases: [(Error, String)] = [
             (AudioRecorderError.failedToStart, "Microfone indisponível"),
-            (WhisperError.executableMissing("/safe/whisper-cli"), "Whisper não encontrado"),
             (WhisperError.modelMissing("/safe/model.bin"), "Modelo Whisper não encontrado"),
+            (WhisperError.modelLoadFailed("/safe/model.bin"), "Falha ao abrir o modelo Whisper"),
             (WhisperError.timedOut, "Transcrição demorou demais"),
             (WhisperError.emptyTranscript, "Nenhuma fala detectada"),
             (TextInjectionError.clipboardUnavailable, "Falha ao guardar o texto"),
@@ -905,14 +898,40 @@ final class WhisperKeyTests: XCTestCase {
         XCTAssertFalse(String(describing: subprocess).contains("PRIVATE RAW STDERR"))
     }
 
-    func testWhisperProcessTimeoutPolicyHasAnExactBound() {
+    func testEmbeddedWhisperTranscribesOfficialFixtureWhenLocalModelIsAvailable() throws {
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        let model = home.appendingPathComponent(
+            "Library/Application Support/WhisperKey/Models/ggml-small-q5_1.bin"
+        )
+        guard FileManager.default.fileExists(atPath: model.path) else {
+            throw XCTSkip("Local Whisper model is not installed")
+        }
+
+        let repository = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let fixture = repository.appendingPathComponent("Vendor/whisper.cpp/samples/jfk.wav")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.path))
+
+        let transcript = try WhisperTranscriber().transcribe(
+            audioURL: fixture,
+            language: .english,
+            glossaryText: ""
+        ).lowercased()
+
+        XCTAssertTrue(transcript.contains("fellow americans"), transcript)
+        XCTAssertTrue(transcript.contains("country"), transcript)
+    }
+
+    func testWhisperRuntimePolicyHasAnExactBound() {
         let startedAt = Date(timeIntervalSinceReferenceDate: 100)
-        XCTAssertFalse(WhisperProcessPolicy.hasTimedOut(
+        XCTAssertFalse(WhisperRuntimePolicy.hasTimedOut(
             startedAt: startedAt,
             now: Date(timeIntervalSinceReferenceDate: 699.999),
             maximumRuntime: 600
         ))
-        XCTAssertTrue(WhisperProcessPolicy.hasTimedOut(
+        XCTAssertTrue(WhisperRuntimePolicy.hasTimedOut(
             startedAt: startedAt,
             now: Date(timeIntervalSinceReferenceDate: 700),
             maximumRuntime: 600
@@ -1061,17 +1080,13 @@ final class WhisperKeyTests: XCTestCase {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }
 
-        let executable = directory.appendingPathComponent("whisper-cli")
         let model = directory.appendingPathComponent("model.bin")
-        XCTAssertTrue(FileManager.default.createFile(atPath: executable.path, contents: Data()))
         XCTAssertTrue(FileManager.default.createFile(atPath: model.path, contents: Data()))
-        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: executable.path)
 
         let paths = try WhisperPaths.resolve(
-            environment: ["WHISPER_CLI_PATH": executable.path, "WHISPER_MODEL_PATH": model.path],
+            environment: ["WHISPER_MODEL_PATH": model.path],
             home: directory
         )
-        XCTAssertEqual(paths.executable, executable)
         XCTAssertEqual(paths.model, model)
     }
 }

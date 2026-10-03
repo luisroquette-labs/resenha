@@ -1,44 +1,44 @@
+import AVFoundation
 import Foundation
-import Darwin
+import whisper
 
 enum WhisperError: LocalizedError {
-    case executableMissing(String)
     case modelMissing(String)
     case failed(Int32, String)
     case timedOut
     case emptyTranscript
+    case invalidAudio
+    case modelLoadFailed(String)
 
     var errorDescription: String? {
         switch self {
-        case .executableMissing(let paths): "whisper-cli not found: \(paths)"
         case .modelMissing(let paths): "Whisper model not found: \(paths)"
         case .failed(let code, let detail): "Whisper failed (\(code)): \(detail)"
         case .timedOut: "Whisper exceeded the local transcription time limit."
         case .emptyTranscript: "No speech was detected."
+        case .invalidAudio: "The captured audio is not valid 16 kHz mono PCM."
+        case .modelLoadFailed(let path): "Whisper could not load the local model: \(path)"
         }
     }
 }
 
 struct WhisperPaths: Sendable {
-    let executable: URL
     let model: URL
+
+    static var modelDirectory: URL {
+        let applicationSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support")
+        return applicationSupport.appendingPathComponent("WhisperKey/Models", isDirectory: true)
+    }
 
     static func resolve(
         environment: [String: String] = ProcessInfo.processInfo.environment,
         home: URL = FileManager.default.homeDirectoryForCurrentUser
     ) throws -> WhisperPaths {
-        let executableCandidates = [
-            environment["WHISPER_CLI_PATH"],
-            "/opt/homebrew/bin/whisper-cli",
-            "/usr/local/bin/whisper-cli"
-        ].compactMap { $0 }.map(URL.init(fileURLWithPath:))
-        guard let executable = executableCandidates.first(where: {
-            FileManager.default.isExecutableFile(atPath: $0.path)
-        }) else {
-            throw WhisperError.executableMissing(executableCandidates.map(\.path).joined(separator: ", "))
-        }
-
-        let modelDirectory = home.appendingPathComponent("Library/Application Support/WhisperKey/Models")
+        let defaultHome = FileManager.default.homeDirectoryForCurrentUser
+        let modelDirectory = home == defaultHome
+            ? Self.modelDirectory
+            : home.appendingPathComponent("Library/Application Support/WhisperKey/Models")
         let modelCandidates = [
             environment["WHISPER_MODEL_PATH"].map(URL.init(fileURLWithPath:)),
             modelDirectory.appendingPathComponent("ggml-large-v3-turbo-q5_0.bin"),
@@ -47,13 +47,13 @@ struct WhisperPaths: Sendable {
         guard let model = modelCandidates.first(where: { FileManager.default.fileExists(atPath: $0.path) }) else {
             throw WhisperError.modelMissing(modelCandidates.map(\.path).joined(separator: ", "))
         }
-        return WhisperPaths(executable: executable, model: model)
+        return WhisperPaths(model: model)
     }
 }
 
 struct WhisperTranscriber: Sendable {
     static let maximumRuntime: TimeInterval = 10 * 60
-    private static let terminationGracePeriod: TimeInterval = 1
+    private static let engine = EmbeddedWhisperEngine()
 
     func transcribe(
         audioURL: URL,
@@ -62,87 +62,106 @@ struct WhisperTranscriber: Sendable {
     ) throws -> String {
         let paths = try WhisperPaths.resolve()
         let glossary = TranscriptionGlossary(text: glossaryText)
-        let outputPrefix = FileManager.default.temporaryDirectory
-            .appendingPathComponent("WhisperKey-\(UUID().uuidString)")
-        let outputURL = outputPrefix.appendingPathExtension("txt")
-        let diagnosticURL = outputPrefix.appendingPathExtension("log")
-        guard FileManager.default.createFile(
-            atPath: diagnosticURL.path,
-            contents: nil,
-            attributes: [.posixPermissions: 0o600]
-        ) else { throw CocoaError(.fileWriteUnknown) }
-        let diagnosticHandle = try FileHandle(forWritingTo: diagnosticURL)
-        defer {
-            try? diagnosticHandle.close()
-            try? FileManager.default.removeItem(at: outputURL)
-            try? FileManager.default.removeItem(at: diagnosticURL)
-        }
-
-        let process = Process()
-        process.executableURL = paths.executable
-        process.arguments = [
-            "-m", paths.model.path,
-            "-f", audioURL.path,
-            "-l", language.rawValue,
-            "-otxt",
-            "-of", outputPrefix.path,
-            "-np",
-            "-nt"
-        ]
-        if !glossary.prompt.isEmpty { process.arguments! += ["--prompt", glossary.prompt] }
-        process.standardInput = FileHandle.nullDevice
-        process.standardOutput = FileHandle.nullDevice
-        process.standardError = diagnosticHandle
-        try process.run()
-        let startedAt = Date()
-        while process.isRunning {
-            if Task.isCancelled {
-                stop(process)
-                throw CancellationError()
-            }
-            if WhisperProcessPolicy.hasTimedOut(
-                startedAt: startedAt,
-                now: Date(),
-                maximumRuntime: Self.maximumRuntime
-            ) {
-                stop(process)
-                throw WhisperError.timedOut
-            }
-            Thread.sleep(forTimeInterval: 0.05)
-        }
-
-        try diagnosticHandle.close()
-        let errorText = String(decoding: readPrefix(of: diagnosticURL, limit: 64 * 1_024), as: UTF8.self)
-        guard process.terminationStatus == 0 else {
-            throw WhisperError.failed(process.terminationStatus, errorText.trimmingCharacters(in: .whitespacesAndNewlines))
-        }
-        let raw = try String(contentsOf: outputURL, encoding: .utf8)
+        let samples = try Self.readSamples(from: audioURL)
+        let raw = try Self.engine.transcribe(
+            samples: samples,
+            model: paths.model,
+            language: language.rawValue,
+            prompt: glossary.prompt,
+            maximumRuntime: Self.maximumRuntime
+        )
         let transcript = TranscriptPostprocessor.process(raw, glossary: glossary)
         guard !transcript.isEmpty else { throw WhisperError.emptyTranscript }
         return transcript
     }
 
-    private func readPrefix(of url: URL, limit: Int) -> Data {
-        guard let handle = try? FileHandle(forReadingFrom: url) else { return Data() }
-        defer { try? handle.close() }
-        return (try? handle.read(upToCount: limit)) ?? Data()
-    }
-
-    private func stop(_ process: Process) {
-        guard process.isRunning else { return }
-        process.terminate()
-        let deadline = Date().addingTimeInterval(Self.terminationGracePeriod)
-        while process.isRunning, Date() < deadline {
-            Thread.sleep(forTimeInterval: 0.02)
-        }
-        if process.isRunning {
-            kill(process.processIdentifier, SIGKILL)
-        }
-        process.waitUntilExit()
+    private static func readSamples(from url: URL) throws -> [Float] {
+        let file = try AVAudioFile(forReading: url)
+        let format = file.processingFormat
+        guard format.sampleRate == 16_000, format.channelCount == 1,
+              let buffer = AVAudioPCMBuffer(
+                  pcmFormat: format,
+                  frameCapacity: AVAudioFrameCount(file.length)
+              ) else { throw WhisperError.invalidAudio }
+        try file.read(into: buffer)
+        guard let channel = buffer.floatChannelData?.pointee else { throw WhisperError.invalidAudio }
+        return Array(UnsafeBufferPointer(start: channel, count: Int(buffer.frameLength)))
     }
 }
 
-enum WhisperProcessPolicy {
+private final class EmbeddedWhisperEngine: @unchecked Sendable {
+    private let lock = NSLock()
+    private var context: OpaquePointer?
+    private var modelPath: String?
+
+    deinit {
+        if let context { whisper_free(context) }
+    }
+
+    func transcribe(
+        samples: [Float],
+        model: URL,
+        language: String,
+        prompt: String,
+        maximumRuntime: TimeInterval
+    ) throws -> String {
+        lock.lock()
+        defer { lock.unlock() }
+        if Task.isCancelled { throw CancellationError() }
+        let startedAt = Date()
+        let context = try loadContext(model: model)
+        var params = whisper_full_default_params(WHISPER_SAMPLING_BEAM_SEARCH)
+        params.n_threads = Int32(max(2, min(8, ProcessInfo.processInfo.activeProcessorCount - 2)))
+        params.translate = false
+        params.no_context = true
+        params.no_timestamps = true
+        params.print_special = false
+        params.print_progress = false
+        params.print_realtime = false
+        params.print_timestamps = false
+        params.suppress_blank = true
+        params.beam_search.beam_size = 5
+
+        let status = language.withCString { languagePointer in
+            prompt.withCString { promptPointer in
+                params.language = languagePointer
+                params.initial_prompt = prompt.isEmpty ? nil : promptPointer
+                return samples.withUnsafeBufferPointer { buffer in
+                    whisper_full(context, params, buffer.baseAddress, Int32(buffer.count))
+                }
+            }
+        }
+        if Task.isCancelled { throw CancellationError() }
+        guard !WhisperRuntimePolicy.hasTimedOut(
+            startedAt: startedAt,
+            now: Date(),
+            maximumRuntime: maximumRuntime
+        ) else { throw WhisperError.timedOut }
+        guard status == 0 else { throw WhisperError.failed(status, "embedded whisper.cpp inference failed") }
+
+        return (0..<whisper_full_n_segments(context)).compactMap { index in
+            whisper_full_get_segment_text(context, index).map(String.init(cString:))
+        }.joined()
+    }
+
+    private func loadContext(model: URL) throws -> OpaquePointer {
+        if let context, modelPath == model.path { return context }
+        if let context { whisper_free(context) }
+        var parameters = whisper_context_default_params()
+        parameters.use_gpu = true
+        parameters.flash_attn = true
+        guard let loaded = model.path.withCString({ whisper_init_from_file_with_params($0, parameters) }) else {
+            context = nil
+            modelPath = nil
+            throw WhisperError.modelLoadFailed(model.path)
+        }
+        context = loaded
+        modelPath = model.path
+        return loaded
+    }
+}
+
+enum WhisperRuntimePolicy {
     static func hasTimedOut(startedAt: Date, now: Date, maximumRuntime: TimeInterval) -> Bool {
         now.timeIntervalSince(startedAt) >= max(0, maximumRuntime)
     }

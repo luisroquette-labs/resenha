@@ -23,6 +23,7 @@ enum HotkeyShortcut: String, CaseIterable, Identifiable {
     case leftOption
     case controlSpace
     case optionSpace
+    case controlOptionSpace
     case commandShiftSpace
 
     var id: Self { self }
@@ -30,13 +31,14 @@ enum HotkeyShortcut: String, CaseIterable, Identifiable {
         switch self {
         case .rightOption: 61
         case .leftOption: 58
-        case .controlSpace, .optionSpace, .commandShiftSpace: 49
+        case .controlSpace, .optionSpace, .controlOptionSpace, .commandShiftSpace: 49
         }
     }
     var requiredFlags: CGEventFlags {
         switch self {
         case .rightOption, .leftOption, .optionSpace: .maskAlternate
         case .controlSpace: .maskControl
+        case .controlOptionSpace: [.maskControl, .maskAlternate]
         case .commandShiftSpace: [.maskCommand, .maskShift]
         }
     }
@@ -64,6 +66,7 @@ enum HotkeyShortcut: String, CaseIterable, Identifiable {
         case .leftOption: "Option esquerda"
         case .controlSpace: "Control + Espaço"
         case .optionSpace: "Option + Espaço"
+        case .controlOptionSpace: "Control + Option + Espaço"
         case .commandShiftSpace: "Command + Shift + Espaço"
         }
     }
@@ -131,7 +134,12 @@ final class ProductPreferences: ObservableObject {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-        shortcut = HotkeyShortcut(rawValue: defaults.string(forKey: Key.shortcut) ?? "") ?? .rightOption
+#if STORE_DISTRIBUTION
+        let defaultShortcut = HotkeyShortcut.controlOptionSpace
+#else
+        let defaultShortcut = HotkeyShortcut.rightOption
+#endif
+        shortcut = HotkeyShortcut(rawValue: defaults.string(forKey: Key.shortcut) ?? "") ?? defaultShortcut
         showsHUD = defaults.object(forKey: Key.showsHUD) as? Bool ?? true
         soundsEnabled = defaults.object(forKey: Key.soundsEnabled) as? Bool ?? true
         keepsHistory = defaults.object(forKey: Key.keepsHistory) as? Bool ?? true
@@ -355,9 +363,7 @@ private struct SoundLibrarySettingsPane: View {
 
 private struct TranscriptionSettingsPane: View {
     @ObservedObject var preferences: ProductPreferences
-    private var modelName: String {
-        (try? WhisperPaths.resolve().model.deletingPathExtension().lastPathComponent) ?? "Não encontrado"
-    }
+    @ObservedObject private var modelManager = WhisperModelManager.shared
 
     var body: some View {
         ScrollView {
@@ -379,7 +385,7 @@ private struct TranscriptionSettingsPane: View {
                     .font(.callout).foregroundStyle(.secondary)
                 }
                 ResenhaRuleSection("Modelo local") {
-                LabeledContent("Modelo local", value: modelName)
+                    modelStatus
                 }
                 ResenhaRuleSection("Vocabulário pessoal") {
                 TextEditor(text: $preferences.transcriptionGlossary)
@@ -394,6 +400,45 @@ private struct TranscriptionSettingsPane: View {
                     preferences.transcriptionGlossary = TranscriptionGlossary.defaultText
                 }
                 }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var modelStatus: some View {
+        switch modelManager.state {
+        case .missing:
+            VStack(alignment: .leading, spacing: 10) {
+                LabeledContent("Modelo", value: "Ainda não instalado")
+                Text("Download único de 181 MB. O modelo fica neste Mac e a voz nunca é enviada.")
+                    .font(.callout).foregroundStyle(.secondary)
+                Button("Baixar modelo local") { modelManager.download() }
+                    .buttonStyle(.borderedProminent)
+            }
+        case .downloading(let progress):
+            VStack(alignment: .leading, spacing: 8) {
+                LabeledContent("Baixando", value: progress.formatted(.percent.precision(.fractionLength(0))))
+                ProgressView(value: progress)
+                Text("Pode continuar usando o Mac. O download será verificado antes da instalação.")
+                    .font(.callout).foregroundStyle(.secondary)
+            }
+        case .verifying:
+            VStack(alignment: .leading, spacing: 8) {
+                LabeledContent("Modelo", value: "Verificando integridade…")
+                ProgressView()
+            }
+        case .ready:
+            VStack(alignment: .leading, spacing: 8) {
+                LabeledContent("Modelo", value: modelManager.model.displayName)
+                Label("Instalado e verificado", systemImage: "checkmark.seal.fill")
+                    .font(.callout.weight(.medium)).foregroundStyle(ResenhaTheme.success)
+            }
+        case .failed(let message):
+            VStack(alignment: .leading, spacing: 10) {
+                Label("Download interrompido", systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(ResenhaTheme.warning)
+                Text(message).font(.callout).foregroundStyle(.secondary)
+                Button("Tentar novamente") { modelManager.retry() }
             }
         }
     }
@@ -475,6 +520,24 @@ private struct ShortcutSettingsPane: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
             ResenhaPageHeader(eyebrow: "Push to talk", title: "Atalho", subtitle: "Uma combinação global, disponível em qualquer aplicativo.")
+#if STORE_DISTRIBUTION
+                ResenhaRuleSection("Pressione e segure para falar") {
+                    LabeledContent("Atalho recomendado", value: "Control + Option + Espaço")
+                    Text("O macOS controla atalhos de Serviços. Você pode trocar a combinação sem conceder acesso de Acessibilidade ao Resenha.")
+                        .font(.callout).foregroundStyle(.secondary)
+                    Button("Personalizar nos Ajustes do Sistema") {
+                        if let url = URL(string: "x-apple.systempreferences:com.apple.Keyboard-Settings.extension") {
+                            NSWorkspace.shared.open(url)
+                        }
+                    }
+                }
+                Spacer(minLength: 24)
+                HStack(spacing: 14) {
+                    Image(systemName: "keyboard.fill").font(.system(size: 28)).foregroundStyle(ResenhaTheme.accent)
+                    Text("Control + Option + Espaço")
+                        .font(.system(size: 26, weight: .medium, design: .serif))
+                }
+#else
                 ResenhaRuleSection("Pressione e segure para falar") {
                     HStack {
                         Text("Atalho global")
@@ -496,6 +559,7 @@ private struct ShortcutSettingsPane: View {
                     Text(preferences.shortcut.displayName)
                         .font(.system(size: 26, weight: .medium, design: .serif))
                 }
+#endif
             }
         }
     }
