@@ -4,21 +4,15 @@ import AVFoundation
 
 enum RequiredPermission: Hashable {
     case microphone
-    case accessibility
     case inputMonitoring
 
     static var requiredCases: [RequiredPermission] {
-#if STORE_DISTRIBUTION
         [.microphone, .inputMonitoring]
-#else
-        [.microphone, .accessibility, .inputMonitoring]
-#endif
     }
 
     var name: String {
         switch self {
         case .microphone: "Microfone"
-        case .accessibility: "Acessibilidade"
         case .inputMonitoring: "Monitoramento de Entrada"
         }
     }
@@ -26,7 +20,6 @@ enum RequiredPermission: Hashable {
     var purpose: String {
         switch self {
         case .microphone: "Necessário para capturar sua voz."
-        case .accessibility: "Necessário para inserir texto no aplicativo original."
         case .inputMonitoring: "Necessário para detectar o atalho em outros aplicativos."
         }
     }
@@ -41,7 +34,6 @@ enum RequiredPermission: Hashable {
         let pane: String
         switch self {
         case .microphone: pane = "Privacy_Microphone"
-        case .accessibility: pane = "Privacy_Accessibility"
         case .inputMonitoring: pane = "Privacy_ListenEvent"
         }
         return URL(string: "x-apple.systempreferences:com.apple.preference.security?\(pane)")!
@@ -56,18 +48,16 @@ struct PermissionPresentation: Equatable {
 }
 
 struct PermissionSnapshot: Equatable {
-    let accessibility: Bool
     let microphone: Bool
     let inputMonitoring: Bool
 
-    var isReady: Bool { accessibility && microphone && inputMonitoring }
+    var isReady: Bool { microphone && inputMonitoring }
 
     var presentations: [PermissionPresentation] {
         RequiredPermission.requiredCases.map { permission in
             let granted: Bool
             switch permission {
             case .microphone: granted = microphone
-            case .accessibility: granted = accessibility
             case .inputMonitoring: granted = inputMonitoring
             }
             return PermissionPresentation(permission: permission, isGranted: granted)
@@ -79,7 +69,6 @@ struct PermissionSnapshot: Equatable {
     }
 
     var missingPermissionMessage: String {
-        if !accessibility { return "Acesso à Acessibilidade necessário" }
         if !microphone { return "Acesso ao Microfone necessário" }
         if !inputMonitoring { return "Acesso ao Monitoramento de Entrada necessário" }
         return "Permissões prontas"
@@ -88,29 +77,20 @@ struct PermissionSnapshot: Equatable {
 
 enum PermissionGate {
     static func shouldStartHotkey(
-        accessibility: Bool,
         microphone: Bool,
         inputMonitoring: Bool,
         hotkeyRunning: Bool
     ) -> Bool {
-        accessibility && microphone && inputMonitoring && !hotkeyRunning
+        microphone && inputMonitoring && !hotkeyRunning
     }
 }
 
 struct PermissionService {
-    var isAccessibilityGranted: Bool {
-#if STORE_DISTRIBUTION
-        true
-#else
-        AXIsProcessTrusted()
-#endif
-    }
     var isMicrophoneGranted: Bool { AVCaptureDevice.authorizationStatus(for: .audio) == .authorized }
     var isInputMonitoringGranted: Bool { CGPreflightListenEventAccess() }
 
     var snapshot: PermissionSnapshot {
         PermissionSnapshot(
-            accessibility: isAccessibilityGranted,
             microphone: isMicrophoneGranted,
             inputMonitoring: isInputMonitoringGranted
         )
@@ -122,13 +102,6 @@ struct PermissionService {
     @discardableResult
     func openSettings(for permission: RequiredPermission) -> Bool {
         NSWorkspace.shared.open(permission.settingsDestination)
-    }
-
-    func requestAccessibility() {
-#if !STORE_DISTRIBUTION
-        let key = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
-        AXIsProcessTrustedWithOptions([key: true] as CFDictionary)
-#endif
     }
 
     func requestMicrophone() async {

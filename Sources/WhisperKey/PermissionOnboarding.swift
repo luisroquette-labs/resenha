@@ -13,7 +13,6 @@ private extension RequiredPermission {
     var onboardingTitle: String {
         switch self {
         case .microphone: "Microfone"
-        case .accessibility: "Acessibilidade"
         case .inputMonitoring: "Monitoramento de Entrada"
         }
     }
@@ -21,7 +20,6 @@ private extension RequiredPermission {
     var onboardingPurpose: String {
         switch self {
         case .microphone: "Captura sua voz enquanto a tecla estiver pressionada."
-        case .accessibility: "Insere a transcrição no campo em que você estava escrevendo."
         case .inputMonitoring: "Detecta o atalho escolhido mesmo em outros aplicativos."
         }
     }
@@ -29,7 +27,6 @@ private extension RequiredPermission {
     var onboardingIcon: String {
         switch self {
         case .microphone: "mic.fill"
-        case .accessibility: "text.cursor"
         case .inputMonitoring: "keyboard"
         }
     }
@@ -51,11 +48,7 @@ private struct PermissionOnboardingView: View {
     private var setupReady: Bool { snapshot.isReady && modelReady }
 
     private var introText: String {
-#if STORE_DISTRIBUTION
         "Duas permissões conectam o atalho e o microfone. O áudio nunca sai deste Mac."
-#else
-        "Três permissões conectam o atalho, o microfone e o cursor. O áudio nunca sai deste Mac."
-#endif
     }
     var body: some View {
         ZStack {
@@ -186,7 +179,7 @@ private struct PermissionOnboardingView: View {
 @MainActor
 final class PermissionOnboardingController: NSObject, NSWindowDelegate {
     private(set) var window: NSWindow?
-    private var snapshot = PermissionSnapshot(accessibility: false, microphone: false, inputMonitoring: false)
+    private var snapshot = PermissionSnapshot(microphone: false, inputMonitoring: false)
     private var isRequesting = false
     private let requestPermissions: () -> Void
     private let openSettings: (RequiredPermission) -> Void

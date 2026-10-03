@@ -57,12 +57,6 @@ struct DictationErrorPresentation: Equatable {
             self.init(title: "Áudio inválido", diagnostic: nil, recovery: "Confira o microfone e tente novamente.")
         case TextInjectionError.clipboardUnavailable:
             self.init(title: "Falha ao guardar o texto", diagnostic: nil, recovery: "Confira o clipboard e tente novamente.")
-        case TextInjectionError.clipboardChanged:
-            self.init(title: "Clipboard alterado durante o ditado", diagnostic: nil, recovery: "Copie o texto em Textos recentes no menu do Resenha.")
-        case TextInjectionError.targetUnavailable:
-            self.init(title: "Aplicativo original indisponível", diagnostic: nil, recovery: "O texto está no clipboard e em Textos recentes.")
-        case TextInjectionError.eventCreationFailed:
-            self.init(title: "Falha ao inserir texto", diagnostic: nil, recovery: "O texto está no clipboard. Confira a Acessibilidade e cole manualmente.")
         case is AudioRecorderError:
             self.init(title: "Microfone indisponível", diagnostic: nil, recovery: "Confira o acesso e a disponibilidade do microfone.")
         default:
@@ -151,7 +145,6 @@ final class DictationCoordinator {
             transition(to: .transcribing)
             if soundsEnabled() { cuePlayer.play(.stopped) }
             if showsHUD() { panel.show(.transcribing, target: panelTarget) }
-            let target = targetApplication
             let attemptID = attemptID
             let sessionLanguage = sessionLanguage
             let glossaryText = glossaryText()
@@ -173,19 +166,12 @@ final class DictationCoordinator {
                     }
                     try Task.checkCancellation()
                     guard self.attemptID == attemptID else { return }
-                    let clipboardChangeCount = try self.injector.stage(transcript)
+                    _ = try self.injector.stage(transcript)
                     self.onTranscript(transcript)
                     self.transition(to: .inserting)
                     if self.showsHUD() { self.panel.show(.inserting, target: self.panelTarget) }
-#if STORE_DISTRIBUTION
                     self.transition(to: .idle)
                     self.reset()
-#else
-                    try await self.injector.insertStaged(into: target, changeCount: clipboardChangeCount)
-                    guard self.attemptID == attemptID else { return }
-                    self.transition(to: .idle)
-                    self.reset()
-#endif
                 } catch is CancellationError {
                     guard self.attemptID == attemptID else { return }
                     self.reset()

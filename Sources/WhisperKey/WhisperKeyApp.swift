@@ -32,9 +32,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         openSettings: { [weak self] permission in self?.openSettings(for: permission) }
     )
     private lazy var settingsController = ProductSettingsWindowController(preferences: preferences)
-#if STORE_DISTRIBUTION
     private lazy var serviceProvider = ResenhaServiceProvider()
-#endif
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         AudioRecorder.cleanupStaleRecordings()
@@ -61,17 +59,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             onRecordingLevel: { [weak self] level in self?.menuController.updateRecordingLevel(level) },
             onTranscript: { [weak self] text in
                 self?.recordTranscript(text)
-#if STORE_DISTRIBUTION
                 self?.serviceProvider.complete(with: text)
-#endif
             },
             onFailure: { [weak self] error in
-#if STORE_DISTRIBUTION
                 self?.serviceProvider.fail(with: error.title)
-#endif
             }
         ))
-#if STORE_DISTRIBUTION
         serviceProvider.beginDictation = { [weak self] in
             guard let self else { return }
             self.hotkey.armServiceRelease()
@@ -80,9 +73,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         NSApp.servicesProvider = serviceProvider
         NSUpdateDynamicServices()
         hotkey.onPress = nil
-#else
-        hotkey.onPress = { [weak self] in self?.handleHotkeyPress() }
-#endif
         hotkey.onRelease = { [weak self] in self?.handleHotkeyRelease() }
         configureMenuBar()
         menuController.updateLanguage(preferences.transcriptionLanguage)
@@ -128,9 +118,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard !interaction.isRequestingPermission else { return }
         interaction.isRequestingPermission = true
         updateStatusItem()
-#if !STORE_DISTRIBUTION
-        permissions.requestAccessibility()
-#endif
         permissions.requestInputMonitoring()
         Task {
             defer {

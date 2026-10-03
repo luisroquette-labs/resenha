@@ -9,58 +9,31 @@
 /* Begin PBXBuildFile section */
 		041CC4F567E9E6084F9847FF /* libc++.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = CC53403AB4A2D89C204327D2 /* libc++.tbd */; };
 		05000D0D3D17971B45BD1891 /* TranscriptHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3739A1A43D300FD95FA56BD /* TranscriptHistory.swift */; };
-		0B2F5CC8A4F4275A23AB64E9 /* TextInjector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 733DACDEB4AB93D5CF9C3903 /* TextInjector.swift */; };
-		10D5248EB4DBC60B95C63B40 /* WhisperModelManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D146404C7236681875DFD04 /* WhisperModelManager.swift */; };
-		11B5BE4877E6F6656DDC0EE2 /* HotkeyMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 134C1BDCDE10F8CF85B7E4CF /* HotkeyMonitor.swift */; };
 		13ECA0D0496E5378424EB59E /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 657BE28A9445C25311C92C86 /* Metal.framework */; };
-		154351B1086B614E56590A09 /* ResenhaDesign.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD98C7E641E041C3A2E5E855 /* ResenhaDesign.swift */; };
 		1B1C1E5EE7067B35DC5C3404 /* PermissionOnboarding.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D1F830A2CA5F7BBF9179783 /* PermissionOnboarding.swift */; };
-		1CF41069DA1F3CAE06A0661E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 00EE951794E83B89436ADF66 /* Assets.xcassets */; };
-		1F67D08AF1914A54876DB155 /* FloatingStatusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06A6C0A3CA2A532832FE5EA2 /* FloatingStatusView.swift */; };
 		215BEFC1AEC743FF631DB269 /* HotkeyMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 134C1BDCDE10F8CF85B7E4CF /* HotkeyMonitor.swift */; };
 		21BFEB851E15B4030C254977 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 00EE951794E83B89436ADF66 /* Assets.xcassets */; };
 		23B9446876E4BE5B1AFE5873 /* DictationInteraction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 360ACBBE554E2869FCDC8B7E /* DictationInteraction.swift */; };
-		2FA99FF3A08DEA560BF5A960 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3ED7E4E0EECD606D580A89C0 /* main.swift */; };
 		4606CD9D92C6ACAA3C397C20 /* SoundLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75D558D773F2BC3AB3159027 /* SoundLibrary.swift */; };
 		4D275811B61D4D4E11E8E920 /* FloatingStatusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06A6C0A3CA2A532832FE5EA2 /* FloatingStatusView.swift */; };
-		4D8E02E2F6201F65A13FB254 /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 657BE28A9445C25311C92C86 /* Metal.framework */; };
 		51525402AD13FA5CA9902099 /* PermissionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 455B40E8E0EA98B11A9E7FF5 /* PermissionService.swift */; };
-		57FC76D17D92EA5B7A4D3872 /* SoundLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75D558D773F2BC3AB3159027 /* SoundLibrary.swift */; };
 		591DD42A9F96EBA7F0FDDC8E /* PanelPlacement.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6D551801267264DB250896E /* PanelPlacement.swift */; };
 		5C704B1BDF72D42759556414 /* ProductPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD3A8F8F80E9569C5B9B6616 /* ProductPreferences.swift */; };
 		6623A7ED527515535110CC64 /* RecordingWaveformView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4A8FD7C33E4604E0E2BE7C1 /* RecordingWaveformView.swift */; };
 		689D5145FF1FCF328F843A75 /* NativeMenuController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 523F074FCFE5942E2581895F /* NativeMenuController.swift */; };
-		6A8724FDFFF366EA5B22AC15 /* RecordingWaveformView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4A8FD7C33E4604E0E2BE7C1 /* RecordingWaveformView.swift */; };
-		6FF66590AAB5B26441C71D39 /* NativeMenuController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 523F074FCFE5942E2581895F /* NativeMenuController.swift */; };
 		726C0EFD16B67C19F84BC57B /* TextInjector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 733DACDEB4AB93D5CF9C3903 /* TextInjector.swift */; };
+		73B3AA17549C4AF0E03C6F25 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = B63B342300F9037E5752DC51 /* PrivacyInfo.xcprivacy */; };
 		7A195F12859C4F1568C35E16 /* ResenhaServiceProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C21778039C6CF048E46A91A /* ResenhaServiceProvider.swift */; };
-		85D03FB05E18F624931BF634 /* whisper.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4FA43D69884F75983C03D5CD /* whisper.xcframework */; };
 		86DFF8F34B535D75107AB91C /* AudioRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA553ED088000409A1534B10 /* AudioRecorder.swift */; };
 		8A12E0347CA26301459DABDD /* MenuPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E88ECFDFC9BE5A2B95ED500 /* MenuPresentation.swift */; };
-		8C5F4A74D5A139126D23B922 /* TranscriptHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3739A1A43D300FD95FA56BD /* TranscriptHistory.swift */; };
-		8ECD12DC8A9688DE978AA481 /* ProductPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD3A8F8F80E9569C5B9B6616 /* ProductPreferences.swift */; };
 		A43F5E47CFC6FC2CDEC601A4 /* DictationCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E0F01DAE4C30ED2DC6B9DBC /* DictationCoordinator.swift */; };
-		AA84DFB47E8304950AF4BFAD /* libc++.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = CC53403AB4A2D89C204327D2 /* libc++.tbd */; };
 		B35865AFF46A73E125E89E8F /* WhisperKeyApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FFCCC5A27F52BFFEE1004E2 /* WhisperKeyApp.swift */; };
-		B6F45A1660DEA722AC1037F9 /* PermissionOnboarding.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D1F830A2CA5F7BBF9179783 /* PermissionOnboarding.swift */; };
-		BA3A310337F722648669168F /* WhisperKeyApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FFCCC5A27F52BFFEE1004E2 /* WhisperKeyApp.swift */; };
-		C080B25B55357E408CEAACD1 /* Accelerate.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 08C6D6EE682FF41296ABF618 /* Accelerate.framework */; };
-		C3E5A8F47EEB887F1F561F55 /* ResenhaServiceProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C21778039C6CF048E46A91A /* ResenhaServiceProvider.swift */; };
-		C44769BEA50BC49DEA31A0DB /* PanelPlacement.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6D551801267264DB250896E /* PanelPlacement.swift */; };
-		C467D823EE2B686DA5E77311 /* WhisperTranscriber.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAC1740D72EC6212C4303041 /* WhisperTranscriber.swift */; };
 		C4A5F5D768D1319B58EE2118 /* ResenhaDesign.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD98C7E641E041C3A2E5E855 /* ResenhaDesign.swift */; };
-		C63CAAE26C9787602285FC4C /* PermissionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 455B40E8E0EA98B11A9E7FF5 /* PermissionService.swift */; };
-		C9751D7587C019328DA69F12 /* DictationCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E0F01DAE4C30ED2DC6B9DBC /* DictationCoordinator.swift */; };
-		CD08C9D5026A38C07F930F00 /* DictationInteraction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 360ACBBE554E2869FCDC8B7E /* DictationInteraction.swift */; };
-		D30F0255A5CAF20BB06CEB3A /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = B63B342300F9037E5752DC51 /* PrivacyInfo.xcprivacy */; };
 		D7739963D1B010F882D8BCA0 /* WhisperTranscriber.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAC1740D72EC6212C4303041 /* WhisperTranscriber.swift */; };
 		D853F8CE772EBAB3FED1F4F7 /* FloatingPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F90F5A838310B1F6007F64FE /* FloatingPanel.swift */; };
 		E3A0DFBB2A6D4E1421C9581A /* whisper.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4FA43D69884F75983C03D5CD /* whisper.xcframework */; };
 		E840D16CE29F012BFD264C1D /* Accelerate.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 08C6D6EE682FF41296ABF618 /* Accelerate.framework */; };
 		ED3412FBD5A2E25998D1A1AE /* WhisperModelManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D146404C7236681875DFD04 /* WhisperModelManager.swift */; };
-		EF796FFE3C99B2F96B10FB65 /* AudioRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA553ED088000409A1534B10 /* AudioRecorder.swift */; };
-		EFC842F9B9A5C444284320CB /* FloatingPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F90F5A838310B1F6007F64FE /* FloatingPanel.swift */; };
-		F0B1565440E94FC619F2352B /* MenuPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E88ECFDFC9BE5A2B95ED500 /* MenuPresentation.swift */; };
 		F95D54A8DF1F718AD734EAE3 /* WhisperKeyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC280A6E884D7AF1EBD71925 /* WhisperKeyTests.swift */; };
 /* End PBXBuildFile section */
 
@@ -81,9 +54,7 @@
 		134C1BDCDE10F8CF85B7E4CF /* HotkeyMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyMonitor.swift; sourceTree = "<group>"; };
 		1E88ECFDFC9BE5A2B95ED500 /* MenuPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuPresentation.swift; sourceTree = "<group>"; };
 		360ACBBE554E2869FCDC8B7E /* DictationInteraction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationInteraction.swift; sourceTree = "<group>"; };
-		3ED7E4E0EECD606D580A89C0 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		455B40E8E0EA98B11A9E7FF5 /* PermissionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionService.swift; sourceTree = "<group>"; };
-		476C840EDABE22600303EB7B /* ResenhaServiceProbe.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ResenhaServiceProbe.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		4D1F830A2CA5F7BBF9179783 /* PermissionOnboarding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionOnboarding.swift; sourceTree = "<group>"; };
 		4FA43D69884F75983C03D5CD /* whisper.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = whisper.xcframework; path = Frameworks/whisper.xcframework; sourceTree = "<group>"; };
 		523F074FCFE5942E2581895F /* NativeMenuController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeMenuController.swift; sourceTree = "<group>"; };
@@ -95,7 +66,6 @@
 		733DACDEB4AB93D5CF9C3903 /* TextInjector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextInjector.swift; sourceTree = "<group>"; };
 		75D558D773F2BC3AB3159027 /* SoundLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoundLibrary.swift; sourceTree = "<group>"; };
 		82C866CD9730D225ABB0F72B /* WhisperKeyTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = WhisperKeyTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		949A2838FCCDE943B17DCF88 /* ResenhaStore.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ResenhaStore.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A7127B7D90D717FFC9B8794D /* WhisperKey.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = WhisperKey.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA553ED088000409A1534B10 /* AudioRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioRecorder.swift; sourceTree = "<group>"; };
 		AAC1740D72EC6212C4303041 /* WhisperTranscriber.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhisperTranscriber.swift; sourceTree = "<group>"; };
@@ -122,34 +92,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		9D1DA5679F4377D5D4D37814 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				85D03FB05E18F624931BF634 /* whisper.xcframework in Frameworks */,
-				C080B25B55357E408CEAACD1 /* Accelerate.framework in Frameworks */,
-				4D8E02E2F6201F65A13FB254 /* Metal.framework in Frameworks */,
-				AA84DFB47E8304950AF4BFAD /* libc++.tbd in Frameworks */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		0AAC23C3B5B2D059604B5B1E /* StoreServiceProbe */ = {
-			isa = PBXGroup;
-			children = (
-				3ED7E4E0EECD606D580A89C0 /* main.swift */,
-			);
-			name = StoreServiceProbe;
-			path = Tools/StoreServiceProbe;
-			sourceTree = "<group>";
-		};
 		4A27B5C9BFB14B477A59865D = {
 			isa = PBXGroup;
 			children = (
 				E997ABCD3F17473CF7C7AE6B /* Config */,
-				0AAC23C3B5B2D059604B5B1E /* StoreServiceProbe */,
 				EE8A65A769C7C55A687549E3 /* WhisperKey */,
 				8A9681C9A56F1D758D1A5E09 /* WhisperKeyTests */,
 				EAFE19FE782D0432CC9A790B /* Frameworks */,
@@ -188,8 +137,6 @@
 		ED4597DFB2BE6587112891D6 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				476C840EDABE22600303EB7B /* ResenhaServiceProbe.app */,
-				949A2838FCCDE943B17DCF88 /* ResenhaStore.app */,
 				A7127B7D90D717FFC9B8794D /* WhisperKey.app */,
 				82C866CD9730D225ABB0F72B /* WhisperKeyTests.xctest */,
 			);
@@ -229,25 +176,6 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		0FF8D342B6CA80FE573B20EE /* ResenhaStore */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 25B9519927CD2B045981B06D /* Build configuration list for PBXNativeTarget "ResenhaStore" */;
-			buildPhases = (
-				391897E61FDE1ABF50B85E70 /* Sources */,
-				377BD5CCA4125F1CFB94D15D /* Resources */,
-				9D1DA5679F4377D5D4D37814 /* Frameworks */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			name = ResenhaStore;
-			packageProductDependencies = (
-			);
-			productName = ResenhaStore;
-			productReference = 949A2838FCCDE943B17DCF88 /* ResenhaStore.app */;
-			productType = "com.apple.product-type.application";
-		};
 		252900FEB7891C76780DCA50 /* WhisperKey */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = A36CFD0CA738CE308216F881 /* Build configuration list for PBXNativeTarget "WhisperKey" */;
@@ -265,23 +193,6 @@
 			);
 			productName = WhisperKey;
 			productReference = A7127B7D90D717FFC9B8794D /* WhisperKey.app */;
-			productType = "com.apple.product-type.application";
-		};
-		4A81F05F9ACD50353E2496F8 /* ResenhaServiceProbe */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 6855A6A0FA0CC88D57B2BFCE /* Build configuration list for PBXNativeTarget "ResenhaServiceProbe" */;
-			buildPhases = (
-				24A31C1CAF18E2778C1A4C34 /* Sources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			name = ResenhaServiceProbe;
-			packageProductDependencies = (
-			);
-			productName = ResenhaServiceProbe;
-			productReference = 476C840EDABE22600303EB7B /* ResenhaServiceProbe.app */;
 			productType = "com.apple.product-type.application";
 		};
 		E7E1955CE58BED26125B69DC /* WhisperKeyTests */ = {
@@ -311,15 +222,7 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
-					0FF8D342B6CA80FE573B20EE = {
-						DevelopmentTeam = S3YCFYY8SC;
-						ProvisioningStyle = Automatic;
-					};
 					252900FEB7891C76780DCA50 = {
-						DevelopmentTeam = S3YCFYY8SC;
-						ProvisioningStyle = Automatic;
-					};
-					4A81F05F9ACD50353E2496F8 = {
 						DevelopmentTeam = S3YCFYY8SC;
 						ProvisioningStyle = Automatic;
 					};
@@ -344,28 +247,18 @@
 			projectRoot = "";
 			targets = (
 				252900FEB7891C76780DCA50 /* WhisperKey */,
-				0FF8D342B6CA80FE573B20EE /* ResenhaStore */,
 				E7E1955CE58BED26125B69DC /* WhisperKeyTests */,
-				4A81F05F9ACD50353E2496F8 /* ResenhaServiceProbe */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		377BD5CCA4125F1CFB94D15D /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				1CF41069DA1F3CAE06A0661E /* Assets.xcassets in Resources */,
-				D30F0255A5CAF20BB06CEB3A /* PrivacyInfo.xcprivacy in Resources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		E0B0B1BF46A83D651E804B08 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 				21BFEB851E15B4030C254977 /* Assets.xcassets in Resources */,
+				73B3AA17549C4AF0E03C6F25 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -377,42 +270,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				F95D54A8DF1F718AD734EAE3 /* WhisperKeyTests.swift in Sources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		24A31C1CAF18E2778C1A4C34 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				2FA99FF3A08DEA560BF5A960 /* main.swift in Sources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		391897E61FDE1ABF50B85E70 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				EF796FFE3C99B2F96B10FB65 /* AudioRecorder.swift in Sources */,
-				C9751D7587C019328DA69F12 /* DictationCoordinator.swift in Sources */,
-				CD08C9D5026A38C07F930F00 /* DictationInteraction.swift in Sources */,
-				EFC842F9B9A5C444284320CB /* FloatingPanel.swift in Sources */,
-				1F67D08AF1914A54876DB155 /* FloatingStatusView.swift in Sources */,
-				11B5BE4877E6F6656DDC0EE2 /* HotkeyMonitor.swift in Sources */,
-				F0B1565440E94FC619F2352B /* MenuPresentation.swift in Sources */,
-				6FF66590AAB5B26441C71D39 /* NativeMenuController.swift in Sources */,
-				C44769BEA50BC49DEA31A0DB /* PanelPlacement.swift in Sources */,
-				B6F45A1660DEA722AC1037F9 /* PermissionOnboarding.swift in Sources */,
-				C63CAAE26C9787602285FC4C /* PermissionService.swift in Sources */,
-				8ECD12DC8A9688DE978AA481 /* ProductPreferences.swift in Sources */,
-				6A8724FDFFF366EA5B22AC15 /* RecordingWaveformView.swift in Sources */,
-				154351B1086B614E56590A09 /* ResenhaDesign.swift in Sources */,
-				C3E5A8F47EEB887F1F561F55 /* ResenhaServiceProvider.swift in Sources */,
-				57FC76D17D92EA5B7A4D3872 /* SoundLibrary.swift in Sources */,
-				0B2F5CC8A4F4275A23AB64E9 /* TextInjector.swift in Sources */,
-				8C5F4A74D5A139126D23B922 /* TranscriptHistory.swift in Sources */,
-				BA3A310337F722648669168F /* WhisperKeyApp.swift in Sources */,
-				10D5248EB4DBC60B95C63B40 /* WhisperModelManager.swift in Sources */,
-				C467D823EE2B686DA5E77311 /* WhisperTranscriber.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -455,36 +312,6 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
-		6F5399542CCAEF7092743D34 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CODE_SIGN_ENTITLEMENTS = Config/ResenhaStore.entitlements;
-				CODE_SIGN_IDENTITY = "Apple Development";
-				CODE_SIGN_STYLE = Automatic;
-				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = S3YCFYY8SC;
-				ENABLE_HARDENED_RUNTIME = YES;
-				FRAMEWORK_SEARCH_PATHS = (
-					"$(inherited)",
-					"\"Frameworks\"",
-				);
-				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = "Config/ResenhaStore-Info.plist";
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-				);
-				MARKETING_VERSION = 1.0.0;
-				PRODUCT_BUNDLE_IDENTIFIER = br.com.luisroquette.Resenha;
-				PRODUCT_MODULE_NAME = ResenhaStore;
-				PRODUCT_NAME = Resenha;
-				SDKROOT = macosx;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) STORE_DISTRIBUTION";
-			};
-			name = Debug;
-		};
 		75A460B8607D15C1C0530E02 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -529,9 +356,11 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Config/ResenhaStore.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = S3YCFYY8SC;
 				ENABLE_HARDENED_RUNTIME = YES;
 				FRAMEWORK_SEARCH_PATHS = (
@@ -539,12 +368,13 @@
 					"\"Frameworks\"",
 				);
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = "Config/WhisperKey-Info.plist";
+				INFOPLIST_FILE = "Config/ResenhaStore-Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = br.com.luisroquette.WhisperKey;
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = br.com.luisroquette.Resenha;
 				PRODUCT_MODULE_NAME = WhisperKey;
 				PRODUCT_NAME = Resenha;
 				SDKROOT = macosx;
@@ -604,58 +434,6 @@
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 5.0;
-			};
-			name = Release;
-		};
-		BC27FE5962E4B3873A4BB65B /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CODE_SIGN_ENTITLEMENTS = Config/ResenhaServiceProbe.entitlements;
-				CODE_SIGN_IDENTITY = "Apple Development";
-				CODE_SIGN_STYLE = Automatic;
-				COMBINE_HIDPI_IMAGES = YES;
-				DEVELOPMENT_TEAM = S3YCFYY8SC;
-				ENABLE_HARDENED_RUNTIME = YES;
-				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = "Config/ResenhaServiceProbe-Info.plist";
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-				);
-				PRODUCT_BUNDLE_IDENTIFIER = br.com.luisroquette.Resenha.ServiceProbe;
-				PRODUCT_NAME = ResenhaServiceProbe;
-				SDKROOT = macosx;
-			};
-			name = Debug;
-		};
-		D8A78EEA1B798543225AD186 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CODE_SIGN_ENTITLEMENTS = Config/ResenhaStore.entitlements;
-				CODE_SIGN_IDENTITY = "Apple Development";
-				CODE_SIGN_STYLE = Automatic;
-				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = S3YCFYY8SC;
-				ENABLE_HARDENED_RUNTIME = YES;
-				FRAMEWORK_SEARCH_PATHS = (
-					"$(inherited)",
-					"\"Frameworks\"",
-				);
-				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = "Config/ResenhaStore-Info.plist";
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-				);
-				MARKETING_VERSION = 1.0.0;
-				PRODUCT_BUNDLE_IDENTIFIER = br.com.luisroquette.Resenha;
-				PRODUCT_MODULE_NAME = ResenhaStore;
-				PRODUCT_NAME = Resenha;
-				SDKROOT = macosx;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) STORE_DISTRIBUTION";
 			};
 			name = Release;
 		};
@@ -726,9 +504,11 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = Config/ResenhaStore.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = S3YCFYY8SC;
 				ENABLE_HARDENED_RUNTIME = YES;
 				FRAMEWORK_SEARCH_PATHS = (
@@ -736,39 +516,18 @@
 					"\"Frameworks\"",
 				);
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = "Config/WhisperKey-Info.plist";
+				INFOPLIST_FILE = "Config/ResenhaStore-Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = br.com.luisroquette.WhisperKey;
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = br.com.luisroquette.Resenha;
 				PRODUCT_MODULE_NAME = WhisperKey;
 				PRODUCT_NAME = Resenha;
 				SDKROOT = macosx;
 			};
 			name = Debug;
-		};
-		EF8F1AB84C1C804921C65F04 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CODE_SIGN_ENTITLEMENTS = Config/ResenhaServiceProbe.entitlements;
-				CODE_SIGN_IDENTITY = "Apple Development";
-				CODE_SIGN_STYLE = Automatic;
-				COMBINE_HIDPI_IMAGES = YES;
-				DEVELOPMENT_TEAM = S3YCFYY8SC;
-				ENABLE_HARDENED_RUNTIME = YES;
-				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = "Config/ResenhaServiceProbe-Info.plist";
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-				);
-				PRODUCT_BUNDLE_IDENTIFIER = br.com.luisroquette.Resenha.ServiceProbe;
-				PRODUCT_NAME = ResenhaServiceProbe;
-				SDKROOT = macosx;
-			};
-			name = Release;
 		};
 /* End XCBuildConfiguration section */
 
@@ -778,24 +537,6 @@
 			buildConfigurations = (
 				8889DFC95D43EC220F761133 /* Debug */,
 				75A460B8607D15C1C0530E02 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Debug;
-		};
-		25B9519927CD2B045981B06D /* Build configuration list for PBXNativeTarget "ResenhaStore" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				6F5399542CCAEF7092743D34 /* Debug */,
-				D8A78EEA1B798543225AD186 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Debug;
-		};
-		6855A6A0FA0CC88D57B2BFCE /* Build configuration list for PBXNativeTarget "ResenhaServiceProbe" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				BC27FE5962E4B3873A4BB65B /* Debug */,
-				EF8F1AB84C1C804921C65F04 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

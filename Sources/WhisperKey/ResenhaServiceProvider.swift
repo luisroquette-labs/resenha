@@ -1,7 +1,6 @@
 import AppKit
 import OSLog
 
-#if STORE_DISTRIBUTION
 @MainActor
 final class ResenhaServiceProvider: NSObject {
     private enum Outcome {
@@ -65,4 +64,3 @@ final class ResenhaServiceProvider: NSObject {
         outcome = .failure(message)
     }
 }
-#endif

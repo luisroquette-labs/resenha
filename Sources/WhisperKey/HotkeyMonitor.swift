@@ -5,7 +5,7 @@ enum HotkeyError: LocalizedError {
     case eventTapUnavailable
 
     var errorDescription: String? {
-        "Atalho global indisponível. Conceda acesso à Acessibilidade."
+        "Atalho global indisponível. Conceda acesso ao Monitoramento de Entrada."
     }
 }
 
@@ -83,13 +83,11 @@ final class HotkeyMonitor {
             if let edge = latch.interrupt() { deliver(edge) }
             return
         }
-#if STORE_DISTRIBUTION
         if serviceReleaseArmed, type == .keyUp {
             serviceReleaseArmed = false
             deliver(.released)
             return
         }
-#endif
         let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
         let physicalModifierState = shortcut.isModifierOnly
             ? CGEventSource.keyState(.combinedSessionState, key: CGKeyCode(shortcut.keyCode)) : nil

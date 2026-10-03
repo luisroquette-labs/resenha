@@ -24,12 +24,7 @@ struct MenuStatusPresentation {
     }
 
     var accessibleStatus: String {
-#if STORE_DISTRIBUTION
         "Resenha — \(activity). Use o atalho de ditado configurado nos Serviços do macOS."
-#else
-        "Resenha — \(activity). Segure \(shortcut.displayName) para ditar."
-            + snapshot.missingPermissions.map { " Permissão necessária: \($0.name). \($0.purpose)" }.joined()
-#endif
     }
 }
 

@@ -134,11 +134,7 @@ final class ProductPreferences: ObservableObject {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-#if STORE_DISTRIBUTION
         let defaultShortcut = HotkeyShortcut.controlOptionSpace
-#else
-        let defaultShortcut = HotkeyShortcut.rightOption
-#endif
         shortcut = HotkeyShortcut(rawValue: defaults.string(forKey: Key.shortcut) ?? "") ?? defaultShortcut
         showsHUD = defaults.object(forKey: Key.showsHUD) as? Bool ?? true
         soundsEnabled = defaults.object(forKey: Key.soundsEnabled) as? Bool ?? true
@@ -520,7 +516,6 @@ private struct ShortcutSettingsPane: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
             ResenhaPageHeader(eyebrow: "Push to talk", title: "Atalho", subtitle: "Uma combinação global, disponível em qualquer aplicativo.")
-#if STORE_DISTRIBUTION
                 ResenhaRuleSection("Pressione e segure para falar") {
                     LabeledContent("Atalho recomendado", value: "Control + Option + Espaço")
                     Text("O macOS controla atalhos de Serviços. Você pode trocar a combinação sem conceder acesso de Acessibilidade ao Resenha.")
@@ -537,29 +532,6 @@ private struct ShortcutSettingsPane: View {
                     Text("Control + Option + Espaço")
                         .font(.system(size: 26, weight: .medium, design: .serif))
                 }
-#else
-                ResenhaRuleSection("Pressione e segure para falar") {
-                    HStack {
-                        Text("Atalho global")
-                        Spacer()
-                Picker("Atalho global", selection: $preferences.shortcut) {
-                    ForEach(HotkeyShortcut.allCases) { shortcut in
-                        Text(shortcut.displayName).tag(shortcut)
-                    }
-                }
-                        .labelsHidden()
-                        .frame(width: 230)
-                    }
-                Text("A alteração entra em vigor imediatamente. Solte a combinação para transcrever.")
-                    .font(.callout).foregroundStyle(.secondary)
-                }
-                Spacer(minLength: 24)
-                HStack(spacing: 14) {
-                    Image(systemName: "keyboard.fill").font(.system(size: 28)).foregroundStyle(ResenhaTheme.accent)
-                    Text(preferences.shortcut.displayName)
-                        .font(.system(size: 26, weight: .medium, design: .serif))
-                }
-#endif
             }
         }
     }

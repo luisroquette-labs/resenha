@@ -1,7 +1,4 @@
 import AppKit
-#if !STORE_DISTRIBUTION
-import ApplicationServices
-#endif
 import SwiftUI
 
 struct PanelDismissal {
@@ -161,29 +158,7 @@ final class FloatingPanelController: NSObject {
     }
 
     private func focusedWindowFrame(pid: pid_t?) -> CGRect? {
-#if STORE_DISTRIBUTION
         nil
-#else
-        guard let pid, AXIsProcessTrusted(), let primary = NSScreen.screens.first else { return nil }
-        let app = AXUIElementCreateApplication(pid)
-        var window: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(app, kAXFocusedWindowAttribute as CFString, &window) == .success,
-              let window, CFGetTypeID(window) == AXUIElementGetTypeID() else { return nil }
-        let element = window as! AXUIElement
-        var position: CFTypeRef?
-        var size: CFTypeRef?
-        guard AXUIElementCopyAttributeValue(element, kAXPositionAttribute as CFString, &position) == .success,
-              AXUIElementCopyAttributeValue(element, kAXSizeAttribute as CFString, &size) == .success,
-              let position, let size,
-              CFGetTypeID(position) == AXValueGetTypeID(), CFGetTypeID(size) == AXValueGetTypeID() else { return nil }
-        var origin = CGPoint.zero
-        var dimensions = CGSize.zero
-        guard AXValueGetValue(position as! AXValue, .cgPoint, &origin),
-              AXValueGetValue(size as! AXValue, .cgSize, &dimensions),
-              origin.x.isFinite, origin.y.isFinite, dimensions.width.isFinite, dimensions.height.isFinite,
-              dimensions.width > 0, dimensions.height > 0 else { return nil }
-        return PanelPlacement.appKitFrame(fromAX: CGRect(origin: origin, size: dimensions), primaryFrame: primary.frame)
-#endif
     }
 
     @objc private func screensChanged() {
