@@ -4,4 +4,4 @@
 2. [x] Implementar gravação/persistência de qualquer atalho no painel do app.
 3. [x] Restaurar inserção automática com Acessibilidade e remover o Serviço do bundle.
 4. [x] Adicionar testes de regressão e atualizar arquitetura/permissões.
-5. [ ] Rodar o gate canônico, revisar o diff e abrir um único PR.
+5. [x] Rodar o gate canônico, revisar o diff e abrir um único PR.
