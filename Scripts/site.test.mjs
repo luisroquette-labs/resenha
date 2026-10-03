@@ -214,7 +214,14 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
         assert.doesNotMatch(html, /OpenAI|chave API/u);
         assert.match(html, /atalho é gravado dentro do Resenha/u);
         assert.match(html, /Option direita isolada/u);
+        assert.match(html, /class="voice-ribbon"/u);
+        assert.match(html, /class="hero-stamp"/u);
+        assert.ok((html.match(/data-reveal/gu) ?? []).length >= 8);
         assert.match(html, /type="module"/u);
+        const media = await get(preview.origin, prefix + 'media.mjs');
+        assert.equal(media.status, 200);
+        assert.match(media.body, /IntersectionObserver/u);
+        assert.match(media.body, /prefers-reduced-motion/u);
         const privacy = await get(preview.origin, prefix + 'privacy/');
         assert.equal(privacy.status, 200);
         assert.match(privacy.body, /Sua voz fica no seu Mac/u);
@@ -227,6 +234,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
         assert.match(comparison.body, /Resenha é um projeto independente/u);
         assert.match(comparison.body, /wisprflow\.ai\/pricing/u);
         assert.match(comparison.body, /application\/ld\+json/u);
+        assert.match(comparison.body, /src="\.\.\/media\.mjs"/u);
+        assert.ok((comparison.body.match(/data-reveal/gu) ?? []).length >= 5);
         const robots = await get(preview.origin, prefix + 'robots.txt');
         assert.equal(robots.status, 200);
         assert.match(robots.body, /Sitemap: https:\/\/luisroquette\.github\.io\/resenha\/sitemap\.xml/u);

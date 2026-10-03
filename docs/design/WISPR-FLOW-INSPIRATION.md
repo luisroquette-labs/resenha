@@ -47,6 +47,14 @@ Não copiar o Hub, a taxonomia de recursos ou o escopo do Wispr. O Resenha deve 
 - Demonstração do ditado: 900–1400 ms para ouvir, processar e inserir.
 - `prefers-reduced-motion` remove trajetórias, parallax, ticker e escalonamento.
 
+## Segunda rodada aplicada
+
+- Navegação em cápsula passou a flutuar durante o scroll, preservando acesso ao download.
+- Hero ganhou um selo coral de preço/código aberto como contraponto editorial.
+- Faixa lavanda apresenta contextos de uso em movimento lento, com pausa no hover.
+- Seções entram com opacidade e deslocamento de 16 px por `IntersectionObserver`.
+- Sem JavaScript ou com movimento reduzido, todo o conteúdo permanece visível e estático.
+
 ## Evidência pública
 
 - [Site do Wispr Flow](https://wisprflow.ai/)
