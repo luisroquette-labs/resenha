@@ -78,13 +78,11 @@ final class HotkeyMonitor {
             return
         }
         let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
-        let physicalModifierState = shortcut.isModifierOnly
-            ? CGEventSource.keyState(.combinedSessionState, key: CGKeyCode(shortcut.keyCode)) : nil
         guard let pressed = shortcut.isPressed(
             eventType: type,
             keyCode: keyCode,
             flags: event.flags,
-            modifierKeyDown: physicalModifierState
+            modifierKeyDown: nil
         ), let edge = latch.update(pressed) else { return }
         deliver(edge)
     }

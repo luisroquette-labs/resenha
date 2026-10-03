@@ -347,6 +347,12 @@ final class WhisperKeyTests: XCTestCase {
         XCTAssertEqual(HotkeyShortcut.rightOption.isPressed(
             eventType: .flagsChanged, keyCode: 61, flags: .maskAlternate, modifierKeyDown: false
         ), false)
+        XCTAssertEqual(HotkeyShortcut.rightOption.isPressed(
+            eventType: .flagsChanged, keyCode: 61, flags: .maskAlternate
+        ), true)
+        XCTAssertEqual(HotkeyShortcut.rightOption.isPressed(
+            eventType: .flagsChanged, keyCode: 61, flags: []
+        ), false)
 
         var latch = HotkeyLatch()
         XCTAssertEqual(latch.update(true), .pressed)
