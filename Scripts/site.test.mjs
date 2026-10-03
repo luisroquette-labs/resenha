@@ -206,7 +206,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
           'assets/product/settings-transcription.webp', 'assets/product/settings-about.webp',
           'assets/product/resenha-flow.mp4', 'assets/product/resenha-settings.mp4',
           'assets/product/resenha-flow-poster.webp']) {
-          assert.ok(html.includes(`"./${name}"`) || html.includes(`"${name}"`));
+          assert.ok(html.includes(name));
           assert.equal((await get(preview.origin, prefix + name)).status, 200);
         }
         assert.equal((html.match(/Interface real do app/gu) ?? []).length, 1);
@@ -218,6 +218,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
         assert.match(html, /class="hero-stamp"/u);
         assert.ok((html.match(/data-reveal/gu) ?? []).length >= 8);
         assert.match(html, /type="module"/u);
+        assert.match(html, /styles\.css\?v=20261003-2/u);
+        assert.match(html, /media\.mjs\?v=20261003-2/u);
         const media = await get(preview.origin, prefix + 'media.mjs');
         assert.equal(media.status, 200);
         assert.match(media.body, /IntersectionObserver/u);
@@ -234,7 +236,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
         assert.match(comparison.body, /Resenha é um projeto independente/u);
         assert.match(comparison.body, /wisprflow\.ai\/pricing/u);
         assert.match(comparison.body, /application\/ld\+json/u);
-        assert.match(comparison.body, /src="\.\.\/media\.mjs"/u);
+        assert.match(comparison.body, /src="\.\.\/media\.mjs\?v=20261003-2"/u);
         assert.ok((comparison.body.match(/data-reveal/gu) ?? []).length >= 5);
         const robots = await get(preview.origin, prefix + 'robots.txt');
         assert.equal(robots.status, 200);
