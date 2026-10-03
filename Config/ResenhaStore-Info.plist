@@ -30,6 +30,8 @@
     <true/>
     <key>LSUIElement</key>
     <true/>
+    <key>ITSAppUsesNonExemptEncryption</key>
+    <false/>
     <key>NSHumanReadableCopyright</key>
     <string>Copyright © 2026 Luis Roquette. Código aberto sob licença MIT.</string>
     <key>NSMicrophoneUsageDescription</key>

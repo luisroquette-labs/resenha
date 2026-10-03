@@ -2,6 +2,8 @@
 
 Status: generation-ready; paid Google Veo call not started
 
+Canonical prompts live in `prompts/`. `Scripts/generate-veo-plates.sh` performs a no-cost dry run by default, reads a rotated key only from macOS Keychain and refuses paid execution unless the exact US$ 9.60 ceiling is supplied after owner approval. It performs one request per plate and never retries automatically.
+
 ## Production rule
 
 Veo generates only the cinematic plate: people, light, environment, camera and ambience. It must not invent the Resenha interface, logo or readable screen text. Real SwiftUI renders, the approved mark and final typography are composited afterward. This keeps the product truthful and prevents warped UI.
@@ -35,6 +37,28 @@ Locked-camera cinematic tabletop shot, 8 seconds, landscape. A closed-loop visua
 3. Add approved V2 mark as a locked graphic; never ask the model to redraw it.
 4. Master H.264 website/App Store preview plus 9:16 social cut, captions baked only in final edit.
 5. Keep generated-video disclosure and source prompt in internal release evidence.
+
+## Secure generation
+
+After revoking the key exposed in chat, store a newly created key without echoing it:
+
+```sh
+read -s "key?Nova chave Google AI: "; echo
+security add-generic-password -U -a "$USER" -s br.com.luisroquette.Resenha.google-veo -w "$key"
+unset key
+```
+
+Dry run, with zero network calls:
+
+```sh
+Scripts/generate-veo-plates.sh --dry-run
+```
+
+Paid execution is deliberately gated and must only be run after explicit approval:
+
+```sh
+RESENHA_VEO_APPROVED_USD=9.60 Scripts/generate-veo-plates.sh --execute
+```
 
 ## Mac App Store master
 

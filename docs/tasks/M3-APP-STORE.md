@@ -7,6 +7,7 @@
 - [x] Collapse Store/direct experiments into one sandboxed product target and pass Release tests.
 - [x] Complete privacy manifest, policy, support and third-party notices.
 - [x] Produce full icon/logo/export system and ten compliant 2880 × 1800 App Store screenshots.
+- [x] Validate Store metadata package, privacy manifest, encryption declaration and an arm64 Release archive.
 - [ ] Produce the final App Store preview video from real UI and approved cinematic plates.
 - [ ] Reserve Store identity and complete localized metadata/privacy questionnaires.
 - [ ] Archive, validate, upload and physically validate the processed build.
