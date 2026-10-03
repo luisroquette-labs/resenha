@@ -6,7 +6,9 @@ const copy = Object.freeze({
 
 export const releaseState = Object.freeze({
   macos: Object.freeze({ state: 'unavailable', url: null, evidence: null }),
-  source: Object.freeze({ state: 'planned', url: null, evidence: null }),
+  source: Object.freeze({ state: 'published', url: 'https://github.com/luisroquette/resenha',
+    evidence: Object.freeze({ channel: 'source', url: 'https://github.com/luisroquette/resenha',
+      verifiedAt: '2026-10-03T02:30:00Z' }) }),
   store: Object.freeze({ state: 'planned', url: null, evidence: null }),
 });
 
