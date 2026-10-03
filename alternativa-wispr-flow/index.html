@@ -14,6 +14,7 @@
   <link rel="icon" href="../assets/brand/resenha-app-icon.png">
   <link rel="stylesheet" href="../styles.css">
   <script type="module" src="../release.mjs"></script>
+  <script type="module" src="../media.mjs"></script>
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"WebPage","name":"Alternativa gratuita e sem limite ao Wispr Flow","description":"Comparação factual entre Resenha e Wispr Flow para ditado no Mac.","dateModified":"2026-10-03","about":[{"@type":"SoftwareApplication","name":"Resenha"},{"@type":"SoftwareApplication","name":"Wispr Flow"}]}</script>
 </head>
 <body class="comparison-page">
@@ -24,7 +25,7 @@
   </header>
 
   <main id="conteudo">
-    <section class="comparison-hero shell">
+    <section class="comparison-hero shell" data-reveal>
       <nav class="breadcrumb" aria-label="Breadcrumb"><a href="../">Início</a><span aria-hidden="true">/</span><span>Alternativa ao Wispr Flow</span></nav>
       <p class="kicker">Alternativa ao Wispr Flow para Mac</p>
       <h1>Ditado gratuito.<br><em>Sem contar palavras.</em></h1>
@@ -32,7 +33,7 @@
       <div class="hero-actions"><a class="button button-light" href="../#download">Baixar grátis <span aria-hidden="true">↘</span></a><a class="comparison-source-link" href="#fontes">Ver fontes da comparação ↓</a></div>
     </section>
 
-    <section class="comparison-sheet" id="tabela" aria-labelledby="table-title">
+    <section class="comparison-sheet" id="tabela" aria-labelledby="table-title" data-reveal>
       <div class="shell">
         <div class="comparison-page-heading"><p class="kicker">Comparação direta</p><h2 id="table-title">Resenha ou Wispr Flow?</h2><p>Os dois transformam fala em texto. A diferença principal é onde isso acontece e quando você precisa pagar.</p></div>
         <div class="full-comparison" role="table" aria-label="Comparação entre Resenha e Wispr Flow">
@@ -46,7 +47,7 @@
           <div class="full-row" role="row"><span role="cell">Plataformas</span><strong role="cell">macOS Apple Silicon</strong><span role="cell">macOS, Windows, iPhone e Android</span></div>
           <div class="full-row" role="row"><span role="cell">Recursos avançados</span><strong role="cell">Ditado local, atalhos, vocabulário e histórico opcional</strong><span role="cell">Inclui recursos em nuvem, estilos, snippets, times e notetaker</span></div>
         </div>
-        <div class="deep-dive" aria-label="Análise detalhada da comparação">
+        <div class="deep-dive" aria-label="Análise detalhada da comparação" data-reveal>
           <article>
             <p class="kicker">01 / Custo</p>
             <h3>Gratuito significa usar sem vigiar o contador.</h3>
@@ -90,7 +91,7 @@
       </div>
     </section>
 
-    <section class="criteria shell" id="criterios" aria-labelledby="criteria-title">
+    <section class="criteria shell" id="criterios" aria-labelledby="criteria-title" data-reveal>
       <div class="section-heading"><p class="kicker">Escolha honesta</p><h2 id="criteria-title">O Resenha é para você se…</h2></div>
       <div class="criteria-grid">
         <article><span>01</span><h3>Você fala muito</h3><p>Não quer parar porque atingiu uma franquia semanal nem assinar para continuar ditando.</p></article>
@@ -100,11 +101,11 @@
       <div class="honest-note"><strong>O Wispr Flow pode ser melhor</strong><p>se você precisa de Windows, iPhone, Android, recursos de equipe, notetaker ou tratamento de texto baseado em nuvem. A proposta do Resenha é outra: ditado local, simples e sem cobrança por volume.</p></div>
     </section>
 
-    <section class="comparison-cta">
+    <section class="comparison-cta" data-reveal>
       <div class="shell"><p class="kicker">Sua voz. Suas regras.</p><h2>Fale quanto quiser.<br><em>Fica no seu Mac.</em></h2><a class="button button-light" href="../#download">Baixar o Resenha <span aria-hidden="true">↘</span></a></div>
     </section>
 
-    <section class="comparison-faq shell" aria-labelledby="comparison-faq-title">
+    <section class="comparison-faq shell" aria-labelledby="comparison-faq-title" data-reveal>
       <div class="section-heading"><p class="kicker">Perguntas sobre a alternativa</p><h2 id="comparison-faq-title">O que muda na prática?</h2></div>
       <div class="faq-list">
         <details><summary>O Resenha é realmente gratuito?</summary><p>Sim. O código é publicado sob licença MIT e o produto não tem plano pago, assinatura ou cobrança por palavra. Enquanto o instalador público é preparado, o repositório já permite acompanhar e auditar o desenvolvimento.</p></details>
