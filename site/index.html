@@ -3,17 +3,19 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Resenha — Sua voz, em qualquer campo.</title>
-  <meta name="description" content="Resenha está em preparação para distribuição direta: ditado por voz local, gratuito e de código aberto para Apple Silicon, com atalho configurável no próprio app.">
+  <title>Alternativa gratuita ao Wispr Flow para Mac | Resenha</title>
+  <meta name="description" content="Resenha é a alternativa gratuita e open source ao Wispr Flow para Mac: ditado local, sem conta, sem assinatura e sem limite semanal de palavras.">
+  <link rel="canonical" href="https://luisroquette.github.io/resenha/">
   <meta property="og:type" content="website">
   <meta property="og:locale" content="pt_BR">
-  <meta property="og:title" content="Resenha — Sua voz, em qualquer campo.">
-  <meta property="og:description" content="Segure o atalho, fale e solte. O Resenha transcreve no seu Mac e escreve onde o cursor já está.">
+  <meta property="og:title" content="Resenha — alternativa open source ao Wispr Flow">
+  <meta property="og:description" content="Ditado gratuito para Mac, processado localmente e sem limite semanal de palavras.">
   <meta name="theme-color" content="#f1eee4">
   <link rel="icon" href="assets/brand/resenha-app-icon.png">
   <link rel="stylesheet" href="styles.css">
   <script type="module" src="release.mjs"></script>
   <script type="module" src="media.mjs"></script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Resenha","applicationCategory":"UtilitiesApplication","operatingSystem":"macOS 14 ou posterior","isAccessibleForFree":true,"license":"https://opensource.org/license/mit","description":"Alternativa gratuita e open source ao Wispr Flow para ditado local no Mac."}</script>
 </head>
 <body>
   <a class="skip-link" href="#conteudo">Pular para o conteúdo</a>
@@ -24,7 +26,7 @@
       <span>resenha.</span>
     </a>
     <nav aria-label="Navegação principal">
-      <a href="#produto">Produto</a>
+      <a href="#comparacao">Comparação</a>
       <a href="#privacidade">Privacidade</a>
       <a href="#codigo">Código</a>
       <a class="nav-cta" href="#download">Baixar <span aria-hidden="true">↘</span></a>
@@ -34,12 +36,12 @@
   <main id="conteudo">
     <section class="hero shell" id="inicio" aria-labelledby="hero-title">
       <div class="hero-copy">
-        <p class="kicker"><span></span> Ditado local para macOS</p>
-        <h1 id="hero-title">Sua voz,<br><em>em qualquer campo.</em></h1>
-        <p class="hero-lead">Segure o atalho. Fale. Solte. O Resenha transforma sua voz em texto exatamente onde você já estava escrevendo.</p>
+        <p class="kicker"><span></span> A alternativa open source ao Wispr Flow</p>
+        <h1 id="hero-title">Fale sem<br><em>contar palavras.</em></h1>
+        <p class="hero-lead">Ditado gratuito para Mac, sem conta e sem assinatura. O Resenha transcreve localmente e escreve onde o cursor já está.</p>
         <div class="hero-actions">
-          <a class="button" href="#download">Ver disponibilidade <span aria-hidden="true">↘</span></a>
-          <span>Grátis · código aberto · 100% local</span>
+          <a class="button" href="#download">Baixar grátis <span aria-hidden="true">↘</span></a>
+          <a class="text-link" href="alternativa-wispr-flow/">Comparar com Wispr Flow →</a>
         </div>
       </div>
 
@@ -58,10 +60,29 @@
 
     <section class="proof-strip" aria-label="Destaques do Resenha">
       <div class="shell proof-grid">
-        <p><b>100%</b><span>processado no Mac</span></p>
-        <p><b>3</b><span>idiomas no lançamento</span></p>
-        <p><b>10</b><span>últimos textos recuperáveis</span></p>
-        <p><b>0</b><span>contas ou assinaturas</span></p>
+        <p><b>R$ 0</b><span>para usar</span></p>
+        <p><b>Sem teto</b><span>semanal de palavras</span></p>
+        <p><b>MIT</b><span>código aberto</span></p>
+        <p><b>Local</b><span>áudio fica no Mac</span></p>
+      </div>
+    </section>
+
+    <section class="comparison-intro" id="comparacao" aria-labelledby="comparison-title">
+      <div class="shell comparison-layout">
+        <div>
+          <p class="kicker">Resenha × Wispr Flow</p>
+          <h2 id="comparison-title">Sua voz não precisa de <em>assinatura.</em></h2>
+          <p class="comparison-lead">O plano gratuito do Wispr Flow informa um limite semanal no desktop. O Resenha não impõe franquia: ele roda no seu próprio Mac, sob licença MIT.</p>
+          <a class="button button-light" href="alternativa-wispr-flow/">Ver a comparação completa <span aria-hidden="true">↘</span></a>
+        </div>
+        <div class="comparison-card" aria-label="Resumo da comparação entre Resenha e Wispr Flow">
+          <div class="comparison-head"><span>O que muda</span><b>Resenha</b><b>Wispr Flow Free</b></div>
+          <div><span>Limite semanal</span><strong>Não impõe</strong><span>2.000 palavras no desktop</span></div>
+          <div><span>Preço</span><strong>Grátis</strong><span>Grátis com limite</span></div>
+          <div><span>Processamento</span><strong>No seu Mac</strong><span>Na nuvem</span></div>
+          <div><span>Código</span><strong>Open source</strong><span>Proprietário</span></div>
+          <small>Dados públicos do Wispr Flow verificados em 03/10/2026. Resenha é independente e não afiliado ao Wispr Flow.</small>
+        </div>
       </div>
     </section>
 
@@ -127,7 +148,7 @@
             <li><span>02</span> Histórico opcional guardado só neste Mac</li>
             <li><span>03</span> Modelo baixado uma vez e verificado por SHA-256</li>
           </ul>
-          <p class="network-note">A internet é usada somente no primeiro download do modelo local de voz.</p>
+          <p class="network-note">A internet é usada somente no primeiro download do modelo local de voz. Depois, o ditado funciona offline.</p>
           <p class="network-note"><a href="privacy/">Ler a política de privacidade completa →</a></p>
         </div>
       </div>
@@ -161,11 +182,11 @@
         <div class="download-icon"><img src="assets/brand/resenha-app-icon.png" alt="Ícone do Resenha" width="128" height="128"></div>
         <div class="download-copy">
           <p class="kicker">Versão 1.0 para macOS</p>
-          <h2 id="download-title">Download direto em breve.</h2>
-          <p>Grátis, sem conta e otimizado para Apple Silicon. Requer macOS 14 ou posterior.</p>
+          <h2 id="download-title">Fale quanto quiser.</h2>
+          <p>Grátis, open source, sem limite semanal e otimizado para Apple Silicon. Requer macOS 14 ou posterior.</p>
         </div>
         <div class="download-actions">
-          <div class="release-slot" data-release-channel="store"><strong>Publicação em preparação</strong><span>A página da loja será liberada após a revisão da Apple.</span></div>
+          <div class="release-slot" data-release-channel="source"><strong>Ver código no GitHub</strong><span>Licença MIT e desenvolvimento público.</span></div>
           <div class="release-slot secondary-release" data-release-channel="macos"><strong>Download em preparação</strong><span>O pacote público ainda não foi assinado para distribuição.</span></div>
         </div>
       </div>
@@ -176,7 +197,8 @@
       <div class="faq-list">
         <details><summary>Minha voz é enviada para a internet?</summary><p>Não. A transcrição acontece dentro do Mac. Só o download inicial do modelo usa a internet; depois disso, o ditado funciona localmente.</p></details>
         <details><summary>Preciso instalar Python ou o Whisper?</summary><p>Não. O runtime whisper.cpp faz parte do aplicativo. Na primeira configuração, o Resenha baixa e verifica o modelo de voz.</p></details>
-        <details><summary>Posso escolher o atalho?</summary><p>Sim. O atalho do serviço “Ditar com Resenha” é configurável nos Ajustes do Sistema do macOS.</p></details>
+        <details><summary>Posso escolher o atalho?</summary><p>Sim. Grave qualquer tecla ou combinação dentro do próprio Resenha, inclusive Option direita isolada.</p></details>
+        <details><summary>O Resenha é uma alternativa ao Wispr Flow?</summary><p>Sim, para quem procura ditado no Mac sem assinatura, sem conta e sem limite semanal. O Resenha é local e open source; não tenta reproduzir todos os recursos em nuvem e de equipe do Wispr Flow.</p></details>
         <details><summary>Quais idiomas estão disponíveis?</summary><p>Português do Brasil, inglês e espanhol. Em PT-BR, o vocabulário pessoal ajuda a preservar nomes, siglas e palavras em inglês.</p></details>
         <details><summary>Existe versão para Windows?</summary><p>O foco da versão 1.0 é macOS com Apple Silicon. Windows continua no roteiro, mas ainda não tem data pública.</p></details>
       </div>

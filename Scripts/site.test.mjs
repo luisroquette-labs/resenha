@@ -177,21 +177,26 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
         if (rootBody) assert.equal(html, rootBody); else rootBody = html;
         assert.match(html, /<html\b[^>]*lang="pt-BR"/u);
         assert.match(html, /<title>[^<]*Resenha[^<]*<\/title>/u);
-        assert.match(html, /name="description"[^>]*content="[^"]*(?:desenvolvimento|prepara)[^"]*"/iu);
+        assert.match(html, /name="description"[^>]*content="[^"]*alternativa gratuita[^"]*Wispr Flow[^"]*"/iu);
         assert.match(html, /property="og:title"/u);
         assert.match(html, /property="og:description"/u);
         assert.match(html, /licença MIT/u);
         assert.match(html, /SwiftUI/u); assert.match(html, /whisper\.cpp/u); assert.match(html, /ATALHO LIVRE/u);
         assert.match(html, /Acessibilidade/u);
         assert.match(html, /Apple Silicon/u); assert.match(html, /AVFoundation/u);
-        assert.match(html, /prepara|roteiro/iu);
+        assert.match(html, /alternativa open source ao Wispr Flow/iu);
+        assert.match(html, /sem limite semanal/iu);
+        assert.match(html, /2\.000 palavras no desktop/iu);
         assert.equal((html.match(/id="download"/gu) ?? []).length, 1);
         assert.ok((html.match(/href="#download"/gu) ?? []).length >= 2);
         assert.match(html.match(/<section\b[^>]*id="inicio"[\s\S]*?<\/section>/u)?.[0] ?? '', /href="#download"/u);
         assert.match(html.match(/<nav\b[\s\S]*?<\/nav>/u)?.[0] ?? '', /href="#download"/u);
-        for (const channel of ['macos', 'source', 'store']) assert.equal((html.match(new RegExp(`data-release-channel="${channel}"`, 'gu')) ?? []).length, 1);
+        assert.equal((html.match(/data-release-channel="macos"/gu) ?? []).length, 1);
+        assert.ok((html.match(/data-release-channel="source"/gu) ?? []).length >= 1);
         assert.doesNotMatch(html, /href="(?:|#|https?:\/\/(?:github\.com|apps\.apple\.com)[^"]*)"/u);
-        assert.doesNotMatch(html, /rel="canonical"|aggregateRating|application\/ld\+json/u);
+        assert.match(html, /rel="canonical"/u);
+        assert.match(html, /application\/ld\+json/u);
+        assert.doesNotMatch(html, /aggregateRating/u);
         assert.doesNotMatch(html, /<(?:form|input|iframe)\b/iu);
         assert.match(html, /<details[\s>]/u); assert.match(html, /<summary[\s>]/u);
         for (const name of ['styles.css', 'release.mjs', 'media.mjs', 'assets/brand/resenha-mark.svg',
@@ -208,12 +213,26 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
         assert.equal((html.match(/<video\b/gu) ?? []).length, 2);
         assert.doesNotMatch(html, /OpenAI|chave API/u);
         assert.match(html, /atalho é gravado dentro do Resenha/u);
+        assert.match(html, /Option direita isolada/u);
         assert.match(html, /type="module"/u);
         const privacy = await get(preview.origin, prefix + 'privacy/');
         assert.equal(privacy.status, 200);
         assert.match(privacy.body, /Sua voz fica no seu Mac/u);
         assert.match(privacy.body, /Acessibilidade devolve o foco/u);
         assert.match(privacy.body, /não lê o conteúdo de outros apps/u);
+        const comparison = await get(preview.origin, prefix + 'alternativa-wispr-flow/');
+        assert.equal(comparison.status, 200);
+        assert.match(comparison.body, /<title>Alternativa gratuita e sem limite ao Wispr Flow \| Resenha<\/title>/u);
+        assert.match(comparison.body, /Sem limite semanal imposto pelo plano/u);
+        assert.match(comparison.body, /Resenha é um projeto independente/u);
+        assert.match(comparison.body, /wisprflow\.ai\/pricing/u);
+        assert.match(comparison.body, /application\/ld\+json/u);
+        const robots = await get(preview.origin, prefix + 'robots.txt');
+        assert.equal(robots.status, 200);
+        assert.match(robots.body, /Sitemap: https:\/\/luisroquette\.github\.io\/resenha\/sitemap\.xml/u);
+        const sitemap = await get(preview.origin, prefix + 'sitemap.xml');
+        assert.equal(sitemap.status, 200);
+        assert.match(sitemap.body, /alternativa-wispr-flow/u);
       } finally { await preview.close(); }
     }
   });
