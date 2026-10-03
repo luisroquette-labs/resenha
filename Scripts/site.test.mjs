@@ -87,13 +87,16 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
     assert.ok(Object.isFrozen(output));
     assert.deepEqual(fixture.record, before);
   });
-  test('CK-7/15: authored state is unavailable, missing and malformed data fail closed', () => {
-    for (const channel of ['macos', 'source', 'store']) {
+  test('CK-7/15: published source resolves while unreleased channels fail closed', () => {
+    assert.equal(resolveDestination('source', releaseState.source).active, true);
+    assert.equal(resolveDestination('source', releaseState.source).href, 'https://github.com/luisroquette/resenha');
+    for (const channel of ['macos', 'store']) {
       assert.equal(releaseState[channel].url, null);
       assert.equal(releaseState[channel].evidence, null);
       assert.equal(resolveDestination(channel, releaseState[channel]).active, false);
-      for (const record of [null, undefined, {}, '', [], { state: 'published' }]) assert.equal(resolveDestination(channel, record).active, false);
     }
+    for (const channel of ['macos', 'source', 'store'])
+      for (const record of [null, undefined, {}, '', [], { state: 'published' }]) assert.equal(resolveDestination(channel, record).active, false);
     assert.equal(resolveDestination('__proto__', macos).active, false);
   });
   test('CK-7: malformed evidence and concrete-destination partitions', () => {
@@ -141,7 +144,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
         const preview = await createPreviewServer({ root, prefix });
         try {
           assert.equal(preview.server.address().address, '127.0.0.1');
-          assert.equal((await get(preview.origin, prefix)).status, 200);
+        assert.equal((await get(preview.origin, prefix)).status, 200);
+          assert.equal((await get(preview.origin, prefix + 'privacy/')).status, 404);
           const head = await get(preview.origin, prefix, 'HEAD');
           assert.equal(head.status, 200); assert.equal(head.body, '');
           assert.match(head.headers['content-type'], /text\/html/u);
@@ -203,6 +207,10 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
         assert.equal((html.match(/<video\b/gu) ?? []).length, 2);
         assert.doesNotMatch(html, /OpenAI|chave API|Acessibilidade para inserir/u);
         assert.match(html, /type="module"/u);
+        const privacy = await get(preview.origin, prefix + 'privacy/');
+        assert.equal(privacy.status, 200);
+        assert.match(privacy.body, /Sua voz fica no seu Mac/u);
+        assert.match(privacy.body, /não solicita Acessibilidade/u);
       } finally { await preview.close(); }
     }
   });

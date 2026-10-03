@@ -30,7 +30,8 @@ export async function createPreviewServer({ root = defaultRoot, prefix = '/', po
     if (!pathname.startsWith('/') || /[\u0000-\u001f\u007f\\]/u.test(pathname)
       || pathname.split('/').some(part => part === '..' || part === '.')) return reply(400, 'Invalid path');
     if (!pathname.startsWith(prefix)) return reply(404, 'Not found');
-    const local = pathname.slice(prefix.length) || 'index.html';
+    const requested = pathname.slice(prefix.length);
+    const local = requested ? (requested.endsWith('/') ? `${requested}index.html` : requested) : 'index.html';
     const candidate = resolve(siteRoot, local);
     if (!inside(siteRoot, candidate)) return reply(403, 'Forbidden');
     try {
