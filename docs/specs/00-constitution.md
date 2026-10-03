@@ -4,14 +4,14 @@ Status: accepted for M0
 
 ## Product invariant
 
-Resenha is a macOS input method: invoke and hold its native Service shortcut, speak, release it, and receive the local transcription at the active cursor.
+Resenha is a macOS input method: hold the global shortcut chosen inside the app, speak, release it, and receive the local transcription at the active cursor.
 
 ## Non-negotiable principles
 
 1. **Local-only:** microphone audio and transcripts never leave the Mac.
-2. **Native:** Swift, SwiftUI, AVFoundation, AppKit Services, and embedded whisper.cpp. No Electron, Python runtime, Accessibility permission, or backend.
+2. **Native:** Swift, SwiftUI, AVFoundation, Accessibility event posting, and embedded whisper.cpp. No Electron, Python runtime, or backend.
 3. **Invisible workflow:** dictation requires no app switching, file selection, copying, or manual pasting.
-4. **Least privilege:** request only Microphone and Input Monitoring; never retain or act on keystrokes beyond the armed Service shortcut release.
+4. **Least privilege:** request Microphone, Input Monitoring and Accessibility; never retain or act on keystrokes beyond the configured shortcut and one insertion command.
 5. **Ephemeral audio:** M0 deletes audio and generated transcript files after each attempt. A later owner-approved amendment may retain final text locally with an explicit limit and clear action.
 
 ## Engineering rules
@@ -21,7 +21,7 @@ Resenha is a macOS input method: invoke and hold its native Service shortcut, sp
 - One active dictation at a time. Repeated or overlapping hotkey events are ignored safely.
 - Fail closed: no text injection after failed or empty transcription.
 - Every non-trivial component has one focused automated check; the end-to-end path has a manual acceptance check.
-- Distribution embeds whisper.cpp. The fixed model is installed in the sandbox only after exact size and SHA-256 verification.
+- Distribution embeds whisper.cpp. The fixed model is installed locally only after exact size and SHA-256 verification.
 
 ## Explicit non-goals
 
@@ -34,6 +34,10 @@ After M0 passed physically, the owner authorized a local recovery buffer of the 
 ## Amendment 002 — Store distribution (2026-10-02)
 
 The owner authorized one free, public Mac App Store product with full product-quality presentation. Distribution must not weaken the core privacy promise or silently ship a reduced workflow. The app uses App Sandbox, embeds every runtime dependency, works without Homebrew/Python/API keys and avoids Accessibility APIs. A sandbox-compatible macOS Service is the insertion boundary: the calling editor receives the transcript through its service pasteboard. Obsolete direct targets and duplicate app identities must be removed. App Store submission remains an explicit owner authorization gate after the exact binary, metadata, privacy answers, territories and release mode are shown.
+
+## Amendment 003 — direct distribution and in-app shortcut (2026-10-03)
+
+The owner explicitly replaced the Store shortcut boundary with direct distribution. The user chooses any shortcut inside Resenha, including a single right Option key. Accessibility is required for automatic insertion through a bounded synthetic `Command-V`; App Sandbox and the registered macOS Service are removed. The transcript remains on the clipboard if the target refuses insertion. This amendment supersedes Amendment 002 wherever the two conflict.
 
 ## Definition of done
 

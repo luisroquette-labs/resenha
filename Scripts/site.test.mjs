@@ -181,7 +181,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
         assert.match(html, /property="og:title"/u);
         assert.match(html, /property="og:description"/u);
         assert.match(html, /licença MIT/u);
-        assert.match(html, /SwiftUI/u); assert.match(html, /whisper\.cpp/u); assert.match(html, /App Sandbox/iu);
+        assert.match(html, /SwiftUI/u); assert.match(html, /whisper\.cpp/u); assert.match(html, /ATALHO LIVRE/u);
+        assert.match(html, /Acessibilidade/u);
         assert.match(html, /Apple Silicon/u); assert.match(html, /AVFoundation/u);
         assert.match(html, /prepara|roteiro/iu);
         assert.equal((html.match(/id="download"/gu) ?? []).length, 1);
@@ -205,12 +206,14 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
         }
         assert.equal((html.match(/Interface real do app/gu) ?? []).length, 1);
         assert.equal((html.match(/<video\b/gu) ?? []).length, 2);
-        assert.doesNotMatch(html, /OpenAI|chave API|Acessibilidade para inserir/u);
+        assert.doesNotMatch(html, /OpenAI|chave API/u);
+        assert.match(html, /atalho é gravado dentro do Resenha/u);
         assert.match(html, /type="module"/u);
         const privacy = await get(preview.origin, prefix + 'privacy/');
         assert.equal(privacy.status, 200);
         assert.match(privacy.body, /Sua voz fica no seu Mac/u);
-        assert.match(privacy.body, /não solicita Acessibilidade/u);
+        assert.match(privacy.body, /Acessibilidade devolve o foco/u);
+        assert.match(privacy.body, /não lê o conteúdo de outros apps/u);
       } finally { await preview.close(); }
     }
   });

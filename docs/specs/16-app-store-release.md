@@ -1,6 +1,8 @@
 # SPEC-016 — Mac App Store release
 
-Status: accepted for implementation
+Status: superseded by SPEC-021 on 2026-10-03; retained as historical release work.
+
+Previous status: accepted for implementation
 
 ## Goal
 

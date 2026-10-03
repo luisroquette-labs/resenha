@@ -57,6 +57,14 @@ struct DictationErrorPresentation: Equatable {
             self.init(title: "Áudio inválido", diagnostic: nil, recovery: "Confira o microfone e tente novamente.")
         case TextInjectionError.clipboardUnavailable:
             self.init(title: "Falha ao guardar o texto", diagnostic: nil, recovery: "Confira o clipboard e tente novamente.")
+        case TextInjectionError.accessibilityUnavailable:
+            self.init(title: "Acessibilidade necessária", diagnostic: nil, recovery: "Ative o Resenha em Privacidade e Segurança → Acessibilidade.", isPermissionFailure: true)
+        case TextInjectionError.clipboardChanged:
+            self.init(title: "O clipboard mudou", diagnostic: nil, recovery: "O texto continua no histórico do Resenha. Tente novamente.")
+        case TextInjectionError.targetUnavailable:
+            self.init(title: "O aplicativo original não está disponível", diagnostic: nil, recovery: "Volte ao campo de texto e tente novamente.")
+        case TextInjectionError.eventCreationFailed:
+            self.init(title: "Não foi possível inserir o texto", diagnostic: nil, recovery: "O texto está no clipboard. Use Command-V.")
         case is AudioRecorderError:
             self.init(title: "Microfone indisponível", diagnostic: nil, recovery: "Confira o acesso e a disponibilidade do microfone.")
         default:
@@ -166,10 +174,11 @@ final class DictationCoordinator {
                     }
                     try Task.checkCancellation()
                     guard self.attemptID == attemptID else { return }
-                    _ = try self.injector.stage(transcript)
+                    let changeCount = try self.injector.stage(transcript)
                     self.onTranscript(transcript)
                     self.transition(to: .inserting)
                     if self.showsHUD() { self.panel.show(.inserting, target: self.panelTarget) }
+                    try await self.injector.insertStaged(into: self.targetApplication, changeCount: changeCount)
                     self.transition(to: .idle)
                     self.reset()
                 } catch is CancellationError {

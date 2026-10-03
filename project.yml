@@ -22,11 +22,8 @@ targets:
       - sdk: Metal.framework
       - sdk: libc++.tbd
     entitlements:
-      path: Config/ResenhaStore.entitlements
-      properties:
-        com.apple.security.app-sandbox: true
-        com.apple.security.device.audio-input: true
-        com.apple.security.network.client: true
+      path: Config/Resenha.entitlements
+      properties: {}
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: br.com.luisroquette.Resenha
@@ -35,7 +32,7 @@ targets:
         DEVELOPMENT_TEAM: S3YCFYY8SC
         CODE_SIGN_STYLE: Automatic
         GENERATE_INFOPLIST_FILE: NO
-        INFOPLIST_FILE: Config/ResenhaStore-Info.plist
+        INFOPLIST_FILE: Config/Resenha-Info.plist
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ENABLE_HARDENED_RUNTIME: YES
         ARCHS: arm64

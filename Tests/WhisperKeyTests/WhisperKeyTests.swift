@@ -38,7 +38,7 @@ final class WhisperKeyTests: XCTestCase {
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
         let preferences = ProductPreferences(defaults: defaults)
-        XCTAssertEqual(preferences.shortcut, .controlOptionSpace)
+        XCTAssertEqual(preferences.shortcut, .rightOption)
         XCTAssertTrue(preferences.showsHUD)
         XCTAssertTrue(preferences.soundsEnabled)
         XCTAssertTrue(preferences.keepsHistory)
@@ -47,16 +47,17 @@ final class WhisperKeyTests: XCTestCase {
         XCTAssertEqual(preferences.readySoundID, 60)
         var changed: HotkeyShortcut?
         preferences.onShortcutChange = { changed = $0 }
-        preferences.shortcut = .controlSpace
+        let customShortcut = HotkeyShortcut(keyCode: 40, flags: [.maskControl, .maskShift], keyLabel: "K")
+        preferences.shortcut = customShortcut
         preferences.showsHUD = false
         preferences.soundsEnabled = false
         preferences.keepsHistory = false
         preferences.transcriptionLanguage = .spanish
         preferences.transcriptionGlossary = "coisa = COESA"
         preferences.readySoundID = 3
-        XCTAssertEqual(changed, .controlSpace)
+        XCTAssertEqual(changed, customShortcut)
         let restored = ProductPreferences(defaults: defaults)
-        XCTAssertEqual(restored.shortcut, .controlSpace)
+        XCTAssertEqual(restored.shortcut, customShortcut)
         XCTAssertFalse(restored.showsHUD)
         XCTAssertFalse(restored.soundsEnabled)
         XCTAssertFalse(restored.keepsHistory)
@@ -294,6 +295,12 @@ final class WhisperKeyTests: XCTestCase {
         }
     }
 
+    func testDirectInsertionRequiresTheOriginalApplicationToBeFrontmost() {
+        XCTAssertTrue(TextInjectionTargetPolicy.isExpectedTarget(targetPID: 42, frontmostPID: 42))
+        XCTAssertFalse(TextInjectionTargetPolicy.isExpectedTarget(targetPID: 42, frontmostPID: 7))
+        XCTAssertFalse(TextInjectionTargetPolicy.isExpectedTarget(targetPID: 42, frontmostPID: nil))
+    }
+
     func testHotkeyPresetsHaveDistinctNamesAndSafeTriggers() {
         XCTAssertEqual(Set(HotkeyShortcut.allCases.map(\.displayName)).count, HotkeyShortcut.allCases.count)
         XCTAssertTrue(HotkeyShortcut.rightOption.isModifierOnly)
@@ -302,6 +309,23 @@ final class WhisperKeyTests: XCTestCase {
             XCTAssertEqual(shortcut.keyCode, 49)
             XCTAssertFalse(shortcut.requiredFlags.isEmpty)
         }
+    }
+
+    func testCustomHotkeyRoundTripsAndMatchesOnlyItsExactCombination() throws {
+        let shortcut = HotkeyShortcut(keyCode: 40, flags: [.maskControl, .maskShift], keyLabel: "K")
+        let restored = try XCTUnwrap(HotkeyShortcut(rawValue: shortcut.rawValue))
+        XCTAssertEqual(restored, shortcut)
+        XCTAssertEqual(restored.displayName, "Control + Shift + K")
+        XCTAssertEqual(restored.isPressed(eventType: .keyDown, keyCode: 40, flags: [.maskControl, .maskShift]), true)
+        XCTAssertEqual(restored.isPressed(eventType: .keyDown, keyCode: 40, flags: [.maskControl, .maskShift, .maskAlternate]), false)
+        XCTAssertNil(restored.isPressed(eventType: .keyDown, keyCode: 41, flags: [.maskControl, .maskShift]))
+        XCTAssertEqual(HotkeyShortcut(rawValue: "rightOption"), .rightOption)
+    }
+
+    @MainActor
+    func testShortcutRecorderNormalizesOnlySupportedGlobalModifiers() {
+        let flags = ShortcutCaptureController.flags(from: [.command, .option, .capsLock, .numericPad])
+        XCTAssertEqual(flags, [.maskCommand, .maskAlternate])
     }
 
     func testHotkeyMatchingRejectsExtraModifiersAndInterruptionReleasesLatch() {
@@ -424,19 +448,22 @@ final class WhisperKeyTests: XCTestCase {
     func testPermissionPresentationCoversEveryAvailabilityCombination() {
         for microphone in [false, true] {
             for inputMonitoring in [false, true] {
-                    let snapshot = PermissionSnapshot(microphone: microphone, inputMonitoring: inputMonitoring)
-                    XCTAssertEqual(snapshot.isReady, microphone && inputMonitoring)
-                    XCTAssertEqual(snapshot.presentations.map(\.permission), [.microphone, .inputMonitoring])
-                    XCTAssertEqual(snapshot.presentations.map(\.isGranted), [microphone, inputMonitoring])
-                    XCTAssertEqual(snapshot.missingPermissions.count, [microphone, inputMonitoring].filter { !$0 }.count)
+                for accessibility in [false, true] {
+                    let snapshot = PermissionSnapshot(microphone: microphone, inputMonitoring: inputMonitoring, accessibility: accessibility)
+                    XCTAssertEqual(snapshot.isReady, microphone && inputMonitoring && accessibility)
+                    XCTAssertEqual(snapshot.presentations.map(\.permission), [.microphone, .inputMonitoring, .accessibility])
+                    XCTAssertEqual(snapshot.presentations.map(\.isGranted), [microphone, inputMonitoring, accessibility])
+                    XCTAssertEqual(snapshot.missingPermissions.count, [microphone, inputMonitoring, accessibility].filter { !$0 }.count)
                     for presentation in snapshot.presentations {
                         XCTAssertEqual(presentation.status, "\(presentation.permission.name): \(presentation.isGranted ? "ativada" : "permissão necessária")")
                         XCTAssertFalse(presentation.permission.purpose.isEmpty)
                         XCTAssertEqual(presentation.permission.settingsActionTitle, "Abrir Ajustes de \(presentation.permission.name)")
                     }
                     let expectedMessage = !microphone ? "Acesso ao Microfone necessário"
-                        : !inputMonitoring ? "Acesso ao Monitoramento de Entrada necessário" : "Permissões prontas"
+                        : !inputMonitoring ? "Acesso ao Monitoramento de Entrada necessário"
+                        : !accessibility ? "Acesso à Acessibilidade necessário" : "Permissões prontas"
                     XCTAssertEqual(snapshot.missingPermissionMessage, expectedMessage)
+                }
                 }
         }
     }
@@ -465,8 +492,10 @@ final class WhisperKeyTests: XCTestCase {
     func testPermissionDestinationsIdentifyEachSettingsPane() {
         XCTAssertEqual(RequiredPermission.microphone.name, "Microfone")
         XCTAssertEqual(RequiredPermission.inputMonitoring.name, "Monitoramento de Entrada")
+        XCTAssertEqual(RequiredPermission.accessibility.name, "Acessibilidade")
         XCTAssertEqual(RequiredPermission.microphone.settingsDestination.absoluteString, "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone")
         XCTAssertEqual(RequiredPermission.inputMonitoring.settingsDestination.absoluteString, "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent")
+        XCTAssertEqual(RequiredPermission.accessibility.settingsDestination.absoluteString, "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
     }
 
     @MainActor
@@ -488,7 +517,7 @@ final class WhisperKeyTests: XCTestCase {
         for (phase, expected) in [(DictationPhase.recording, "Ouvindo"), (.transcribing, "Transcrevendo"), (.inserting, "Inserindo")] {
             let presentation = MenuStatusPresentation(phase: phase, snapshot: snapshot, error: nil)
             XCTAssertEqual(presentation.activity, expected)
-            XCTAssertTrue(presentation.accessibleStatus.contains("Serviços do macOS"))
+            XCTAssertTrue(presentation.accessibleStatus.contains("configurado no Resenha"))
             XCTAssertEqual(presentation.symbol, phase == .recording ? "mic.fill" : "waveform")
         }
         let blocked = MenuStatusPresentation(phase: .idle, snapshot: snapshot, error: nil)
@@ -591,6 +620,7 @@ final class WhisperKeyTests: XCTestCase {
     func testPermissionGateStartsWhenPermissionsArriveAfterLaunch() {
         XCTAssertFalse(PermissionGate.shouldStartHotkey(microphone: false, inputMonitoring: true, hotkeyRunning: false))
         XCTAssertFalse(PermissionGate.shouldStartHotkey(microphone: true, inputMonitoring: false, hotkeyRunning: false))
+        XCTAssertFalse(PermissionGate.shouldStartHotkey(microphone: true, inputMonitoring: true, accessibility: false, hotkeyRunning: false))
         XCTAssertTrue(PermissionGate.shouldStartHotkey(microphone: true, inputMonitoring: true, hotkeyRunning: false))
         XCTAssertFalse(PermissionGate.shouldStartHotkey(microphone: true, inputMonitoring: true, hotkeyRunning: true))
     }

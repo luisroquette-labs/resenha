@@ -1,5 +1,7 @@
 # SPEC-017 — Sandboxed text insertion service
 
+Status: superseded by SPEC-021 on 2026-10-03. Retained as the historical Store design; it is not registered by the direct-distribution bundle.
+
 ## Problem
 
 Mac App Store apps must enable App Sandbox. Apple documents Accessibility API use as incompatible with sandbox, and simulated `Command-V` is not an acceptable Store architecture for this product.

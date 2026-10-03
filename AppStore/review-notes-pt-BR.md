@@ -1,5 +1,7 @@
 # Notas para a equipe de revisão
 
+> Arquivo histórico: a distribuição pela Mac App Store foi substituída pela distribuição direta em 03/10/2026. Estas notas não descrevem o bundle atual.
+
 Resenha é um app de barra de menus. Não há conta, compras ou conteúdo pago.
 
 ## Fluxo principal

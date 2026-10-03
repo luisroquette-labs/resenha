@@ -1,76 +1,53 @@
 # Resenha architecture
 
-Status: Mac App Store architecture implemented; physical cross-app acceptance and Store signing pending
+Status: direct-distribution architecture implemented; physical cross-app acceptance pending
 
 ## Runtime flow
 
 ```text
-Focused editable field
-        │ macOS Service: "Ditar com Resenha"
-        ▼
-ResenhaServiceProvider ──► DictationCoordinator ──► FloatingPanelController
-        waits                    │
-                                 ├──► AVAudioRecorder ──► temporary 16 kHz mono WAV
-shortcut release ◄── CGEvent tap│
-                                 ├──► embedded whisper.cpp XCFramework
-                                 │       └──► local verified model + Metal/Accelerate
-                                 ├──► general pasteboard recovery copy
-                                 └──► service response pasteboard
-                                             │
-                                             ▼
-                                  requesting app inserts text
+configured global shortcut → listen-only CGEvent tap
+        │ press                         │ release
+        ▼                               ▼
+capture target app → AVAudioRecorder → embedded whisper.cpp
+                                            │
+                                            ▼
+                                  general pasteboard
+                                            │
+                           reactivate target + Command-V
 ```
 
 ## Distribution shape
 
-One XcodeGen app target (`WhisperKey`, product name `Resenha`) and one unit-test target produce one bundle identity: `br.com.luisroquette.Resenha`. There is no second direct target or legacy app edition. The app is arm64, requires macOS 14, runs as a menu-bar utility and enables App Sandbox.
-
-The signed bundle embeds the arm64 `whisper.xcframework`. It does not invoke Homebrew, Python, `Process`, a shell or an external executable. The model is downloaded once from the official Hugging Face repository into the sandbox Application Support container, then accepted only after exact byte-size and SHA-256 verification.
+One XcodeGen application target (`WhisperKey`, product name `Resenha`) and one unit-test target produce bundle `br.com.luisroquette.Resenha`. The arm64 macOS 14 app uses Hardened Runtime and direct distribution without App Sandbox. It embeds `whisper.xcframework`; no Homebrew, Python, shell, cloud transcription or API key is required.
 
 ## Components
 
 | Component | Responsibility | Boundary |
 |---|---|---|
-| `ResenhaServiceProvider` | receive a native Services request and return plain text | one request, ten-minute timeout, no focus manipulation |
-| `HotkeyMonitor` | observe only the armed service shortcut release | listen-only; never posts events or stores unrelated keys |
-| `AudioRecorder` | capture one temporary WAV and meter levels | deletes stale/current audio; never transcribes |
-| `WhisperTranscriber` | run serialized embedded inference and deterministic cleanup | no network, process or Python runtime |
-| `WhisperModelManager` | download, verify and atomically install the fixed model | HTTPS download only; rejects wrong size/hash |
-| `TextInjector` | place every completed transcript on the general pasteboard | recovery copy only; never simulates paste |
-| `DictationCoordinator` | own phase, cancellation, cleanup and callbacks | one active attempt; fail closed |
-| `FloatingPanelController` | render passive status near the current screen | never activates or becomes text target |
-| `TranscriptHistory` | keep up to ten successful texts locally when enabled | no audio, sync, analytics or account |
+| `HotkeyMonitor` | observe the exact user-selected press/release | listen-only; never suppresses events |
+| `ShortcutCaptureController` | record and persist a shortcut inside Settings | local events only while recording |
+| `AudioRecorder` | capture one temporary 16 kHz mono WAV | deletes stale/current audio |
+| `WhisperTranscriber` | serialized embedded inference | local model and Metal/Accelerate |
+| `TextInjector` | stage text, restore target focus and post `Command-V` | target, permission and clipboard guards |
+| `DictationCoordinator` | own state, cancellation and cleanup | one active attempt; fail closed |
+| `TranscriptHistory` | retain up to ten successful texts when enabled | local only; no audio or sync |
 
-## State and concurrency
+## Permissions
 
-The main actor owns `idle → recording → transcribing → inserting → idle`; any active phase may enter `failed`, then recover to idle. Inference runs in one detached user-initiated task behind an engine lock. Attempt identifiers reject stale completions. Cancellation stops recording/task ownership and removes the unique temporary WAV.
+- Microphone captures speech only while the shortcut is held.
+- Input Monitoring powers the global listen-only event tap.
+- Accessibility reactivates the captured application and posts one paste command.
 
-The service provider keeps its AppKit service connection alive with a bounded run-loop wait. Completion returns UTF-8 plain text to the requesting app. Failure and timeout return no placeholder text, while the last successful transcript is already available through Command-V.
-
-## Permissions and sandbox
-
-The app requests only:
-
-- Microphone, for AVFoundation capture.
-- Input Monitoring, for the release of the already-invoked service shortcut.
-- Network client entitlement, only for the first verified model download.
-
-The production binary does not request Accessibility and contains no `AXIsProcessTrusted`, `AXUIElement`, `CGEventPost` or synthetic Command-V path. UI accessibility labels and system appearance support remain normal SwiftUI accessibility behavior and require no privacy permission.
+The app requests permissions only after explicit user action and exposes separate recovery destinations. It does not inspect another app's accessibility tree.
 
 ## Data lifecycle
 
 - Audio: unique temporary file, deleted after success, failure or cancellation.
-- Transcript: returned to the service, copied to the general pasteboard and optionally retained in a bounded ten-item local history.
-- Model: persistent inside the sandbox container; verified before installation.
+- Transcript: kept on the general pasteboard and optionally in a bounded local history.
+- Model: persistent local file accepted only after exact size and SHA-256 verification.
 - Preferences: local `UserDefaults`; no account or sync.
 - Diagnostics: no raw audio or transcript content in logs.
 
-## Build and release boundary
+## Validation boundary
 
-The archive must contain `PrivacyInfo.xcprivacy`, the embedded Whisper framework, exactly the three declared sandbox entitlements and no forbidden insertion symbols. The exact archived app must pass unit tests, model verification, embedded inference and physical Service insertion before upload. Apple Distribution signing, provisioning, App Store Connect upload and final submission remain external release gates.
-
-## Deferred
-
-- Windows client.
-- Streaming inference and larger-model benchmarks.
-- AI rewrite, cloud transcription, login, billing, analytics or sync.
+Unit tests prove shortcut serialization/matching, permission combinations, clipboard staging and target identity. A signed app with real TCC grants must still prove physical TextEdit insertion, then browser and terminal compatibility. The legacy sandboxed Service design remains documented in SPEC-017 but is not registered in the direct bundle.
