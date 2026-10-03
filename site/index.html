@@ -34,7 +34,7 @@
   </header>
 
   <main id="conteudo">
-    <section class="hero shell" id="inicio" aria-labelledby="hero-title">
+    <section class="hero shell" id="inicio" aria-labelledby="hero-title" data-reveal>
       <div class="hero-copy">
         <p class="kicker"><span></span> A alternativa open source ao Wispr Flow</p>
         <h1 id="hero-title">Fale sem<br><em>contar palavras.</em></h1>
@@ -46,6 +46,7 @@
       </div>
 
       <div class="hero-stage" aria-label="Demonstração visual do Resenha transcrevendo uma frase">
+        <p class="hero-stamp" aria-label="Grátis e open source"><span>R$ 0</span>OPEN SOURCE</p>
         <div class="sound-rings" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
         <div class="editor-window">
           <div class="window-bar" aria-hidden="true"><span></span><span></span><span></span><b>rascunho.txt</b></div>
@@ -58,7 +59,14 @@
       </div>
     </section>
 
-    <section class="proof-strip" aria-label="Destaques do Resenha">
+    <section class="voice-ribbon" aria-label="Exemplos de onde usar o Resenha">
+      <div class="voice-ribbon-track">
+        <span>E-mails</span><i>fale</i><span>Documentos</span><i>revise</i><span>Mensagens</span><i>responda</i><span>Notas</span><i>registre</i><span>Código</span><i>explique</i>
+        <span aria-hidden="true">E-mails</span><i aria-hidden="true">fale</i><span aria-hidden="true">Documentos</span><i aria-hidden="true">revise</i><span aria-hidden="true">Mensagens</span><i aria-hidden="true">responda</i><span aria-hidden="true">Notas</span><i aria-hidden="true">registre</i><span aria-hidden="true">Código</span><i aria-hidden="true">explique</i>
+      </div>
+    </section>
+
+    <section class="proof-strip" aria-label="Destaques do Resenha" data-reveal>
       <div class="shell proof-grid">
         <p><b>R$ 0</b><span>para usar</span></p>
         <p><b>Sem teto</b><span>semanal de palavras</span></p>
@@ -67,7 +75,7 @@
       </div>
     </section>
 
-    <section class="comparison-intro" id="comparacao" aria-labelledby="comparison-title">
+    <section class="comparison-intro" id="comparacao" aria-labelledby="comparison-title" data-reveal>
       <div class="shell comparison-layout">
         <div>
           <p class="kicker">Resenha × Wispr Flow</p>
@@ -86,7 +94,7 @@
       </div>
     </section>
 
-    <section class="flow shell ruled-section" id="produto" aria-labelledby="flow-title">
+    <section class="flow shell ruled-section" id="produto" aria-labelledby="flow-title" data-reveal>
       <div class="section-heading">
         <p class="kicker">Um gesto. Três momentos.</p>
         <h2 id="flow-title">Falar vira tão natural<br>quanto digitar.</h2>
@@ -99,7 +107,7 @@
       <p class="service-note">O atalho é gravado dentro do Resenha. A permissão de Acessibilidade devolve o texto ao aplicativo ativo.</p>
     </section>
 
-    <section class="product-tour" aria-labelledby="tour-title">
+    <section class="product-tour" aria-labelledby="tour-title" data-reveal>
       <div class="shell">
         <div class="section-heading light-heading">
           <p class="kicker">O produto, sem maquiagem</p>
@@ -107,7 +115,7 @@
           <p>Vídeos e capturas gerados com os próprios componentes SwiftUI do aplicativo.</p>
         </div>
 
-        <figure class="product-film">
+        <figure class="product-film" data-reveal>
           <div class="film-frame">
             <video autoplay muted loop playsinline controls preload="metadata" poster="assets/product/resenha-flow-poster.webp" aria-label="Demonstração do fluxo de ditado do Resenha">
               <source src="assets/product/resenha-flow.mp4" type="video/mp4">
@@ -116,7 +124,7 @@
           <figcaption><span>01 / FLUXO COMPLETO</span><h3>Da voz ao cursor em oito segundos.</h3><p>Demonstração do HUD nativo nos estados Ouvindo, Transcrevendo e Inserindo.</p></figcaption>
         </figure>
 
-        <figure class="product-film settings-film">
+        <figure class="product-film settings-film" data-reveal>
           <div class="film-frame"><video muted loop playsinline controls preload="metadata" poster="assets/product/settings-general.webp" aria-label="Tour em vídeo dos ajustes do Resenha"><source src="assets/product/resenha-settings.mp4" type="video/mp4"></video></div>
           <figcaption><span>02 / TOUR DOS AJUSTES</span><h3>Seis áreas. Nenhuma bagunça.</h3><p>Geral, atalho, sons, áudio, transcrição e informações do aplicativo.</p></figcaption>
         </figure>
@@ -133,7 +141,7 @@
       </div>
     </section>
 
-    <section class="local-section" id="privacidade" aria-labelledby="local-title">
+    <section class="local-section" id="privacidade" aria-labelledby="local-title" data-reveal>
       <div class="shell local-layout">
         <div class="local-mark" aria-hidden="true">
           <img src="assets/brand/resenha-mark.svg" alt="">
@@ -154,7 +162,7 @@
       </div>
     </section>
 
-    <section class="details shell ruled-section" aria-labelledby="details-title">
+    <section class="details shell ruled-section" aria-labelledby="details-title" data-reveal>
       <div class="section-heading">
         <p class="kicker">Construído para o Mac</p>
         <h2 id="details-title">Nativo até o último pixel.</h2>
@@ -167,7 +175,7 @@
       </div>
     </section>
 
-    <section class="open-source" id="codigo" aria-labelledby="source-title">
+    <section class="open-source" id="codigo" aria-labelledby="source-title" data-reveal>
       <div class="shell source-layout">
         <div><p class="kicker">Código aberto sem letra miúda</p><h2 id="source-title">Grátis para usar.<br>Aberto para melhorar.</h2></div>
         <div>
@@ -177,7 +185,7 @@
       </div>
     </section>
 
-    <section class="download shell" id="download" aria-labelledby="download-title">
+    <section class="download shell" id="download" aria-labelledby="download-title" data-reveal>
       <div class="download-card">
         <div class="download-icon"><img src="assets/brand/resenha-app-icon.png" alt="Ícone do Resenha" width="128" height="128"></div>
         <div class="download-copy">
