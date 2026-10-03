@@ -87,13 +87,16 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
     assert.ok(Object.isFrozen(output));
     assert.deepEqual(fixture.record, before);
   });
-  test('CK-7/15: authored state is unavailable, missing and malformed data fail closed', () => {
-    for (const channel of ['macos', 'source', 'store']) {
+  test('CK-7/15: published source resolves while unreleased channels fail closed', () => {
+    assert.equal(resolveDestination('source', releaseState.source).active, true);
+    assert.equal(resolveDestination('source', releaseState.source).href, 'https://github.com/luisroquette/resenha');
+    for (const channel of ['macos', 'store']) {
       assert.equal(releaseState[channel].url, null);
       assert.equal(releaseState[channel].evidence, null);
       assert.equal(resolveDestination(channel, releaseState[channel]).active, false);
-      for (const record of [null, undefined, {}, '', [], { state: 'published' }]) assert.equal(resolveDestination(channel, record).active, false);
     }
+    for (const channel of ['macos', 'source', 'store'])
+      for (const record of [null, undefined, {}, '', [], { state: 'published' }]) assert.equal(resolveDestination(channel, record).active, false);
     assert.equal(resolveDestination('__proto__', macos).active, false);
   });
   test('CK-7: malformed evidence and concrete-destination partitions', () => {
@@ -133,6 +136,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
     await writeFile(join(root, 'index.html'), '<h1>Owned fixture</h1>');
     await writeFile(join(root, 'styles.css'), 'body {}');
     await writeFile(join(root, 'release.mjs'), 'export const test = true;');
+    await writeFile(join(root, 'media.mjs'), 'export const test = true;');
     await writeFile(join(fixtureRoot, 'outside.txt'), 'OWNED_OUTSIDE_SENTINEL');
     await symlink(join(fixtureRoot, 'outside.txt'), join(root, 'escape.txt'));
     try {
@@ -140,11 +144,12 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
         const preview = await createPreviewServer({ root, prefix });
         try {
           assert.equal(preview.server.address().address, '127.0.0.1');
-          assert.equal((await get(preview.origin, prefix)).status, 200);
+        assert.equal((await get(preview.origin, prefix)).status, 200);
+          assert.equal((await get(preview.origin, prefix + 'privacy/')).status, 404);
           const head = await get(preview.origin, prefix, 'HEAD');
           assert.equal(head.status, 200); assert.equal(head.body, '');
           assert.match(head.headers['content-type'], /text\/html/u);
-          for (const [name, type] of [['styles.css', 'text/css'], ['release.mjs', 'text/javascript']]) {
+          for (const [name, type] of [['styles.css', 'text/css'], ['release.mjs', 'text/javascript'], ['media.mjs', 'text/javascript']]) {
             assert.ok((await get(preview.origin, prefix + name)).headers['content-type'].startsWith(type));
           }
           for (const path of ['../outside.txt', '%2e%2e/outside.txt', '%2e%2e%2foutside.txt', '%ZZ', '%00', 'escape.txt', '%5c..%5coutside.txt', '/outside.txt']) {
@@ -175,9 +180,10 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
         assert.match(html, /name="description"[^>]*content="[^"]*(?:desenvolvimento|prepara)[^"]*"/iu);
         assert.match(html, /property="og:title"/u);
         assert.match(html, /property="og:description"/u);
-        assert.match(html, /Apache 2\.0/u);
-        assert.match(html, /SwiftUI/u); assert.match(html, /WinUI/u); assert.match(html, /Rust/u);
-        assert.match(html, /planejad[oa]|direção|objetivo/iu);
+        assert.match(html, /licença MIT/u);
+        assert.match(html, /SwiftUI/u); assert.match(html, /whisper\.cpp/u); assert.match(html, /App Sandbox/iu);
+        assert.match(html, /Apple Silicon/u); assert.match(html, /AVFoundation/u);
+        assert.match(html, /prepara|roteiro/iu);
         assert.equal((html.match(/id="download"/gu) ?? []).length, 1);
         assert.ok((html.match(/href="#download"/gu) ?? []).length >= 2);
         assert.match(html.match(/<section\b[^>]*id="inicio"[\s\S]*?<\/section>/u)?.[0] ?? '', /href="#download"/u);
@@ -187,11 +193,24 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
         assert.doesNotMatch(html, /rel="canonical"|aggregateRating|application\/ld\+json/u);
         assert.doesNotMatch(html, /<(?:form|input|iframe)\b/iu);
         assert.match(html, /<details[\s>]/u); assert.match(html, /<summary[\s>]/u);
-        for (const name of ['styles.css', 'release.mjs']) {
+        for (const name of ['styles.css', 'release.mjs', 'media.mjs', 'assets/brand/resenha-mark.svg',
+          'assets/brand/resenha-app-icon.png', 'assets/product/hud-listening.png',
+          'assets/product/settings-general.webp', 'assets/product/settings-shortcut.webp',
+          'assets/product/settings-sounds.webp', 'assets/product/settings-audio.webp',
+          'assets/product/settings-transcription.webp', 'assets/product/settings-about.webp',
+          'assets/product/resenha-flow.mp4', 'assets/product/resenha-settings.mp4',
+          'assets/product/resenha-flow-poster.webp']) {
           assert.ok(html.includes(`"./${name}"`) || html.includes(`"${name}"`));
           assert.equal((await get(preview.origin, prefix + name)).status, 200);
         }
+        assert.equal((html.match(/Interface real do app/gu) ?? []).length, 1);
+        assert.equal((html.match(/<video\b/gu) ?? []).length, 2);
+        assert.doesNotMatch(html, /OpenAI|chave API|Acessibilidade para inserir/u);
         assert.match(html, /type="module"/u);
+        const privacy = await get(preview.origin, prefix + 'privacy/');
+        assert.equal(privacy.status, 200);
+        assert.match(privacy.body, /Sua voz fica no seu Mac/u);
+        assert.match(privacy.body, /não solicita Acessibilidade/u);
       } finally { await preview.close(); }
     }
   });

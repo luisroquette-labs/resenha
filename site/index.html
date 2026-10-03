@@ -3,116 +3,190 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Resenha — Fala que vira texto. Em desenvolvimento.</title>
-  <meta name="description" content="Conheça o Resenha: ditado local-first em desenvolvimento. Segure uma tecla, fale e solte para escrever no cursor. macOS primeiro; Windows planejado.">
+  <title>Resenha — Sua voz, em qualquer campo.</title>
+  <meta name="description" content="Resenha está em preparação para a Mac App Store: ditado por voz local, gratuito e de código aberto para Apple Silicon.">
   <meta property="og:type" content="website">
   <meta property="og:locale" content="pt_BR">
-  <meta property="og:title" content="Resenha — Fala que vira texto. Em desenvolvimento.">
-  <meta property="og:description" content="Ditado local-first em desenvolvimento, com macOS primeiro e Windows planejado. Conheça o fluxo, os recursos e a disponibilidade do Resenha.">
-  <meta name="theme-color" content="#f7f4ec">
+  <meta property="og:title" content="Resenha — Sua voz, em qualquer campo.">
+  <meta property="og:description" content="Segure o atalho, fale e solte. O Resenha transcreve no seu Mac e escreve onde o cursor já está.">
+  <meta name="theme-color" content="#f1eee4">
+  <link rel="icon" href="assets/brand/resenha-app-icon.png">
   <link rel="stylesheet" href="styles.css">
   <script type="module" src="release.mjs"></script>
+  <script type="module" src="media.mjs"></script>
 </head>
 <body>
   <a class="skip-link" href="#conteudo">Pular para o conteúdo</a>
-  <header class="site-header wrap">
-    <a class="wordmark" href="#inicio" aria-label="Resenha, início">resenha<span aria-hidden="true">*</span></a>
+
+  <header class="site-header shell">
+    <a class="brand" href="#inicio" aria-label="Resenha, início">
+      <img src="assets/brand/resenha-mark.svg" alt="" width="42" height="42">
+      <span>resenha.</span>
+    </a>
     <nav aria-label="Navegação principal">
-      <a href="#como-funciona">Como funciona</a>
-      <a href="#recursos">Recursos</a>
-      <a class="nav-action" href="#download">Disponibilidade <span aria-hidden="true">↗</span></a>
+      <a href="#produto">Produto</a>
+      <a href="#privacidade">Privacidade</a>
+      <a href="#codigo">Código</a>
+      <a class="nav-cta" href="#download">Baixar <span aria-hidden="true">↘</span></a>
     </nav>
   </header>
 
   <main id="conteudo">
-    <section class="hero wrap" id="inicio" aria-labelledby="hero-title">
+    <section class="hero shell" id="inicio" aria-labelledby="hero-title">
       <div class="hero-copy">
-        <p class="eyebrow"><span class="status-dot" aria-hidden="true"></span> Uma ideia em voz alta · em desenvolvimento</p>
-        <h1 id="hero-title">Fala que<br>vira <em>texto.</em></h1>
-        <p class="hero-description">Tem coisa que sai melhor falando.<br>Segure uma tecla, diga o que pensou e solte. O Resenha transforma sua voz em texto no cursor.</p>
-        <a class="button" href="#download">Ver disponibilidade <span aria-hidden="true">↓</span></a>
-        <p class="hero-note">Ditado local no Mac. Código aberto no horizonte.</p>
+        <p class="kicker"><span></span> Ditado local para macOS</p>
+        <h1 id="hero-title">Sua voz,<br><em>em qualquer campo.</em></h1>
+        <p class="hero-lead">Segure o atalho. Fale. Solte. O Resenha transforma sua voz em texto exatamente onde você já estava escrevendo.</p>
+        <div class="hero-actions">
+          <a class="button" href="#download">Ver disponibilidade <span aria-hidden="true">↘</span></a>
+          <span>Grátis · código aberto · 100% local</span>
+        </div>
       </div>
 
-      <figure class="product-preview">
-        <div class="note-sheet">
-          <div class="note-meta"><span>NOTA 001</span><span aria-hidden="true">↗</span></div>
-          <p class="note-handwritten">Uma boa ideia<br>não precisa esperar<br>seus dedos.<span class="text-cursor" aria-hidden="true"></span></p>
-          <div class="note-footer"><span>Da sua voz para a página.</span><span aria-hidden="true">✳</span></div>
+      <div class="hero-stage" aria-label="Demonstração visual do Resenha transcrevendo uma frase">
+        <div class="sound-rings" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+        <div class="editor-window">
+          <div class="window-bar" aria-hidden="true"><span></span><span></span><span></span><b>rascunho.txt</b></div>
+          <p class="draft-label">NOTA DE VOZ / 001</p>
+          <p class="draft-text">A ideia não<br>precisa esperar<br><i>seus dedos.</i><span class="caret" aria-hidden="true"></span></p>
+          <p class="draft-meta">texto inserido no cursor</p>
         </div>
-        <div class="preview-hud" aria-hidden="true">
-          <div class="hud-state"><span class="recording-dot"></span> Ouvindo <span class="hud-time">00:07</span></div>
-          <svg class="waveform" viewBox="0 0 220 36" fill="none" focusable="false">
-            <path d="M2 16v4m6-8v12m6-16v20m6-18v16m6-10v4m6-12v20m6-24v28m6-30v32m6-25v18m6-16v14m6-10v6m6-12v18m6-24v30m6-28v26m6-18v10m6-12v14m6-20v26m6-30v34m6-28v22m6-14v6m6-12v18m6-22v26m6-20v14m6-10v6m6-12v18m6-24v30m6-28v26m6-22v18m6-12v6m6-8v10m6-16v22m6-18v14m6-12v10m6-8v6m6-4v2m6-4v6m6-6v6" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
-          </svg>
-        </div>
-        <figcaption><span class="preview-label">Prévia ilustrativa</span><span>Segure. Fale. Solte.</span></figcaption>
-      </figure>
+        <img class="live-hud" src="assets/product/hud-listening.png" alt="HUD do Resenha mostrando Ouvindo, cronômetro e onda sonora">
+        <p class="real-ui-note">Interface real do app · escala ampliada</p>
+      </div>
     </section>
 
-    <section class="workflow wrap section-line" id="como-funciona" aria-labelledby="workflow-title">
-      <div class="section-intro"><p class="eyebrow">Menos interrupções</p><h2 id="workflow-title">O pensamento continua.<br>A digitação acompanha.</h2></div>
-      <ol class="steps">
-        <li><span class="step-number" aria-hidden="true">01</span><h3>Segure a tecla.</h3><p>Deixe o cursor no campo em que quer escrever. No protótipo, segure <kbd>Option direita</kbd> <span class="english-key">(Right Option)</span>.</p></li>
-        <li><span class="step-number" aria-hidden="true">02</span><h3>Fale do seu jeito.</h3><p>O microfone grava enquanto a tecla fica pressionada. Uma pequena barra acompanha o nível da sua voz.</p></li>
-        <li><span class="step-number" aria-hidden="true">03</span><h3>Solte. Está escrito.</h3><p>O Whisper transcreve localmente e o Resenha insere o texto no cursor original, sem você precisar trocar de app.</p></li>
+    <section class="proof-strip" aria-label="Destaques do Resenha">
+      <div class="shell proof-grid">
+        <p><b>100%</b><span>processado no Mac</span></p>
+        <p><b>3</b><span>idiomas no lançamento</span></p>
+        <p><b>10</b><span>últimos textos recuperáveis</span></p>
+        <p><b>0</b><span>contas ou assinaturas</span></p>
+      </div>
+    </section>
+
+    <section class="flow shell ruled-section" id="produto" aria-labelledby="flow-title">
+      <div class="section-heading">
+        <p class="kicker">Um gesto. Três momentos.</p>
+        <h2 id="flow-title">Falar vira tão natural<br>quanto digitar.</h2>
+      </div>
+      <ol class="flow-steps">
+        <li><span>01</span><div><h3>Segure</h3><p>Deixe o cursor no campo e mantenha o atalho de Serviço pressionado.</p></div><kbd>⌃ ⌥ Space</kbd></li>
+        <li><span>02</span><div><h3>Fale</h3><p>O HUD responde ao ritmo da sua voz e confirma que está ouvindo.</p></div><div class="mini-wave" aria-hidden="true">▂▄▆█▅▃▇▄▂</div></li>
+        <li><span>03</span><div><h3>Solte</h3><p>O Whisper transcreve localmente. O texto volta ao campo pelo macOS.</p></div><span class="done-mark" aria-hidden="true">✓</span></li>
       </ol>
-      <p class="section-footnote">Esse é o fluxo do protótipo para macOS. A compatibilidade varia conforme o aplicativo e o campo; a validação de uso ainda está em andamento.</p>
+      <p class="service-note">O atalho é personalizável nos Serviços do Teclado do macOS. O Resenha usa a integração nativa de Serviços para devolver o texto ao aplicativo ativo.</p>
     </section>
 
-    <section class="capabilities wrap section-line" id="recursos" aria-labelledby="features-title">
-      <div class="section-intro split-intro"><div><p class="eyebrow">Pequeno no caminho. Útil no dia.</p><h2 id="features-title">O essencial, com<br>espaço para ser seu.</h2></div><p>O primeiro passo é simples: voz entrando, texto saindo. Aqui está o que existe no protótipo e o que estamos preparando.</p></div>
-      <dl class="feature-ledger">
-        <div><dt><span class="feature-index" aria-hidden="true">01 /</span> Ditado no seu Mac</dt><dd><p>Transcrição em português com whisper.cpp e modelo local. Sem conta ou servidor no fluxo atual.</p><span class="tag current">No protótipo</span></dd></div>
-        <div><dt><span class="feature-index" aria-hidden="true">02 /</span> Sua voz à vista</dt><dd><p>Barra flutuante com tempo de gravação e onda que responde ao microfone. Discreta quando você não está falando.</p><span class="tag current">No protótipo</span></dd></div>
-        <div><dt><span class="feature-index" aria-hidden="true">03 /</span> Um atalho que combina com você</dt><dd><p>Escolha entre Option direita, Option esquerda ou combinações com Control, Option, Command e Espaço.</p><span class="tag current">No protótipo</span></dd></div>
-        <div><dt><span class="feature-index" aria-hidden="true">04 /</span> Português sem expulsar o inglês</dt><dd><p>Selecione PT-BR, inglês ou espanhol e mantenha termos como README, benchmark e SwiftUI no vocabulário pessoal.</p><span class="tag current">No protótipo</span></dd></div>
-      </dl>
+    <section class="product-tour" aria-labelledby="tour-title">
+      <div class="shell">
+        <div class="section-heading light-heading">
+          <p class="kicker">O produto, sem maquiagem</p>
+          <h2 id="tour-title">Pequeno quando aparece.<br>Completo quando você abre.</h2>
+          <p>Vídeos e capturas gerados com os próprios componentes SwiftUI do aplicativo.</p>
+        </div>
+
+        <figure class="product-film">
+          <div class="film-frame">
+            <video autoplay muted loop playsinline controls preload="metadata" poster="assets/product/resenha-flow-poster.webp" aria-label="Demonstração do fluxo de ditado do Resenha">
+              <source src="assets/product/resenha-flow.mp4" type="video/mp4">
+            </video>
+          </div>
+          <figcaption><span>01 / FLUXO COMPLETO</span><h3>Da voz ao cursor em oito segundos.</h3><p>Demonstração do HUD nativo nos estados Ouvindo, Transcrevendo e Inserindo.</p></figcaption>
+        </figure>
+
+        <figure class="product-film settings-film">
+          <div class="film-frame"><video muted loop playsinline controls preload="metadata" poster="assets/product/settings-general.webp" aria-label="Tour em vídeo dos ajustes do Resenha"><source src="assets/product/resenha-settings.mp4" type="video/mp4"></video></div>
+          <figcaption><span>02 / TOUR DOS AJUSTES</span><h3>Seis áreas. Nenhuma bagunça.</h3><p>Geral, atalho, sons, áudio, transcrição e informações do aplicativo.</p></figcaption>
+        </figure>
+
+        <div class="screen-gallery" id="telas" aria-label="Galeria das telas do Resenha">
+          <figure><div><img src="assets/product/settings-general.webp" alt="Tela Geral dos ajustes do Resenha"></div><figcaption><b>01</b> Geral</figcaption></figure>
+          <figure><div><img src="assets/product/settings-shortcut.webp" alt="Tela de personalização do atalho do Resenha"></div><figcaption><b>02</b> Atalho</figcaption></figure>
+          <figure><div><img src="assets/product/settings-sounds.webp" alt="Biblioteca de sons rápidos do Resenha"></div><figcaption><b>03</b> Sons</figcaption></figure>
+          <figure><div><img src="assets/product/settings-audio.webp" alt="Tela de configuração de áudio do Resenha"></div><figcaption><b>04</b> Áudio</figcaption></figure>
+          <figure><div><img src="assets/product/settings-transcription.webp" alt="Tela de idioma, modelo local e vocabulário pessoal"></div><figcaption><b>05</b> Transcrição</figcaption></figure>
+          <figure><div><img src="assets/product/settings-about.webp" alt="Tela Sobre do Resenha"></div><figcaption><b>06</b> Sobre</figcaption></figure>
+        </div>
+        <p class="gallery-note">Arraste para explorar · proporção nativa preservada · nenhum corte</p>
+      </div>
     </section>
 
-    <section class="privacy-section" id="privacidade" aria-labelledby="privacy-title">
-      <div class="wrap privacy-layout">
-        <div class="privacy-intro"><p class="eyebrow">Sua voz. Sua escolha.</p><h2 id="privacy-title">Começa no seu<br>computador.</h2><p>O modo local é a base do Resenha. Uma opção de nuvem está planejada para quem preferir escolher esse caminho.</p><span class="privacy-symbol" aria-hidden="true">↳</span></div>
-        <div class="provider-list">
-          <article><div class="provider-heading"><h3>Local, por padrão.</h3><span class="tag dark-tag">No protótipo</span></div><p>O whisper.cpp processa o áudio no Mac com um modelo instalado. A transcrição não envia áudio a uma API. O áudio temporário é apagado; os 10 últimos textos ficam somente no Mac e podem ser desativados ou limpos.</p><p class="provider-detail">O runtime e o modelo ainda precisam ser instalados separadamente no ambiente de desenvolvimento.</p></article>
-          <article><div class="provider-heading"><h3>Nuvem, se você escolher.</h3><span class="tag dark-tag">Planejado</span></div><p>A integração opcional com OpenAI usará uma chave API fornecida por você. Nesse modo, o áudio será enviado à OpenAI pela internet, somente após sua escolha.</p><p class="provider-detail">O uso terá cobrança separada do provedor. Este site não recebe chaves, não grava sua voz e não transcreve áudio.</p></article>
+    <section class="local-section" id="privacidade" aria-labelledby="local-title">
+      <div class="shell local-layout">
+        <div class="local-mark" aria-hidden="true">
+          <img src="assets/brand/resenha-mark.svg" alt="">
+          <i></i><i></i><i></i>
+        </div>
+        <div class="local-copy">
+          <p class="kicker">Sua voz não é matéria-prima.</p>
+          <h2 id="local-title">Fica no Mac.<br>Ponto.</h2>
+          <p>O microfone é capturado pelo AVFoundation e transcrito no próprio computador com whisper.cpp. Não existe backend, conta, telemetria ou chave de API.</p>
+          <ul>
+            <li><span>01</span> Áudio temporário apagado após a tentativa</li>
+            <li><span>02</span> Histórico opcional guardado só neste Mac</li>
+            <li><span>03</span> Modelo baixado uma vez e verificado por SHA-256</li>
+          </ul>
+          <p class="network-note">A internet é usada somente no primeiro download do modelo local de voz.</p>
+          <p class="network-note"><a href="privacy/">Ler a política de privacidade completa →</a></p>
         </div>
       </div>
     </section>
 
-    <section class="download-section wrap" id="download" aria-labelledby="download-title">
-      <div class="section-intro split-intro"><div><p class="eyebrow">A próxima conversa</p><h2 id="download-title">Primeiro no Mac.<br>Depois, mais longe.</h2></div><p>O Resenha ainda está em desenvolvimento. O download público está em preparação; estas são as etapas até ele chegar a você.</p></div>
-      <div class="platforms">
-        <article class="platform primary-platform" aria-labelledby="macos-title">
-          <div class="platform-heading"><svg viewBox="0 0 48 48" aria-hidden="true" focusable="false"><rect x="6" y="8" width="36" height="25" rx="2"/><path d="M18 40h12m-6-7v7"/></svg><span class="tag current">Protótipo local</span></div>
-          <h3 id="macos-title">macOS</h3><p>É onde a primeira versão está tomando forma.</p>
-          <div class="requirements"><h4>Ambiente de desenvolvimento</h4><p>macOS 14 ou posterior como alvo do projeto. Validação atual em Apple Silicon; outras configurações ainda precisam de testes.</p><p>Requer whisper-cli e modelo Whisper instalados separadamente. Ainda não há instalador independente.</p></div>
-          <div class="release-slot" data-release-channel="macos"><strong>Download em preparação</strong><span>Não há versão pública para baixar.</span></div>
-        </article>
-        <article class="platform" aria-labelledby="windows-title">
-          <div class="platform-heading"><svg viewBox="0 0 48 48" aria-hidden="true" focusable="false"><path d="M7 10h14v13H7zm20 0h14v13H27zM7 29h14v13H7zm20 0h14v13H27z"/></svg><span class="tag">Planejado</span></div>
-          <h3 id="windows-title">Windows</h3><p>A mesma ideia, pensada para outro teclado.</p>
-          <div class="requirements"><h4>Próxima plataforma</h4><p>Uma interface nativa em WinUI está planejada. O núcleo compartilhado em Rust também faz parte dessa direção futura.</p><p>A versão para Windows ainda não foi implementada. Requisitos e data de lançamento não estão definidos.</p></div>
-          <p class="platform-status">Windows no roadmap <span aria-hidden="true">↗</span></p>
-        </article>
+    <section class="details shell ruled-section" aria-labelledby="details-title">
+      <div class="section-heading">
+        <p class="kicker">Construído para o Mac</p>
+        <h2 id="details-title">Nativo até o último pixel.</h2>
       </div>
-      <div class="open-source-row"><div><p class="eyebrow">Feito para poder ser aberto</p><h3>O código também vai entrar na resenha.</h3><p>A direção é código aberto com licença Apache 2.0. O app atual usa SwiftUI no macOS; WinUI e núcleo Rust são planos. A publicação do repositório e da licença ainda está em preparação.</p></div><div class="future-destinations"><div class="release-slot" data-release-channel="source"><strong>GitHub em preparação</strong><span>O repositório ainda não é público.</span></div><div class="release-slot" data-release-channel="store"><strong>Mac App Store planejada</strong><span>Sem página na loja neste momento.</span></div></div></div>
+      <div class="detail-grid">
+        <article><span>SWIFTUI</span><h3>Leve de verdade</h3><p>Swift, SwiftUI e AVFoundation. Sem Electron, sem Python e sem servidor escondido.</p></article>
+        <article><span>WHISPER.CPP</span><h3>Apple Silicon</h3><p>Inferência arm64 acelerada por Metal e Accelerate, empacotada dentro do aplicativo.</p></article>
+        <article><span>APP SANDBOX</span><h3>Pronto para a loja</h3><p>Sandbox ativo, manifesto de privacidade e apenas microfone e rede de saída como entitlements.</p></article>
+        <article><span>ACESSÍVEL</span><h3>Sem sustos</h3><p>Estados visuais, sons opcionais, contraste aumentado, transparência e movimento reduzidos.</p></article>
+      </div>
     </section>
 
-    <section class="faq wrap section-line" id="perguntas" aria-labelledby="faq-title">
-      <div class="section-intro"><p class="eyebrow">Sem mistério</p><h2 id="faq-title">Antes de soltar a voz.</h2></div>
-      <div class="faq-list">
-        <details><summary>Já posso baixar e usar?</summary><p>Ainda não há um download público. Existe um protótipo local para macOS, que depende de runtime e modelo instalados à parte. A área de disponibilidade será atualizada quando houver uma versão pronta para distribuição.</p></details>
-        <details><summary>Posso escolher minha própria tecla?</summary><p>Sim. O protótipo oferece cinco atalhos globais e aplica a alteração imediatamente nos outros aplicativos.</p></details>
-        <details><summary>Minha voz vai para a internet?</summary><p>No fluxo local atual, a transcrição acontece no Mac e o áudio temporário é apagado ao fim da tentativa. O histórico opcional guarda somente os 10 últimos textos neste Mac. A opção futura de OpenAI enviará áudio ao provedor apenas se você escolher esse modo e fornecer sua chave; ela depende de internet e tem cobrança de uso separada.</p></details>
-        <details><summary>Preciso de uma conta? Vai ser gratuito?</summary><p>O protótipo não exige conta. A intenção é disponibilizar o Resenha como software gratuito e de código aberto, com licença Apache 2.0. Código e licença ainda serão publicados. O modo local não usa API paga; eventual uso opcional de OpenAI será cobrado pelo provedor.</p></details>
-        <details><summary>Funciona em qualquer aplicativo?</summary><p>A proposta é escrever no campo em que o cursor já está, usando a inserção de texto do macOS. A compatibilidade depende do aplicativo e do tipo de campo. Ainda estamos validando os cenários; não há garantia de suporte a todos os apps.</p></details>
-        <details><summary>Quais permissões ele precisa no Mac?</summary><p>O protótipo pede Microfone para gravar, Acessibilidade para inserir texto e Monitoramento de Entrada para reconhecer o atalho global. As permissões são concedidas no macOS. Esta página não solicita nenhuma delas.</p></details>
-        <details><summary>Ele traduz ou reescreve o que eu digo?</summary><p>O protótipo transcreve em PT-BR, inglês e espanhol, preserva anglicismos por glossário e aplica normalizações determinísticas. Tradução e reescrita por IA ainda não fazem parte desta versão.</p></details>
+    <section class="open-source" id="codigo" aria-labelledby="source-title">
+      <div class="shell source-layout">
+        <div><p class="kicker">Código aberto sem letra miúda</p><h2 id="source-title">Grátis para usar.<br>Aberto para melhorar.</h2></div>
+        <div>
+          <p>O Resenha é distribuído sob licença MIT. O app, as especificações SDD e os testes ficam públicos para auditoria e contribuição.</p>
+          <div class="release-slot inline-release" data-release-channel="source"><strong>GitHub em preparação</strong><span>O repositório público está sendo preparado.</span></div>
+        </div>
       </div>
     </section>
-    <section class="closing wrap" aria-label="Disponibilidade do Resenha"><p>Do jeito que você fala.<br><em>No lugar onde você escreve.</em></p><a class="button" href="#download">Ver disponibilidade <span aria-hidden="true">↗</span></a></section>
+
+    <section class="download shell" id="download" aria-labelledby="download-title">
+      <div class="download-card">
+        <div class="download-icon"><img src="assets/brand/resenha-app-icon.png" alt="Ícone do Resenha" width="128" height="128"></div>
+        <div class="download-copy">
+          <p class="kicker">Versão 1.0 para macOS</p>
+          <h2 id="download-title">Chegando à Mac App Store.</h2>
+          <p>Grátis, sem conta e otimizado para Apple Silicon. Requer macOS 14 ou posterior.</p>
+        </div>
+        <div class="download-actions">
+          <div class="release-slot" data-release-channel="store"><strong>Publicação em preparação</strong><span>A página da loja será liberada após a revisão da Apple.</span></div>
+          <div class="release-slot secondary-release" data-release-channel="macos"><strong>Download em preparação</strong><span>O pacote público ainda não foi assinado para distribuição.</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="faq shell ruled-section" aria-labelledby="faq-title">
+      <div class="section-heading"><p class="kicker">Perguntas diretas</p><h2 id="faq-title">Antes de falar.</h2></div>
+      <div class="faq-list">
+        <details><summary>Minha voz é enviada para a internet?</summary><p>Não. A transcrição acontece dentro do Mac. Só o download inicial do modelo usa a internet; depois disso, o ditado funciona localmente.</p></details>
+        <details><summary>Preciso instalar Python ou o Whisper?</summary><p>Não. O runtime whisper.cpp faz parte do aplicativo. Na primeira configuração, o Resenha baixa e verifica o modelo de voz.</p></details>
+        <details><summary>Posso escolher o atalho?</summary><p>Sim. O atalho do serviço “Ditar com Resenha” é configurável nos Ajustes do Sistema do macOS.</p></details>
+        <details><summary>Quais idiomas estão disponíveis?</summary><p>Português do Brasil, inglês e espanhol. Em PT-BR, o vocabulário pessoal ajuda a preservar nomes, siglas e palavras em inglês.</p></details>
+        <details><summary>Existe versão para Windows?</summary><p>O foco da versão 1.0 é macOS com Apple Silicon. Windows continua no roteiro, mas ainda não tem data pública.</p></details>
+      </div>
+    </section>
   </main>
-  <footer class="site-footer wrap"><a class="wordmark" href="#inicio" aria-label="Resenha, voltar ao início">resenha<span aria-hidden="true">*</span></a><p>Fala que vira texto.<br><span>Um projeto em desenvolvimento.</span></p><a href="#privacidade">Como sua voz é processada</a></footer>
+
+  <footer class="site-footer shell">
+    <a class="brand" href="#inicio" aria-label="Resenha, voltar ao início"><img src="assets/brand/resenha-mark.svg" alt="" width="36" height="36"><span>resenha.</span></a>
+    <p>Feito em português.<br><span>Processado no seu Mac.</span></p>
+    <div><a href="#privacidade">Privacidade</a><a href="#codigo">MIT</a></div>
+  </footer>
 </body>
 </html>

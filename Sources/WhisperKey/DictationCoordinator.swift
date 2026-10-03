@@ -43,24 +43,20 @@ struct DictationErrorPresentation: Equatable {
 
     init(error: Error) {
         switch error {
-        case WhisperError.executableMissing(let paths):
-            self.init(title: "Whisper não encontrado", diagnostic: paths, recovery: "Instale o whisper-cli ou confira o caminho configurado.")
         case WhisperError.modelMissing(let paths):
             self.init(title: "Modelo Whisper não encontrado", diagnostic: paths, recovery: "Instale o modelo local ou confira o caminho configurado.")
+        case WhisperError.modelLoadFailed(let path):
+            self.init(title: "Falha ao abrir o modelo Whisper", diagnostic: path, recovery: "Baixe novamente o modelo local e tente de novo.")
         case WhisperError.failed(let code, _):
             self.init(title: "Falha na transcrição", diagnostic: "Código de saída: \(code)", recovery: "Confira o Whisper e o modelo local e tente novamente.")
         case WhisperError.timedOut:
             self.init(title: "Transcrição demorou demais", diagnostic: nil, recovery: "O processo local foi encerrado. Tente novamente com um áudio menor.")
         case WhisperError.emptyTranscript, TextInjectionError.emptyText:
             self.init(title: "Nenhuma fala detectada", diagnostic: nil, recovery: "Segure seu atalho, fale e solte.")
+        case WhisperError.invalidAudio:
+            self.init(title: "Áudio inválido", diagnostic: nil, recovery: "Confira o microfone e tente novamente.")
         case TextInjectionError.clipboardUnavailable:
             self.init(title: "Falha ao guardar o texto", diagnostic: nil, recovery: "Confira o clipboard e tente novamente.")
-        case TextInjectionError.clipboardChanged:
-            self.init(title: "Clipboard alterado durante o ditado", diagnostic: nil, recovery: "Copie o texto em Textos recentes no menu do Resenha.")
-        case TextInjectionError.targetUnavailable:
-            self.init(title: "Aplicativo original indisponível", diagnostic: nil, recovery: "O texto está no clipboard e em Textos recentes.")
-        case TextInjectionError.eventCreationFailed:
-            self.init(title: "Falha ao inserir texto", diagnostic: nil, recovery: "O texto está no clipboard. Confira a Acessibilidade e cole manualmente.")
         case is AudioRecorderError:
             self.init(title: "Microfone indisponível", diagnostic: nil, recovery: "Confira o acesso e a disponibilidade do microfone.")
         default:
@@ -88,6 +84,7 @@ final class DictationCoordinator {
     private let showsHUD: () -> Bool
     private let soundsEnabled: () -> Bool
     private let onTranscript: (String) -> Void
+    private let onFailure: (DictationErrorPresentation) -> Void
     private let language: () -> TranscriptionLanguage
     private let glossaryText: () -> String
     private var sessionLanguage = TranscriptionLanguage.portuguese
@@ -101,7 +98,8 @@ final class DictationCoordinator {
         language: @escaping () -> TranscriptionLanguage = { .portuguese },
         glossaryText: @escaping () -> String = { TranscriptionGlossary.defaultText },
         onRecordingLevel: @escaping (Float) -> Void = { _ in },
-        onTranscript: @escaping (String) -> Void = { _ in }
+        onTranscript: @escaping (String) -> Void = { _ in },
+        onFailure: @escaping (DictationErrorPresentation) -> Void = { _ in }
     ) {
         self.permissions = permissions
         self.panel = panel
@@ -110,6 +108,7 @@ final class DictationCoordinator {
         self.language = language
         self.glossaryText = glossaryText
         self.onTranscript = onTranscript
+        self.onFailure = onFailure
         recorder.onLevel = { [weak panel] level in
             panel?.updateRecordingLevel(level)
             onRecordingLevel(level)
@@ -146,7 +145,6 @@ final class DictationCoordinator {
             transition(to: .transcribing)
             if soundsEnabled() { cuePlayer.play(.stopped) }
             if showsHUD() { panel.show(.transcribing, target: panelTarget) }
-            let target = targetApplication
             let attemptID = attemptID
             let sessionLanguage = sessionLanguage
             let glossaryText = glossaryText()
@@ -168,12 +166,10 @@ final class DictationCoordinator {
                     }
                     try Task.checkCancellation()
                     guard self.attemptID == attemptID else { return }
-                    let clipboardChangeCount = try self.injector.stage(transcript)
+                    _ = try self.injector.stage(transcript)
                     self.onTranscript(transcript)
                     self.transition(to: .inserting)
                     if self.showsHUD() { self.panel.show(.inserting, target: self.panelTarget) }
-                    try await self.injector.insertStaged(into: target, changeCount: clipboardChangeCount)
-                    guard self.attemptID == attemptID else { return }
                     self.transition(to: .idle)
                     self.reset()
                 } catch is CancellationError {
@@ -212,6 +208,7 @@ final class DictationCoordinator {
 
     func fail(_ error: DictationErrorPresentation) {
         currentError = error
+        onFailure(error)
         recorder.cancel()
         phase = .failed
         let attemptID = attemptID

@@ -49,7 +49,7 @@ decodingProfile: fast | balanced | accurate
 translateToEnglish: Bool
 ```
 
-Perfis mapeiam apenas opções já suportadas pelo `whisper-cli` 1.9.2: modelo, beam/best-of e prompt. GPU e flash attention continuam ativos por padrão. Toda alteração de parâmetro deve ser comparada com o baseline atual `ggml-small-q5_1.bin`. O primeiro candidato é `ggml-large-v3-turbo-q5_0.bin`; ele só se torna padrão se vencer no mesmo corpus sem latência incompatível com o fluxo interativo.
+Perfis mapeiam apenas opções suportadas pelo whisper.cpp embarcado: modelo, beam/best-of e prompt. GPU e flash attention continuam ativos por padrão. Toda alteração de parâmetro deve ser comparada com o baseline atual `ggml-small-q5_1.bin`. Um modelo maior só se torna padrão se vencer no mesmo corpus sem latência, tamanho de download ou memória incompatíveis com o fluxo interativo.
 
 O prompt inicial é um auxílio probabilístico, não uma garantia. Termos e correspondências explícitas do glossário são aplicados depois da transcrição com limites de palavra, preservação da grafia canônica configurada e teste de regressão. A normalização nunca altera substrings dentro de outra palavra.
 
@@ -118,7 +118,7 @@ O candidato com prompt reduziu o WER em 94% relativo. A contagem anterior de 96%
 - Inferência, glossário, corpus de desenvolvimento e pós-processamento permanecem locais.
 - O app não grava áudio; texto continua limitado ao buffer local de 10 itens definido na SPEC-012.
 - Arquivos temporários são apagados após cada execução, inclusive em falha.
-- Cancelar ou encerrar um ditado termina também o subprocesso `whisper-cli`; nenhum processo órfão pode continuar consumindo CPU.
+- Cancelar ou encerrar um ditado invalida a tentativa e limpa seu áudio; não existe subprocesso externo.
 - API paga, telemetria e upload continuam proibidos sem decisão explícita posterior.
 
 ## Falhas e recuperação
@@ -127,7 +127,7 @@ O candidato com prompt reduziu o WER em 94% relativo. A contagem anterior de 96%
 - Idioma automático incorreto: manter seleção manual `pt` disponível.
 - Termo ambíguo no glossário: não substituir por substring nem dentro de outra palavra.
 - Modelo mais preciso porém lento: manter o perfil anterior como padrão até o gate de latência passar.
-- Saída extensa do `whisper-cli`: drenar para arquivo temporário, evitando bloqueio por pipe cheio, e apagar o diagnóstico ao concluir.
+- Falha do motor embarcado: expor apenas diagnóstico seguro e manter o contexto recuperável para a próxima tentativa.
 - Tradução solicitada sem mecanismo compatível: bloquear com mensagem clara; nunca simular tradução via substituições.
 
 ## Aceite
@@ -135,7 +135,7 @@ O candidato com prompt reduziu o WER em 94% relativo. A contagem anterior de 96%
 1. OQ-001 insere “Testando o Resenha no meu Mac.” exatamente.
 2. O corpus registra baseline e candidato com WER, termos críticos e latência.
 3. Uma frase PT-BR com pelo menos dois anglicismos mantém esses termos corretamente.
-4. Trocar PT-BR → EN → ES no menu altera `-l pt|en|es` no ditado seguinte e persiste após reabrir.
+4. Trocar PT-BR → EN → ES no menu altera `params.language` no ditado seguinte e persiste após reabrir.
 5. Glossário local corrige um nome explícito sem alterar palavras vizinhas; nenhum teste faz rede, usa Python no app ou chama API paga.
 6. `Não, corrige. Quarta-feira às 16h30.` transforma `Marque a apresentação para terça-feira às 15 horas.` sem reescrever frases que não sigam esse comando.
 

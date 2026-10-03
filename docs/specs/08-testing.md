@@ -13,9 +13,9 @@ Recording refinement: injected monotonic clock and level samples verify dB norma
 Brand resonance uses the existing microphone samples. Unit checks verify bounded HUD scale/halo values and five menu-bar frames; fixtures compare silence, speech, decay and Reduce Motion. A physical spoken check remains required to prove that the logo follows real speech rhythm.
 
 - Pipeline state rejects overlapping presses and invalid releases.
-- Whisper path resolution respects environment overrides and reports missing files.
+- Model path resolution, download size/hash validation and embedded context reuse are deterministic.
 - Transcript normalization trims whitespace and rejects non-speech-only output.
-- Clipboard restoration occurs only when its change token is still current.
+- Every completed transcript is staged on the clipboard and returned through the Service pasteboard.
 
 All local test/build commands run through `~/.local/bin/mac-gate` and use `-derivedDataPath build`, so tests and manual launch share one signed app bundle.
 
@@ -27,9 +27,9 @@ The NSHostingView fixture test renders six states across four configurations (24
 
 1. Build the `.app` bundle and launch it via LaunchServices.
 2. Confirm the process remains alive and the menu bar item appears.
-3. Grant Microphone, Accessibility and Input Monitoring through explicit setup when needed; never reset real TCC automatically.
+3. Grant Microphone and Input Monitoring through explicit setup when needed; confirm no Accessibility permission is requested.
 4. Run a real Portuguese dictation into TextEdit.
-5. Repeat in a Chromium text field and verify clipboard restoration.
+5. Repeat in a Chromium text field and verify the transcript remains on the clipboard.
 
 ## CORE-001 evidence
 

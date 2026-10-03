@@ -38,7 +38,7 @@ final class WhisperKeyTests: XCTestCase {
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
         let preferences = ProductPreferences(defaults: defaults)
-        XCTAssertEqual(preferences.shortcut, .rightOption)
+        XCTAssertEqual(preferences.shortcut, .controlOptionSpace)
         XCTAssertTrue(preferences.showsHUD)
         XCTAssertTrue(preferences.soundsEnabled)
         XCTAssertTrue(preferences.keepsHistory)
@@ -152,22 +152,15 @@ final class WhisperKeyTests: XCTestCase {
 
     func testWhisperPathsPreferTurboButRespectExplicitEnvironmentModel() throws {
         let home = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        let bin = home.appendingPathComponent("bin")
         let models = home.appendingPathComponent("Library/Application Support/WhisperKey/Models")
-        try FileManager.default.createDirectory(at: bin, withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: models, withIntermediateDirectories: true)
-        let executable = bin.appendingPathComponent("whisper-cli")
-        FileManager.default.createFile(atPath: executable.path, contents: Data())
-        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: executable.path)
         let turbo = models.appendingPathComponent("ggml-large-v3-turbo-q5_0.bin")
         let explicit = models.appendingPathComponent("custom.bin")
         FileManager.default.createFile(atPath: turbo.path, contents: Data())
         FileManager.default.createFile(atPath: explicit.path, contents: Data())
         defer { try? FileManager.default.removeItem(at: home) }
-        XCTAssertEqual(try WhisperPaths.resolve(environment: ["WHISPER_CLI_PATH": executable.path], home: home).model, turbo)
-        XCTAssertEqual(try WhisperPaths.resolve(environment: [
-            "WHISPER_CLI_PATH": executable.path, "WHISPER_MODEL_PATH": explicit.path
-        ], home: home).model, explicit)
+        XCTAssertEqual(try WhisperPaths.resolve(environment: [:], home: home).model, turbo)
+        XCTAssertEqual(try WhisperPaths.resolve(environment: ["WHISPER_MODEL_PATH": explicit.path], home: home).model, explicit)
     }
 
     @MainActor
@@ -264,9 +257,8 @@ final class WhisperKeyTests: XCTestCase {
 
     @MainActor
     func testProductSettingsFixturesForEverySectionAndAppearance() throws {
-        let directory = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("build/ui-fixtures", isDirectory: true)
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ResenhaTests/ui-fixtures", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let suite = "ResenhaSettingsFixtures.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
@@ -370,12 +362,6 @@ final class WhisperKeyTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: unrelated.path))
     }
 
-    func testTextInjectionRefusesToPasteIntoUnexpectedFrontmostProcess() {
-        XCTAssertTrue(TextInjectionTargetPolicy.isExpectedTarget(targetPID: 42, frontmostPID: 42))
-        XCTAssertFalse(TextInjectionTargetPolicy.isExpectedTarget(targetPID: 42, frontmostPID: 43))
-        XCTAssertFalse(TextInjectionTargetPolicy.isExpectedTarget(targetPID: 42, frontmostPID: nil))
-    }
-
     @MainActor
     func testHistoryReportsPersistenceFailureWithoutLosingInMemoryRecovery() throws {
         let root = FileManager.default.temporaryDirectory
@@ -408,8 +394,8 @@ final class WhisperKeyTests: XCTestCase {
     }
 
     func testPermissionOnboardingAppearsOnlyOnceWhileSetupIsIncomplete() {
-        let blocked = PermissionSnapshot(accessibility: false, microphone: true, inputMonitoring: true)
-        let ready = PermissionSnapshot(accessibility: true, microphone: true, inputMonitoring: true)
+        let blocked = PermissionSnapshot(microphone: true, inputMonitoring: false)
+        let ready = PermissionSnapshot(microphone: true, inputMonitoring: true)
         XCTAssertTrue(PermissionOnboardingPolicy.shouldPresent(snapshot: blocked, hasPresented: false))
         XCTAssertFalse(PermissionOnboardingPolicy.shouldPresent(snapshot: blocked, hasPresented: true))
         XCTAssertFalse(PermissionOnboardingPolicy.shouldPresent(snapshot: ready, hasPresented: false))
@@ -418,7 +404,7 @@ final class WhisperKeyTests: XCTestCase {
     @MainActor
     func testPermissionOnboardingReusesOneWindow() throws {
         let controller = PermissionOnboardingController(requestPermissions: {}, openSettings: { _ in })
-        let blocked = PermissionSnapshot(accessibility: false, microphone: false, inputMonitoring: false)
+        let blocked = PermissionSnapshot(microphone: false, inputMonitoring: false)
         controller.show(snapshot: blocked, isRequesting: false)
         let first = try XCTUnwrap(controller.window)
         controller.show(snapshot: blocked, isRequesting: true)
@@ -428,45 +414,37 @@ final class WhisperKeyTests: XCTestCase {
     }
 
     func testPermissionPresentationCoversEveryAvailabilityCombination() {
-        for accessibility in [false, true] {
-            for microphone in [false, true] {
-                for inputMonitoring in [false, true] {
-                    let snapshot = PermissionSnapshot(
-                        accessibility: accessibility,
-                        microphone: microphone,
-                        inputMonitoring: inputMonitoring
-                    )
-                    XCTAssertEqual(snapshot.isReady, accessibility && microphone && inputMonitoring)
-                    XCTAssertEqual(snapshot.presentations.map(\.permission), [.microphone, .accessibility, .inputMonitoring])
-                    XCTAssertEqual(snapshot.presentations.map(\.isGranted), [microphone, accessibility, inputMonitoring])
-                    XCTAssertEqual(snapshot.missingPermissions.count, [accessibility, microphone, inputMonitoring].filter { !$0 }.count)
+        for microphone in [false, true] {
+            for inputMonitoring in [false, true] {
+                    let snapshot = PermissionSnapshot(microphone: microphone, inputMonitoring: inputMonitoring)
+                    XCTAssertEqual(snapshot.isReady, microphone && inputMonitoring)
+                    XCTAssertEqual(snapshot.presentations.map(\.permission), [.microphone, .inputMonitoring])
+                    XCTAssertEqual(snapshot.presentations.map(\.isGranted), [microphone, inputMonitoring])
+                    XCTAssertEqual(snapshot.missingPermissions.count, [microphone, inputMonitoring].filter { !$0 }.count)
                     for presentation in snapshot.presentations {
                         XCTAssertEqual(presentation.status, "\(presentation.permission.name): \(presentation.isGranted ? "ativada" : "permissão necessária")")
                         XCTAssertFalse(presentation.permission.purpose.isEmpty)
                         XCTAssertEqual(presentation.permission.settingsActionTitle, "Abrir Ajustes de \(presentation.permission.name)")
                     }
-                    let expectedMessage = !accessibility ? "Acesso à Acessibilidade necessário"
-                        : !microphone ? "Acesso ao Microfone necessário"
+                    let expectedMessage = !microphone ? "Acesso ao Microfone necessário"
                         : !inputMonitoring ? "Acesso ao Monitoramento de Entrada necessário" : "Permissões prontas"
                     XCTAssertEqual(snapshot.missingPermissionMessage, expectedMessage)
                 }
-            }
         }
     }
 
     func testPermissionSnapshotsDetectPartialRestorationAndRevocation() {
-        let blocked = PermissionSnapshot(accessibility: false, microphone: false, inputMonitoring: false)
-        let partial = PermissionSnapshot(accessibility: false, microphone: true, inputMonitoring: false)
-        let ready = PermissionSnapshot(accessibility: true, microphone: true, inputMonitoring: true)
+        let blocked = PermissionSnapshot(microphone: false, inputMonitoring: false)
+        let partial = PermissionSnapshot(microphone: true, inputMonitoring: false)
+        let ready = PermissionSnapshot(microphone: true, inputMonitoring: true)
         XCTAssertNotEqual(blocked, partial)
-        XCTAssertEqual(blocked.missingPermissionMessage, partial.missingPermissionMessage)
+        XCTAssertNotEqual(blocked.missingPermissionMessage, partial.missingPermissionMessage)
         XCTAssertFalse(partial.isReady)
-        XCTAssertEqual(partial.missingPermissions, [.accessibility, .inputMonitoring])
-        XCTAssertEqual(partial, PermissionSnapshot(accessibility: false, microphone: true, inputMonitoring: false))
+        XCTAssertEqual(partial.missingPermissions, [.inputMonitoring])
+        XCTAssertEqual(partial, PermissionSnapshot(microphone: true, inputMonitoring: false))
         for revoked in [
-            PermissionSnapshot(accessibility: false, microphone: true, inputMonitoring: true),
-            PermissionSnapshot(accessibility: true, microphone: false, inputMonitoring: true),
-            PermissionSnapshot(accessibility: true, microphone: true, inputMonitoring: false)
+            PermissionSnapshot(microphone: false, inputMonitoring: true),
+            PermissionSnapshot(microphone: true, inputMonitoring: false)
         ] {
             XCTAssertNotEqual(ready, revoked)
             XCTAssertFalse(revoked.isReady)
@@ -478,42 +456,37 @@ final class WhisperKeyTests: XCTestCase {
 
     func testPermissionDestinationsIdentifyEachSettingsPane() {
         XCTAssertEqual(RequiredPermission.microphone.name, "Microfone")
-        XCTAssertEqual(RequiredPermission.accessibility.name, "Acessibilidade")
         XCTAssertEqual(RequiredPermission.inputMonitoring.name, "Monitoramento de Entrada")
         XCTAssertEqual(RequiredPermission.microphone.settingsDestination.absoluteString, "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone")
-        XCTAssertEqual(RequiredPermission.accessibility.settingsDestination.absoluteString, "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
         XCTAssertEqual(RequiredPermission.inputMonitoring.settingsDestination.absoluteString, "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent")
     }
 
     @MainActor
     func testPartialSnapshotRefreshBuildsEveryPermissionWithoutFalseBlockers() {
         let app = AppDelegate()
-        let blocked = PermissionSnapshot(accessibility: false, microphone: false, inputMonitoring: false)
-        let partial = PermissionSnapshot(accessibility: false, microphone: true, inputMonitoring: false)
+        let blocked = PermissionSnapshot(microphone: false, inputMonitoring: false)
+        let partial = PermissionSnapshot(microphone: true, inputMonitoring: false)
         let blockedMenu = app.makePermissionsMenu(blocked)
         let partialMenu = app.makePermissionsMenu(partial)
         XCTAssertTrue(blockedMenu.items.contains { $0.title == "Abrir Ajustes de Microfone" })
         XCTAssertFalse(partialMenu.items.contains { $0.title == "Abrir Ajustes de Microfone" })
         XCTAssertTrue(partialMenu.items.contains { $0.title == "Microfone: ativada" })
-        XCTAssertTrue(partialMenu.items.contains { $0.title == "Abrir Ajustes de Acessibilidade" })
         XCTAssertTrue(partialMenu.items.contains { $0.title == "Abrir Ajustes de Monitoramento de Entrada" })
         XCTAssertTrue(partialMenu.delegate === app)
     }
 
     func testMenuActivityPriorityRetainsAllPermissionBlockers() {
-        let snapshot = PermissionSnapshot(accessibility: false, microphone: false, inputMonitoring: true)
+        let snapshot = PermissionSnapshot(microphone: false, inputMonitoring: true)
         for (phase, expected) in [(DictationPhase.recording, "Ouvindo"), (.transcribing, "Transcrevendo"), (.inserting, "Inserindo")] {
             let presentation = MenuStatusPresentation(phase: phase, snapshot: snapshot, error: nil)
             XCTAssertEqual(presentation.activity, expected)
-            XCTAssertTrue(presentation.accessibleStatus.contains("Permissão necessária: Microfone"))
-            XCTAssertTrue(presentation.accessibleStatus.contains("Permissão necessária: Acessibilidade"))
-            XCTAssertFalse(presentation.accessibleStatus.contains("Permissão necessária: Monitoramento de Entrada"))
+            XCTAssertTrue(presentation.accessibleStatus.contains("Serviços do macOS"))
             XCTAssertEqual(presentation.symbol, phase == .recording ? "mic.fill" : "waveform")
         }
         let blocked = MenuStatusPresentation(phase: .idle, snapshot: snapshot, error: nil)
         XCTAssertEqual(blocked.activity, "Permissões necessárias")
         XCTAssertEqual(blocked.symbol, "waveform.badge.exclamationmark")
-        let ready = PermissionSnapshot(accessibility: true, microphone: true, inputMonitoring: true)
+        let ready = PermissionSnapshot(microphone: true, inputMonitoring: true)
         XCTAssertEqual(MenuStatusPresentation(phase: .idle, snapshot: ready, error: nil).activity, "Pronto")
         XCTAssertEqual(MenuStatusPresentation(phase: .idle, snapshot: ready, error: nil, hotkeyUnavailable: true).activity,
             "Atalho global indisponível")
@@ -593,7 +566,7 @@ final class WhisperKeyTests: XCTestCase {
     @MainActor
     func testNamedSettingsFailureRetainsManualRecoveryUntilSuccessfulNavigation() throws {
         let app = AppDelegate()
-        let snapshot = PermissionSnapshot(accessibility: true, microphone: false, inputMonitoring: true)
+        let snapshot = PermissionSnapshot(microphone: false, inputMonitoring: true)
         app.settingsNavigationFinished(false, for: .microphone)
         let rejected = app.makePermissionsMenu(snapshot)
         XCTAssertTrue(rejected.items.contains { $0.title.contains("Não foi possível abrir os Ajustes.")
@@ -608,10 +581,10 @@ final class WhisperKeyTests: XCTestCase {
     }
 
     func testPermissionGateStartsWhenPermissionsArriveAfterLaunch() {
-        XCTAssertFalse(PermissionGate.shouldStartHotkey(accessibility: false, microphone: true, inputMonitoring: true, hotkeyRunning: false))
-        XCTAssertFalse(PermissionGate.shouldStartHotkey(accessibility: true, microphone: true, inputMonitoring: false, hotkeyRunning: false))
-        XCTAssertTrue(PermissionGate.shouldStartHotkey(accessibility: true, microphone: true, inputMonitoring: true, hotkeyRunning: false))
-        XCTAssertFalse(PermissionGate.shouldStartHotkey(accessibility: true, microphone: true, inputMonitoring: true, hotkeyRunning: true))
+        XCTAssertFalse(PermissionGate.shouldStartHotkey(microphone: false, inputMonitoring: true, hotkeyRunning: false))
+        XCTAssertFalse(PermissionGate.shouldStartHotkey(microphone: true, inputMonitoring: false, hotkeyRunning: false))
+        XCTAssertTrue(PermissionGate.shouldStartHotkey(microphone: true, inputMonitoring: true, hotkeyRunning: false))
+        XCTAssertFalse(PermissionGate.shouldStartHotkey(microphone: true, inputMonitoring: true, hotkeyRunning: true))
     }
 
     func testPanelDismissalUsesCurrentGenerationAndDeadline() {
@@ -733,7 +706,7 @@ final class WhisperKeyTests: XCTestCase {
 
     @MainActor
     func testPermissionLossStopsOnlyRecordingAndPreservesProcessing() {
-        let denied = PermissionSnapshot(accessibility: true, microphone: false, inputMonitoring: true)
+        let denied = PermissionSnapshot(microphone: false, inputMonitoring: true)
         let panel = FloatingPanelController()
         let coordinator = DictationCoordinator(permissions: PermissionService(), panel: panel)
         coordinator.transition(to: .recording)
@@ -801,14 +774,6 @@ final class WhisperKeyTests: XCTestCase {
         XCTAssertFalse(failure.isBusy)
     }
 
-    func testAXCoordinatesConvertNegativeAndAbovePrimaryDisplays() {
-        let primary = CGRect(x: 0, y: 0, width: 1440, height: 900)
-        XCTAssertEqual(PanelPlacement.appKitFrame(fromAX: CGRect(x: -1200, y: 100, width: 500, height: 400), primaryFrame: primary),
-                       CGRect(x: -1200, y: 400, width: 500, height: 400))
-        XCTAssertEqual(PanelPlacement.appKitFrame(fromAX: CGRect(x: 100, y: -700, width: 500, height: 400), primaryFrame: primary),
-                       CGRect(x: 100, y: 1200, width: 500, height: 400))
-    }
-
     func testScreenChoiceUsesIntersectionThenCenterAndDeterministicTie() {
         let left = PanelScreen(id: 1, frame: CGRect(x: -1000, y: 0, width: 1000, height: 800), visibleFrame: CGRect(x: -1000, y: 24, width: 1000, height: 776))
         let right = PanelScreen(id: 2, frame: CGRect(x: 0, y: 0, width: 1000, height: 800), visibleFrame: CGRect(x: 0, y: 24, width: 1000, height: 776))
@@ -851,7 +816,7 @@ final class WhisperKeyTests: XCTestCase {
         XCTAssertFalse(selection.hasSession)
     }
 
-    func testStandaloneMissingWindowAndAccessibilityUseExternalTargetFallbacks() {
+    func testStandaloneMissingWindowUsesExternalTargetFallbacks() {
         let primary = PanelScreen(id: 1, frame: CGRect(x: 0, y: 0, width: 1000, height: 800), visibleFrame: CGRect(x: 0, y: 24, width: 1000, height: 776))
         let secondary = PanelScreen(id: 2, frame: CGRect(x: -1000, y: 0, width: 1000, height: 800), visibleFrame: CGRect(x: -1000, y: 24, width: 1000, height: 776))
         var selection = PanelScreenSelection()
@@ -860,7 +825,7 @@ final class WhisperKeyTests: XCTestCase {
         XCTAssertEqual(selection.standaloneTarget(explicit: nil, frontmost: 99, ownPID: 7), 99)
         XCTAssertEqual(selection.standaloneTarget(explicit: 42, frontmost: 99, ownPID: 7), 42)
         XCTAssertEqual(selection.resolve(pid: 42, window: secondary.frame, screens: [primary, secondary], mainID: 1)?.id, 2)
-        // Nil window is the read-only resolver's result for missing AX access or focused window.
+        // The sandboxed Service build does not inspect another app's focused window.
         XCTAssertEqual(selection.resolve(pid: 42, window: nil, screens: [primary, secondary], mainID: 1)?.id, 2)
         XCTAssertEqual(selection.resolve(pid: 99, window: nil, screens: [primary, secondary], mainID: 1)?.id, 1)
         XCTAssertEqual(selection.resolve(pid: 42, window: nil, screens: [primary], mainID: 1)?.id, 1)
@@ -871,7 +836,7 @@ final class WhisperKeyTests: XCTestCase {
     func testFailureLayoutReplacementRestoresOrdinaryFootprintAndDoesNotStealFocus() {
         let panel = FloatingPanelController()
         let activePID = NSWorkspace.shared.frontmostApplication?.processIdentifier
-        panel.showTemporarily(.failure("Input Monitoring permission is required to receive the dictation shortcut"))
+        panel.showTemporarily(.failure("Permissão de Monitoramento de Entrada necessária para receber o atalho de ditado"))
         let obsolete = panel.dismissal.generation
         XCTAssertLessThanOrEqual(panel.frame.width, 360)
         XCTAssertLessThanOrEqual(panel.frame.height, 104)
@@ -886,14 +851,11 @@ final class WhisperKeyTests: XCTestCase {
     func testKnownErrorsMapToSafeCauseAndAllowedDiagnostics() {
         let cases: [(Error, String)] = [
             (AudioRecorderError.failedToStart, "Microfone indisponível"),
-            (WhisperError.executableMissing("/safe/whisper-cli"), "Whisper não encontrado"),
             (WhisperError.modelMissing("/safe/model.bin"), "Modelo Whisper não encontrado"),
+            (WhisperError.modelLoadFailed("/safe/model.bin"), "Falha ao abrir o modelo Whisper"),
             (WhisperError.timedOut, "Transcrição demorou demais"),
             (WhisperError.emptyTranscript, "Nenhuma fala detectada"),
-            (TextInjectionError.clipboardUnavailable, "Falha ao guardar o texto"),
-            (TextInjectionError.clipboardChanged, "Clipboard alterado durante o ditado"),
-            (TextInjectionError.targetUnavailable, "Aplicativo original indisponível"),
-            (TextInjectionError.eventCreationFailed, "Falha ao inserir texto")
+            (TextInjectionError.clipboardUnavailable, "Falha ao guardar o texto")
         ]
         for (error, title) in cases {
             let presentation = DictationErrorPresentation(error: error)
@@ -905,14 +867,40 @@ final class WhisperKeyTests: XCTestCase {
         XCTAssertFalse(String(describing: subprocess).contains("PRIVATE RAW STDERR"))
     }
 
-    func testWhisperProcessTimeoutPolicyHasAnExactBound() {
+    func testEmbeddedWhisperTranscribesOfficialFixtureWhenLocalModelIsAvailable() throws {
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        let model = home.appendingPathComponent(
+            "Library/Application Support/WhisperKey/Models/ggml-small-q5_1.bin"
+        )
+        guard FileManager.default.fileExists(atPath: model.path) else {
+            throw XCTSkip("Local Whisper model is not installed")
+        }
+
+        let repository = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let fixture = repository.appendingPathComponent("Vendor/whisper.cpp/samples/jfk.wav")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.path))
+
+        let transcript = try WhisperTranscriber().transcribe(
+            audioURL: fixture,
+            language: .english,
+            glossaryText: ""
+        ).lowercased()
+
+        XCTAssertTrue(transcript.contains("fellow americans"), transcript)
+        XCTAssertTrue(transcript.contains("country"), transcript)
+    }
+
+    func testWhisperRuntimePolicyHasAnExactBound() {
         let startedAt = Date(timeIntervalSinceReferenceDate: 100)
-        XCTAssertFalse(WhisperProcessPolicy.hasTimedOut(
+        XCTAssertFalse(WhisperRuntimePolicy.hasTimedOut(
             startedAt: startedAt,
             now: Date(timeIntervalSinceReferenceDate: 699.999),
             maximumRuntime: 600
         ))
-        XCTAssertTrue(WhisperProcessPolicy.hasTimedOut(
+        XCTAssertTrue(WhisperRuntimePolicy.hasTimedOut(
             startedAt: startedAt,
             now: Date(timeIntervalSinceReferenceDate: 700),
             maximumRuntime: 600
@@ -921,12 +909,12 @@ final class WhisperKeyTests: XCTestCase {
 
     @MainActor
     func testHUDNativeFixturesForEveryStateAndAppearance() throws {
-        let directory = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("build/ui-fixtures", isDirectory: true)
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ResenhaTests/ui-fixtures", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let states: [(String, FloatingStatus)] = [("ready", .ready), ("listening", .listening), ("listening-silence", .listening), ("listening-decay", .listening), ("transcribing", .transcribing), ("inserting", .inserting),
-            ("failure", .failure("Input Monitoring permission required")),
-            ("long-failure", .failure("Input Monitoring permission is required to receive the dictation shortcut"))]
+            ("failure", .failure("Permissão de Monitoramento de Entrada necessária")),
+            ("long-failure", .failure("Permissão de Monitoramento de Entrada necessária para receber o atalho de ditado"))]
         let appearances: [(String, ColorScheme, ColorSchemeContrast, Bool, Bool)] = [
             ("light", .light, .standard, false, false), ("dark", .dark, .standard, false, false),
             ("increased-contrast", .light, .increased, false, false), ("reduced-transparency", .dark, .increased, true, false),
@@ -1061,17 +1049,13 @@ final class WhisperKeyTests: XCTestCase {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }
 
-        let executable = directory.appendingPathComponent("whisper-cli")
         let model = directory.appendingPathComponent("model.bin")
-        XCTAssertTrue(FileManager.default.createFile(atPath: executable.path, contents: Data()))
         XCTAssertTrue(FileManager.default.createFile(atPath: model.path, contents: Data()))
-        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: executable.path)
 
         let paths = try WhisperPaths.resolve(
-            environment: ["WHISPER_CLI_PATH": executable.path, "WHISPER_MODEL_PATH": model.path],
+            environment: ["WHISPER_MODEL_PATH": model.path],
             home: directory
         )
-        XCTAssertEqual(paths.executable, executable)
         XCTAssertEqual(paths.model, model)
     }
 }

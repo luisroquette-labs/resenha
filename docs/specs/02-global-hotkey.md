@@ -1,33 +1,33 @@
 # SPEC-002 — Global Hotkey
 
-Status: accepted for M0
+Status: implemented for Store 1.0
 
 ## Decision
 
-M0 uses **Right Option** as push-to-talk. It has a distinct hardware key code (`61`) and reliable down/up semantics. Fn is deferred because macOS can reserve or transform it according to Keyboard settings.
+Store 1.0 uses the macOS Service **Ditar com Resenha**, with default shortcut **Control + Option + Space**. The user can change the binding in System Settings → Keyboard → Keyboard Shortcuts → Services. The Service invocation starts capture; a listen-only event tap observes the matching release.
 
 ## Requirements
 
-- Observe global modifier events using a Core Graphics event tap.
-- Start only on the first Right Option down transition.
-- Stop only on the matching release transition.
-- Suppress neither ordinary Option shortcuts nor unrelated keyboard input.
+- Start only from a real Services request in a compatible editable field.
+- Arm release monitoring for the configured Service shortcut only after that request.
+- Stop only on the matching key-up transition.
+- Suppress no shortcut or unrelated keyboard input.
 - Disable monitoring cleanly when the app terminates.
 - Re-enable an event tap if macOS disables it because of timeout.
 
 ## Permissions
 
-The listen-only event tap requires Input Monitoring; text injection requires Accessibility trust. Without either permission, show the exact missing permission and open System Settings only after explicit user action.
+The listen-only event tap requires Input Monitoring. Text return through `NSServices` requires no Accessibility permission. Without Input Monitoring, show the exact missing permission and open System Settings only after explicit user action.
 
 ## Edge cases
 
 - Auto-repeat or duplicate flag events: ignore.
-- App starts while key is already down: wait for a full release before accepting a press.
+- Service invoked while another attempt is active: return a bounded error.
 - Permission revoked while running: stop monitoring and expose the error.
 - Hotkey pressed during transcription: ignore.
 
 ## Acceptance
 
-- Pressing Left Option does nothing.
-- Holding Right Option emits one `pressed` event; releasing emits one `released` event.
-- Events are received while TextEdit, Chrome, and Terminal are frontmost.
+- Invoking another shortcut alone does nothing.
+- One Service request starts one recording; its matching release stops it once.
+- The configured Service works in the supported TextEdit, browser and terminal matrix.

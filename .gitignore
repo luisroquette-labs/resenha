@@ -1,7 +1,10 @@
 .DS_Store
 build/
+build-service-probe/
+build-store/
 DerivedData/
 *.xcuserstate
 xcuserdata/
 .specs/scratchpad/
 Tools/site-audit/node_modules/
+AppStore/media/generated/

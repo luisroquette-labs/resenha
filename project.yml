@@ -11,19 +11,36 @@ targets:
   WhisperKey:
     type: application
     platform: macOS
-    sources: Sources/WhisperKey
+    sources:
+      - path: Sources/WhisperKey
+      - path: Config/PrivacyInfo.xcprivacy
+        buildPhase: resources
+    dependencies:
+      - framework: Frameworks/whisper.xcframework
+        embed: false
+      - sdk: Accelerate.framework
+      - sdk: Metal.framework
+      - sdk: libc++.tbd
+    entitlements:
+      path: Config/ResenhaStore.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.device.audio-input: true
+        com.apple.security.network.client: true
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: br.com.luisroquette.WhisperKey
+        PRODUCT_BUNDLE_IDENTIFIER: br.com.luisroquette.Resenha
         PRODUCT_NAME: Resenha
         PRODUCT_MODULE_NAME: WhisperKey
         DEVELOPMENT_TEAM: S3YCFYY8SC
         CODE_SIGN_STYLE: Automatic
-        CODE_SIGN_IDENTITY: Apple Development
         GENERATE_INFOPLIST_FILE: NO
-        INFOPLIST_FILE: Config/WhisperKey-Info.plist
+        INFOPLIST_FILE: Config/ResenhaStore-Info.plist
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ENABLE_HARDENED_RUNTIME: YES
+        ARCHS: arm64
+        CURRENT_PROJECT_VERSION: 1
+        MARKETING_VERSION: 1.0.0
   WhisperKeyTests:
     type: bundle.unit-test
     platform: macOS
@@ -34,7 +51,6 @@ targets:
       base:
         DEVELOPMENT_TEAM: S3YCFYY8SC
         CODE_SIGN_STYLE: Automatic
-        CODE_SIGN_IDENTITY: Apple Development
         GENERATE_INFOPLIST_FILE: YES
         TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Resenha.app/Contents/MacOS/Resenha"
         BUNDLE_LOADER: "$(TEST_HOST)"

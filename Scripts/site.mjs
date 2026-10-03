@@ -6,7 +6,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const defaultRoot = fileURLToPath(new URL('../site/', import.meta.url));
 const types = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8',
   '.mjs': 'text/javascript; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
-  '.svg': 'image/svg+xml', '.png': 'image/png', '.webp': 'image/webp', '.ico': 'image/x-icon' };
+  '.svg': 'image/svg+xml', '.png': 'image/png', '.webp': 'image/webp', '.ico': 'image/x-icon',
+  '.mp4': 'video/mp4' };
 const inside = (root, candidate) => {
   const path = relative(root, candidate);
   return path !== '..' && !path.startsWith('../') && !isAbsolute(path);
@@ -29,7 +30,8 @@ export async function createPreviewServer({ root = defaultRoot, prefix = '/', po
     if (!pathname.startsWith('/') || /[\u0000-\u001f\u007f\\]/u.test(pathname)
       || pathname.split('/').some(part => part === '..' || part === '.')) return reply(400, 'Invalid path');
     if (!pathname.startsWith(prefix)) return reply(404, 'Not found');
-    const local = pathname.slice(prefix.length) || 'index.html';
+    const requested = pathname.slice(prefix.length);
+    const local = requested ? (requested.endsWith('/') ? `${requested}index.html` : requested) : 'index.html';
     const candidate = resolve(siteRoot, local);
     if (!inside(siteRoot, candidate)) return reply(403, 'Forbidden');
     try {

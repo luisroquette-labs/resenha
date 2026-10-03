@@ -1,81 +1,75 @@
 # Resenha
 
-Local macOS push-to-talk dictation using Swift, AVFoundation, Accessibility, and whisper.cpp.
+**Fale. O Resenha escreve.** Ditado push-to-talk nativo para macOS, gratuito,
+local e de código aberto. Requer Apple Silicon e macOS 14 ou posterior.
 
-## Run
+Segure o atalho, fale e solte. O Resenha grava só enquanto a combinação está
+pressionada, transcreve com whisper.cpp no próprio Mac e devolve o texto ao
+campo ativo por um Serviço nativo do macOS.
+
+## O que já funciona
+
+- Ditado em português, inglês e espanhol, com anglicismos e vocabulário pessoal.
+- Whisper embarcado, acelerado por Metal em Apple Silicon; nenhuma instalação de Python.
+- Áudio transitório, clipboard imediato e últimos 10 textos locais e opcionais.
+- HUD compacto com nível real do microfone, sons configuráveis e feedback de erro.
+- App Sandbox, sem conta, anúncios, analytics, backend ou chave de API.
+
+## Privacidade
+
+O áudio nunca sai do Mac. O modelo de 181 MB é baixado uma vez da distribuição
+oficial do whisper.cpp e validado por tamanho e SHA-256. Resenha não coleta
+dados e não inclui SDKs de rastreamento. Leia a [política de privacidade](docs/PRIVACY.md).
+
+## Rodar o projeto
+
+Requisitos: macOS 14+, Xcode 26+, XcodeGen, CMake e Mac Apple Silicon.
 
 ```sh
+git submodule update --init --recursive
+./Scripts/build-whisper-framework.sh
 xcodegen generate
-~/.local/bin/mac-gate xcodebuild -project WhisperKey.xcodeproj -scheme WhisperKey -destination 'platform=macOS' -derivedDataPath build test
+~/.local/bin/mac-gate xcodebuild \
+  -project WhisperKey.xcodeproj \
+  -scheme WhisperKey \
+  -destination 'platform=macOS' \
+  -derivedDataPath build test
 open build/Build/Products/Debug/Resenha.app
 ```
 
-Xcode uses automatic Apple Development signing. Contributors can select their own team in Xcode or override `DEVELOPMENT_TEAM` without changing source files.
+O target `WhisperKey` gera um único app sandboxado com bundle ID
+`br.com.luisroquette.Resenha`. Contribuidores podem selecionar seu próprio
+Development Team localmente sem alterar o código versionado.
 
-Click the Resenha symbol in the menu bar, choose **Enable permissions**, grant Microphone, Accessibility, and Input Monitoring, then hold **Right Option** while speaking.
-
-The preferred development model path is:
+## Arquitetura
 
 ```text
-~/Library/Application Support/WhisperKey/Models/ggml-large-v3-turbo-q5_0.bin
+Atalho de Serviço do macOS
+  → AVFoundation (PCM mono, 16 kHz)
+  → whisper.cpp + Metal
+  → pós-processamento determinístico
+  → NSPasteboard + retorno do Serviço ao campo ativo
 ```
 
-Audio is deleted after every attempt. The last 10 successful transcripts are stored locally with user-only permissions by default; this can be disabled and cleared in **Ajustes → Geral**.
+A inserção usa a cadeia oficial de Serviços do macOS. O binário da App Store
+não usa Accessibility API nem simula `Command + V`.
 
-## Interface and recovery
+## Desenvolvimento orientado por especificação
 
-WhisperKey stays in the menu bar with no persistent main window. Its passive, click-through HUD shows Listening, Transcribing, Inserting or a concise failure. Idle is hidden; ready/failure feedback lasts approximately two seconds. The menu reports live activity and permission blockers.
+As decisões verificáveis ficam em [`docs/specs`](docs/specs), as tarefas em
+[`docs/tasks`](docs/tasks) e as evidências em [`docs/testing`](docs/testing).
+Mudanças de comportamento começam pela spec e terminam com testes e validação
+física no app.
 
-While recording, a compact mist-green HUD shows elapsed time and 48 rounded bars driven by the real microphone level. Reduce Motion uses a stationary level display. No audio/level history is saved.
-
-Open **Permissions** when access is missing, then choose the named **Open Microphone / Accessibility / Input Monitoring Settings** action. Only **Enable permissions** requests access; **Check permissions** refreshes it. If macOS still reports missing access after granting it, quit and reopen the same bundle. Polling never opens Settings automatically.
-
-For a runtime/model or dictation failure, open **Status details** for safe cause and recovery guidance. No transcript, audio or subprocess stderr appears there. Hotkey presses during menu interaction or permission requests are ignored; release and press again after closing the menu.
-
-## Validation status
-
-The automated suite covers state transitions, permissions, hotkeys, local history, sounds, output processing and native-view fixtures. Actual microphone responsiveness, cross-app caret preservation, menu/VoiceOver and Spaces/display checks still require physical validation.
-
-See [M0 evidence](docs/testing/M0-EVIDENCE.md) and [interface evidence](docs/testing/UI-REFINEMENT-EVIDENCE.md) for the tested revision, limitations and the 60-second phrase check.
-
-## Resenha local sales/download site
-
-Resenha is the public-facing product name; WhisperKey remains the internal native project/bundle name. The pt-BR site is one static document with a directly addressable `#download` section, not an installer or browser transcription app. It has no framework, build step, backend, visitor collection or shipped npm dependencies. Use Node.js; the recorded checks used Node v26.5.0 on macOS arm64.
-
-From the repository root, start the loopback preview:
+## Site local
 
 ```sh
 node Scripts/site.mjs --serve --port 4173 --prefix /
-```
-
-Open `http://127.0.0.1:4173/` or `http://127.0.0.1:4173/#download`. Stop this preview with Ctrl-C before using the same port for the repository-subpath preview:
-
-```sh
-node Scripts/site.mjs --serve --port 4173 --prefix /resenha/
-```
-
-Open `http://127.0.0.1:4173/resenha/#download`. Both mounts serve the same relative HTML/CSS/module files. Nothing is compiled or published. If port 4173 is already in use, stop only your own preview or choose another port.
-
-Run the standard-library gate through the shared queue:
-
-```sh
 ~/.local/bin/mac-gate node --test Scripts/site.test.mjs
 ```
 
-Browser tools are isolated development dependencies, pinned in `Tools/site-audit/package-lock.json`. Install them and the Chromium/WebKit audit engines:
+Abra `http://127.0.0.1:4173/`. O site é estático, sem analytics ou backend.
 
-```sh
-~/.local/bin/mac-gate npm ci --prefix Tools/site-audit
-~/.local/bin/mac-gate Tools/site-audit/node_modules/.bin/playwright install chromium webkit
-```
+## Licença
 
-Setup downloads packages/browser engines; it does not call an AI provider. Run audits serially; each starts and closes its own loopback server and browser, so no separate preview process is required:
-
-```sh
-~/.local/bin/mac-gate node Tools/site-audit/audit.mjs --browser
-~/.local/bin/mac-gate node Tools/site-audit/audit.mjs --lighthouse
-```
-
-Success means exit 0 and zero failures in ignored `build/site-audit/{browser,lighthouse}/summary.json`. Missing packages or engines block the audit: repeat the locked setup, never count a skipped check as passing. Lighthouse measures three local mobile lab runs, not production visitors. See [Resenha site evidence](docs/testing/RESENHA-SITE-EVIDENCE.md) for hashes, all cases, zoom/accessibility observations and measured medians.
-
-`site/release.mjs` exports the sole `releaseState`, `resolveDestination(channel, record)` and `applyReleaseState(root, state)` owners; `Scripts/site.mjs` exports `createPreviewServer({root, prefix, port})` with a close handle. Download/GitHub/App Store slots currently stay inactive with visible explanations. Synthetic test records do not establish public availability. Public GitHub/license publication, verified release packaging and App Store submission are separate later tasks; no remote, deployment or store destination is created here. The site does not close pending native CORE-001 acceptance or authorize native roadmap work.
+[MIT](LICENSE). Dependências e modelos: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

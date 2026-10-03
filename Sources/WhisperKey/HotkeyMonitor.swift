@@ -5,7 +5,7 @@ enum HotkeyError: LocalizedError {
     case eventTapUnavailable
 
     var errorDescription: String? {
-        "Atalho global indisponível. Conceda acesso à Acessibilidade."
+        "Atalho global indisponível. Conceda acesso ao Monitoramento de Entrada."
     }
 }
 
@@ -28,17 +28,22 @@ struct HotkeyLatch {
 }
 
 final class HotkeyMonitor {
-    private let logger = Logger(subsystem: "br.com.luisroquette.WhisperKey", category: "hotkey")
+    private let logger = Logger(subsystem: "br.com.luisroquette.Resenha", category: "hotkey")
     var onPress: (() -> Void)?
     var onRelease: (() -> Void)?
 
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
     private var latch = HotkeyLatch()
+    private var serviceReleaseArmed = false
     private(set) var shortcut: HotkeyShortcut = .rightOption
     var isRunning: Bool { eventTap != nil }
 
     func configure(shortcut: HotkeyShortcut) { self.shortcut = shortcut }
+
+    func armServiceRelease() {
+        serviceReleaseArmed = true
+    }
 
     func start() throws {
         guard eventTap == nil else { return }
@@ -68,6 +73,7 @@ final class HotkeyMonitor {
         if let runLoopSource { CFRunLoopRemoveSource(CFRunLoopGetMain(), runLoopSource, .commonModes) }
         eventTap = nil
         runLoopSource = nil
+        serviceReleaseArmed = false
         _ = latch.interrupt()
     }
 
@@ -75,6 +81,11 @@ final class HotkeyMonitor {
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
             if let eventTap { CGEvent.tapEnable(tap: eventTap, enable: true) }
             if let edge = latch.interrupt() { deliver(edge) }
+            return
+        }
+        if serviceReleaseArmed, type == .keyUp {
+            serviceReleaseArmed = false
+            deliver(.released)
             return
         }
         let keyCode = event.getIntegerValueField(.keyboardEventKeycode)

@@ -12,11 +12,6 @@ struct PanelScreen: Equatable {
 }
 
 enum PanelPlacement {
-    // AX uses a top-left origin on the primary display, AppKit a bottom-left origin.
-    static func appKitFrame(fromAX frame: CGRect, primaryFrame: CGRect) -> CGRect {
-        CGRect(x: frame.minX, y: primaryFrame.maxY - frame.maxY, width: frame.width, height: frame.height)
-    }
-
     static func screen(for window: CGRect?, screens: [PanelScreen], fallbackID: UInt32?) -> PanelScreen? {
         if let window, !window.isEmpty {
             let intersections = screens.map { screen -> (PanelScreen, CGFloat) in

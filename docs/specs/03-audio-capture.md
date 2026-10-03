@@ -38,4 +38,4 @@ Recording shorter than 200 ms may be treated as empty. Input-device selection, v
 
 ## Acceptance
 
-The resulting file exists, has non-zero size, and `whisper-cli` accepts it without conversion.
+The resulting file exists, has non-zero size, and the embedded `WhisperTranscriber` accepts it without conversion.

@@ -24,8 +24,7 @@ struct MenuStatusPresentation {
     }
 
     var accessibleStatus: String {
-        "Resenha — \(activity). Segure \(shortcut.displayName) para ditar."
-            + snapshot.missingPermissions.map { " Permissão necessária: \($0.name). \($0.purpose)" }.joined()
+        "Resenha — \(activity). Use o atalho de ditado configurado nos Serviços do macOS."
     }
 }
 
