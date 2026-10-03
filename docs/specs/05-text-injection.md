@@ -1,36 +1,37 @@
-# SPEC-005 — Text Injection
+# SPEC-005 — Text return and recovery
 
-Status: accepted for M0
-
-Post-M0 amendment: SPEC-012 supersedes clipboard restoration. A completed transcript now remains on the clipboard and enters the bounded local recovery history before insertion.
+Status: sandboxed Service implemented; physical compatibility matrix pending
 
 ## Goal
 
-Insert transcription at the current caret in the application that was focused when recording began.
+Return the completed transcription to the editable field that invoked Resenha, while always leaving a recovery copy available through Command-V.
 
-## M0 method
+## Store method
 
-Use a clipboard transaction plus a synthetic Command-V event:
+1. The focused application invokes the `Ditar com Resenha` macOS Service.
+2. `ResenhaServiceProvider` keeps that Services request open while recording and inference run.
+3. On success, `TextInjector.stage` writes the transcript to the general pasteboard.
+4. The provider declares UTF-8 plain text plus the legacy string pasteboard type on the Service pasteboard.
+5. The requesting application receives and inserts that returned string through its responder chain.
 
-1. Write the transcription to the general pasteboard.
-2. Reactivate the application captured when recording began.
-3. Confirm that this exact process is frontmost.
-4. Post Command-V through Core Graphics only if the clipboard still contains the staged transcription.
-
-This uses the macOS Accessibility event path and maximizes compatibility. Direct `AXUIElement` value/range mutation is deferred because many web and custom editors expose inconsistent writable ranges.
+No application activation, `AXUIElement`, synthetic Command-V or `CGEvent.post` is permitted.
 
 ## Requirements
 
-- Target the frontmost application captured before WhisperKey displays UI.
-- Never activate a normal WhisperKey window during dictation.
-- Leave every completed transcription immediately available to Command-V.
-- Do not paste if the user or target app changes the clipboard before insertion.
-- Reject empty text.
+- Reject blank text.
+- Allow only one active Service request.
+- Return no placeholder after cancellation, failure or the ten-minute timeout.
+- Keep every successful transcript on the general pasteboard for manual recovery.
+- Optionally add it to the bounded ten-item local history before finishing the request.
+- Preserve the active application and selection; Resenha's HUD is passive.
 
-## Known ceiling
+## Compatibility ceiling
 
-Secure fields, apps rejecting synthetic events, remote desktops, and some terminal modes may refuse injection. M0 reports failure where detectable and keeps the transcription in the clipboard only when paste cannot be confirmed.
+Insertion depends on the host application's public Services responder support. Unsupported or secure fields may not accept the returned text. In those cases, the completed transcript remains available through Command-V and the UI reports a specific failure when detectable.
 
-## Current acceptance
+## Acceptance
 
-Insertion works at the caret in TextEdit and one Chromium-based text field. The completed transcript remains on the clipboard after the attempt, as required by SPEC-012.
+- TextEdit inserts the returned text at the selection.
+- Supported browser and terminal fields pass the documented physical matrix.
+- An unsupported host never loses a completed transcript.
+- Binary scanning finds no Accessibility or post-event insertion symbol.

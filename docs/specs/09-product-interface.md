@@ -44,7 +44,7 @@ Entregar uma experiência nativa, pequena e demonstrável:
 
 ### 1. Onboarding
 
-Janela única de 680 × 500 pt, exibida uma vez quando a configuração está incompleta. Ela apresenta a promessa local, Microfone, Acessibilidade e Monitoramento de Entrada, cada um com motivo, estado real e destino nomeado nos Ajustes do Sistema. A recuperação durável permanece no menu.
+Janela única de 680 × 500 pt, exibida uma vez quando a configuração está incompleta. Ela apresenta a promessa local, Microfone, Monitoramento de Entrada e instalação do modelo local, cada um com motivo, estado real e destino nomeado. O Resenha não pede permissão de Acessibilidade. A recuperação durável permanece no menu.
 
 O onboarding não pede conta, API paga, avaliação ou configuração avançada.
 

@@ -62,7 +62,7 @@ Acceptance: deterministic tests cover nonfinite input, clamping, monotonic scale
 
 ## Placement and lifecycle
 
-Read the original target's focused-window frame using already-granted Accessibility, convert AX coordinates to AppKit and choose the largest display intersection with center tie-breaking. Retain that display through the session. If geometry is unavailable, use the last valid target display, then main/first; exact placement cannot be promised without usable AX geometry. Standalone feedback uses the current external app or latest known external target with the same fallback. Pointer position does not select the display.
+Store 1.0 does not read another application's window through Accessibility. Retain the chosen display through the session; use the last valid external target mapping when available, then main/first. Exact target-window placement is deliberately not promised without a public sandbox-safe geometry source. Standalone feedback uses the current external app or latest known external target with the same fallback. Pointer position does not select the display.
 
 Refresh visibleFrame on presentation/display changes; recover from disconnected displays. Center horizontally, prefer visibleFrame.minY + 88 and clamp every edge with a 12-point margin, including negative coordinates. Preserve click-through, hidesOnDeactivate=false, canJoinAllSpaces/fullScreenAuxiliary and one physical panel.
 

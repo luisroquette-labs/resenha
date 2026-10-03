@@ -13,7 +13,7 @@ struct WhisperKeyApp: App {
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
-    private let logger = Logger(subsystem: "br.com.luisroquette.WhisperKey", category: "lifecycle")
+    private let logger = Logger(subsystem: "br.com.luisroquette.Resenha", category: "lifecycle")
     private let permissions = PermissionService()
     private let panel = FloatingPanelController()
     private let hotkey = HotkeyMonitor()

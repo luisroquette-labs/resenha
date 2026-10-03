@@ -28,7 +28,7 @@ struct HotkeyLatch {
 }
 
 final class HotkeyMonitor {
-    private let logger = Logger(subsystem: "br.com.luisroquette.WhisperKey", category: "hotkey")
+    private let logger = Logger(subsystem: "br.com.luisroquette.Resenha", category: "hotkey")
     var onPress: (() -> Void)?
     var onRelease: (() -> Void)?
 

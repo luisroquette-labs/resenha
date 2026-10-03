@@ -2,11 +2,12 @@
 
 - [x] Audit current Apple requirements, existing product and Store blockers.
 - [x] Preserve baseline on `main` and create `feat/app-store-launch`.
-- [ ] Prove sandboxed Services insertion in a focused fixture and real external editor.
-- [ ] Replace external `whisper-cli` with embedded whisper.cpp and model delivery.
-- [ ] Split Store/direct capabilities and pass sandboxed Release tests.
-- [ ] Complete privacy manifest, policy, support and third-party notices.
-- [ ] Produce full icon/logo/export system, ten screenshots and preview video.
+- [x] Prove sandboxed Services insertion in a focused fixture; real external editor remains the physical gate.
+- [x] Replace external `whisper-cli` with embedded whisper.cpp and verified model delivery.
+- [x] Collapse Store/direct experiments into one sandboxed product target and pass Release tests.
+- [x] Complete privacy manifest, policy, support and third-party notices.
+- [x] Produce full icon/logo/export system and ten compliant 2880 × 1800 App Store screenshots.
+- [ ] Produce the final App Store preview video from real UI and approved cinematic plates.
 - [ ] Reserve Store identity and complete localized metadata/privacy questionnaires.
 - [ ] Archive, validate, upload and physically validate the processed build.
 - [ ] Obtain final submission authorization, submit, resolve review and publish.

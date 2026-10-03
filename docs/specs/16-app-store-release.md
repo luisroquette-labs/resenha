@@ -9,16 +9,16 @@ Publish Resenha as a free, polished, local-first macOS app while preserving the 
 ## Channel contract
 
 - Store binary: App Sandbox enabled, Apple Distribution signed, uploaded through Xcode/App Store Connect.
-- Direct binary: preserved until the Store workflow proves equivalent; never mixed with Store entitlements.
+- One product target and bundle identity only; obsolete direct editions must be removed rather than shipped beside it.
 - No backend, account, tracking, paid API, API key or Python runtime.
-- All required executables, libraries, models and resources live inside the signed app or its sandbox container.
+- All required libraries and resources live inside the signed app; the verified model lives inside its sandbox container.
 - Marketing may say "on-device" only after a clean-machine/network-off acceptance test.
 
 ## Release identity
 
 - Product and Finder display name: `Resenha`.
 - Store name: a unique, owner-approved App Store Connect name of at most 30 characters; preferred candidate `Resenha — Ditado por Voz`.
-- Bundle identifier: a stable Store identifier reserved in the owner's developer team. Development and Store builds must not accidentally share incompatible TCC/container state.
+- Bundle identifier: `br.com.luisroquette.Resenha` in the owner's developer team.
 - Version `1.0.0`; globally increasing build number.
 - Price: free, no in-app purchase.
 - Primary category: Productivity. Secondary category: Utilities.
@@ -27,7 +27,7 @@ Publish Resenha as a free, polished, local-first macOS app while preserving the 
 ## Required gates
 
 1. Sandbox launch and microphone capture work from an archived Release build.
-2. No runtime lookup under Homebrew, `/usr/local`, arbitrary home paths or environment variables.
+2. No runtime lookup under Homebrew, `/usr/local`, arbitrary home paths or executable environment variables.
 3. Store insertion passes in TextEdit, Notes, Safari/Chrome web text fields and Terminal, or unsupported hosts are disclosed before submission.
 4. Audio is deleted after every attempt; transcript history remains local, optional and clearable.
 5. `codesign`, archive validation, privacy manifest inspection, unit tests and physical smoke tests pass on the exact submitted build.

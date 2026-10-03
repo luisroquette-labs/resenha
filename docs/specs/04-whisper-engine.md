@@ -1,46 +1,48 @@
 # SPEC-004 — Whisper Engine
 
-Status: accepted for M0
+Status: embedded engine implemented; final clean-install acceptance pending
 
 ## Goal
 
-Convert the captured WAV to Portuguese text locally with whisper.cpp and Apple Silicon acceleration.
+Convert the captured WAV to local text with whisper.cpp, optimized for Apple Silicon and requiring no external runtime.
 
-## M0 integration
+## Runtime contract
 
-The development build invokes an installed `whisper-cli` executable as a child process. This is still local whisper.cpp and contains no Python. Search order:
+- `whisper.xcframework` is embedded in the signed app and called through the public C API.
+- The Release target is arm64 and enables Metal, flash attention and Accelerate.
+- Inference is serialized behind one engine lock; the loaded model context is reused.
+- The app never invokes `Process`, a shell, Homebrew, Python or a cloud API.
+- Language is fixed per attempt from PT-BR, EN or ES; translation is off.
+- The personal glossary becomes a bounded initial prompt and deterministic replacement table.
 
-1. `WHISPER_CLI_PATH`
-2. `/opt/homebrew/bin/whisper-cli`
-3. `/usr/local/bin/whisper-cli`
+## Model acquisition
 
-Model search order:
+The initial model is `ggml-small-q5_1.bin` from the official `ggerganov/whisper.cpp` Hugging Face repository.
 
-1. `WHISPER_MODEL_PATH`
-2. `~/Library/Application Support/WhisperKey/Models/ggml-large-v3-turbo-q5_0.bin`
-3. `~/Library/Application Support/WhisperKey/Models/ggml-small-q5_1.bin`
+- Expected size: `190085487` bytes.
+- Expected SHA-256: `ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb`.
+- Download uses an ephemeral URL session and the sandbox network-client entitlement.
+- Install is atomic inside Application Support after size and hash pass.
+- Existing files with the wrong size/hash are rejected and replaced only by an explicit retry.
 
-The app must show the missing path when discovery fails. It must not download a model automatically.
+## Audio and output
 
-## Invocation contract
+- Input must be 16 kHz, mono PCM readable by `AVAudioFile`.
+- Empty speech, invalid audio, model-load failure, non-zero inference status and timeout fail closed.
+- Segment text is joined, whitespace/non-speech markers normalized and the bounded local glossary applied.
+- No raw audio or transcript content is logged.
 
-Use the language selected for the current session, GPU enabled by default, text output (`-otxt`), a unique output prefix, and no timestamps. Capture stderr and require exit status zero. Stop a stuck local process after ten minutes.
+## Performance
 
-## Output contract
+Initial target for a five-second utterance on Apple Silicon is P50 under three seconds after model load. The exact device/model benchmark is evidence, not a marketing guarantee.
 
-- Read the generated `.txt` as UTF-8.
-- Trim surrounding whitespace and Whisper bracket-only non-speech markers.
-- Empty output is not injected.
-- Delete generated output and bounded diagnostics even on failure.
+## Licensing
 
-## Performance target
-
-For a five-second utterance with the small model on Apple Silicon: initial target P50 under 3 seconds after model load. M0 records actual elapsed time but does not promise sub-second latency.
-
-## Distribution boundary
-
-Before distributable M1, replace process discovery with an embedded whisper.cpp library/C bridge and define model acquisition, integrity verification, licensing, and updates. That work is explicitly outside M0.
+whisper.cpp and the selected model are MIT-licensed. The repository and app distribution include their notices in `THIRD_PARTY_NOTICES.md`.
 
 ## Acceptance
 
-A deterministic fixture WAV produces non-empty Portuguese text with the network disabled.
+1. An archived sandboxed app downloads and verifies the model once.
+2. A deterministic fixture WAV produces non-empty text through the embedded engine.
+3. The same model transcribes with the network disconnected after installation.
+4. Binary inspection finds no external executable dependency or Python runtime.

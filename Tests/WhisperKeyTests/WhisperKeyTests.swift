@@ -774,14 +774,6 @@ final class WhisperKeyTests: XCTestCase {
         XCTAssertFalse(failure.isBusy)
     }
 
-    func testAXCoordinatesConvertNegativeAndAbovePrimaryDisplays() {
-        let primary = CGRect(x: 0, y: 0, width: 1440, height: 900)
-        XCTAssertEqual(PanelPlacement.appKitFrame(fromAX: CGRect(x: -1200, y: 100, width: 500, height: 400), primaryFrame: primary),
-                       CGRect(x: -1200, y: 400, width: 500, height: 400))
-        XCTAssertEqual(PanelPlacement.appKitFrame(fromAX: CGRect(x: 100, y: -700, width: 500, height: 400), primaryFrame: primary),
-                       CGRect(x: 100, y: 1200, width: 500, height: 400))
-    }
-
     func testScreenChoiceUsesIntersectionThenCenterAndDeterministicTie() {
         let left = PanelScreen(id: 1, frame: CGRect(x: -1000, y: 0, width: 1000, height: 800), visibleFrame: CGRect(x: -1000, y: 24, width: 1000, height: 776))
         let right = PanelScreen(id: 2, frame: CGRect(x: 0, y: 0, width: 1000, height: 800), visibleFrame: CGRect(x: 0, y: 24, width: 1000, height: 776))
@@ -824,7 +816,7 @@ final class WhisperKeyTests: XCTestCase {
         XCTAssertFalse(selection.hasSession)
     }
 
-    func testStandaloneMissingWindowAndAccessibilityUseExternalTargetFallbacks() {
+    func testStandaloneMissingWindowUsesExternalTargetFallbacks() {
         let primary = PanelScreen(id: 1, frame: CGRect(x: 0, y: 0, width: 1000, height: 800), visibleFrame: CGRect(x: 0, y: 24, width: 1000, height: 776))
         let secondary = PanelScreen(id: 2, frame: CGRect(x: -1000, y: 0, width: 1000, height: 800), visibleFrame: CGRect(x: -1000, y: 24, width: 1000, height: 776))
         var selection = PanelScreenSelection()
@@ -833,7 +825,7 @@ final class WhisperKeyTests: XCTestCase {
         XCTAssertEqual(selection.standaloneTarget(explicit: nil, frontmost: 99, ownPID: 7), 99)
         XCTAssertEqual(selection.standaloneTarget(explicit: 42, frontmost: 99, ownPID: 7), 42)
         XCTAssertEqual(selection.resolve(pid: 42, window: secondary.frame, screens: [primary, secondary], mainID: 1)?.id, 2)
-        // Nil window is the read-only resolver's result for missing AX access or focused window.
+        // The sandboxed Service build does not inspect another app's focused window.
         XCTAssertEqual(selection.resolve(pid: 42, window: nil, screens: [primary, secondary], mainID: 1)?.id, 2)
         XCTAssertEqual(selection.resolve(pid: 99, window: nil, screens: [primary, secondary], mainID: 1)?.id, 1)
         XCTAssertEqual(selection.resolve(pid: 42, window: nil, screens: [primary], mainID: 1)?.id, 1)
@@ -844,7 +836,7 @@ final class WhisperKeyTests: XCTestCase {
     func testFailureLayoutReplacementRestoresOrdinaryFootprintAndDoesNotStealFocus() {
         let panel = FloatingPanelController()
         let activePID = NSWorkspace.shared.frontmostApplication?.processIdentifier
-        panel.showTemporarily(.failure("Input Monitoring permission is required to receive the dictation shortcut"))
+        panel.showTemporarily(.failure("Permissão de Monitoramento de Entrada necessária para receber o atalho de ditado"))
         let obsolete = panel.dismissal.generation
         XCTAssertLessThanOrEqual(panel.frame.width, 360)
         XCTAssertLessThanOrEqual(panel.frame.height, 104)
@@ -921,8 +913,8 @@ final class WhisperKeyTests: XCTestCase {
             .appendingPathComponent("ResenhaTests/ui-fixtures", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let states: [(String, FloatingStatus)] = [("ready", .ready), ("listening", .listening), ("listening-silence", .listening), ("listening-decay", .listening), ("transcribing", .transcribing), ("inserting", .inserting),
-            ("failure", .failure("Input Monitoring permission required")),
-            ("long-failure", .failure("Input Monitoring permission is required to receive the dictation shortcut"))]
+            ("failure", .failure("Permissão de Monitoramento de Entrada necessária")),
+            ("long-failure", .failure("Permissão de Monitoramento de Entrada necessária para receber o atalho de ditado"))]
         let appearances: [(String, ColorScheme, ColorSchemeContrast, Bool, Bool)] = [
             ("light", .light, .standard, false, false), ("dark", .dark, .standard, false, false),
             ("increased-contrast", .light, .increased, false, false), ("reduced-transparency", .dark, .increased, true, false),
