@@ -72,8 +72,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         NSApp.servicesProvider = serviceProvider
         NSUpdateDynamicServices()
-        hotkey.onPress = nil
-        hotkey.onRelease = { [weak self] in self?.handleHotkeyRelease() }
+        configureHotkeyRouting()
         configureMenuBar()
         menuController.updateLanguage(preferences.transcriptionLanguage)
         menuController.updateRecentTranscripts(
@@ -90,6 +89,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func observeCoordinator(_ coordinator: DictationCoordinator) {
         self.coordinator = coordinator
         coordinator.onPhaseChange = { [weak self] _ in self?.updateStatusItem() }
+    }
+
+    func configureHotkeyRouting() {
+        hotkey.onPress = { [weak self] in self?.handleHotkeyPress(targetIsSelf: false) }
+        hotkey.onRelease = { [weak self] in self?.handleHotkeyRelease() }
+    }
+
+    var isHotkeyRoutingConfigured: Bool {
+        hotkey.onPress != nil && hotkey.onRelease != nil
     }
 
     func handleHotkeyPress(targetIsSelf: Bool? = nil) {

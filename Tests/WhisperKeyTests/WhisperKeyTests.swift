@@ -332,6 +332,14 @@ final class WhisperKeyTests: XCTestCase {
         XCTAssertNil(latch.interrupt())
     }
 
+    @MainActor
+    func testAppConfiguresBothGlobalHotkeyEdges() {
+        let app = AppDelegate()
+        XCTAssertFalse(app.isHotkeyRoutingConfigured)
+        app.configureHotkeyRouting()
+        XCTAssertTrue(app.isHotkeyRoutingConfigured)
+    }
+
     func testStaleAudioCleanupKeepsFreshAndUnrelatedFiles() throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("ResenhaAudioCleanupTests-\(UUID().uuidString)", isDirectory: true)

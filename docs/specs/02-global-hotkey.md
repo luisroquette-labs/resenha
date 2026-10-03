@@ -4,12 +4,14 @@ Status: implemented for Store 1.0
 
 ## Decision
 
-Store 1.0 uses the macOS Service **Ditar com Resenha**, with default shortcut **Control + Option + Space**. The user can change the binding in System Settings → Keyboard → Keyboard Shortcuts → Services. The Service invocation starts capture; a listen-only event tap observes the matching release.
+Store 1.0 uses the macOS Service **Ditar com Resenha** for automatic insertion, with default shortcut **Control + Option + Space**. A listen-only event tap must also start capture directly from the shortcut so dictation never appears dead when macOS has not activated the Service binding. The same monitor observes the matching release. A direct invocation keeps the completed transcript on the clipboard; a compatible Service request additionally returns it to the active field.
 
 ## Requirements
 
-- Start only from a real Services request in a compatible editable field.
-- Arm release monitoring for the configured Service shortcut only after that request.
+- Start from the configured global shortcut whenever permissions are ready.
+- Attach both press and release handlers before starting the event tap.
+- If a compatible editable field also invokes the Service, coalesce both paths into one recording.
+- Arm Service release monitoring after a Services request without duplicating the active press.
 - Stop only on the matching key-up transition.
 - Suppress no shortcut or unrelated keyboard input.
 - Disable monitoring cleanly when the app terminates.
@@ -29,5 +31,6 @@ The listen-only event tap requires Input Monitoring. Text return through `NSServ
 ## Acceptance
 
 - Invoking another shortcut alone does nothing.
-- One Service request starts one recording; its matching release stops it once.
+- One physical press starts one recording; its matching release stops it once.
+- A simultaneous Service request and global press still produce exactly one recording.
 - The configured Service works in the supported TextEdit, browser and terminal matrix.
