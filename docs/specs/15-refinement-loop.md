@@ -1,5 +1,7 @@
 # SPEC-015 — Lapidação contínua do produto
 
+Status: active, with the App Store/Sandbox gate superseded by SPEC-021 for direct distribution.
+
 ## Objetivo
 
 Elevar o Resenha por ciclos completos de inspeção, correção e validação até que duas rodadas consecutivas não encontrem correções ou otimizações relevantes.

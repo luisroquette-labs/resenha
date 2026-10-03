@@ -15,6 +15,7 @@
 		21BFEB851E15B4030C254977 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 00EE951794E83B89436ADF66 /* Assets.xcassets */; };
 		23B9446876E4BE5B1AFE5873 /* DictationInteraction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 360ACBBE554E2869FCDC8B7E /* DictationInteraction.swift */; };
 		4606CD9D92C6ACAA3C397C20 /* SoundLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75D558D773F2BC3AB3159027 /* SoundLibrary.swift */; };
+		488CDC52580DCA390B89A260 /* ShortcutCaptureController.swift in Sources */ = {isa = PBXBuildFile; fileRef = D37823F6AEBFF7A451345AD9 /* ShortcutCaptureController.swift */; };
 		4D275811B61D4D4E11E8E920 /* FloatingStatusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06A6C0A3CA2A532832FE5EA2 /* FloatingStatusView.swift */; };
 		51525402AD13FA5CA9902099 /* PermissionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 455B40E8E0EA98B11A9E7FF5 /* PermissionService.swift */; };
 		591DD42A9F96EBA7F0FDDC8E /* PanelPlacement.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6D551801267264DB250896E /* PanelPlacement.swift */; };
@@ -23,7 +24,6 @@
 		689D5145FF1FCF328F843A75 /* NativeMenuController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 523F074FCFE5942E2581895F /* NativeMenuController.swift */; };
 		726C0EFD16B67C19F84BC57B /* TextInjector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 733DACDEB4AB93D5CF9C3903 /* TextInjector.swift */; };
 		73B3AA17549C4AF0E03C6F25 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = B63B342300F9037E5752DC51 /* PrivacyInfo.xcprivacy */; };
-		7A195F12859C4F1568C35E16 /* ResenhaServiceProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C21778039C6CF048E46A91A /* ResenhaServiceProvider.swift */; };
 		86DFF8F34B535D75107AB91C /* AudioRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA553ED088000409A1534B10 /* AudioRecorder.swift */; };
 		8A12E0347CA26301459DABDD /* MenuPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E88ECFDFC9BE5A2B95ED500 /* MenuPresentation.swift */; };
 		A43F5E47CFC6FC2CDEC601A4 /* DictationCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E0F01DAE4C30ED2DC6B9DBC /* DictationCoordinator.swift */; };
@@ -61,7 +61,6 @@
 		5D146404C7236681875DFD04 /* WhisperModelManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhisperModelManager.swift; sourceTree = "<group>"; };
 		5FFCCC5A27F52BFFEE1004E2 /* WhisperKeyApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhisperKeyApp.swift; sourceTree = "<group>"; };
 		657BE28A9445C25311C92C86 /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = SDKROOT; };
-		6C21778039C6CF048E46A91A /* ResenhaServiceProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResenhaServiceProvider.swift; sourceTree = "<group>"; };
 		6E0F01DAE4C30ED2DC6B9DBC /* DictationCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationCoordinator.swift; sourceTree = "<group>"; };
 		733DACDEB4AB93D5CF9C3903 /* TextInjector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextInjector.swift; sourceTree = "<group>"; };
 		75D558D773F2BC3AB3159027 /* SoundLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoundLibrary.swift; sourceTree = "<group>"; };
@@ -73,6 +72,7 @@
 		B63B342300F9037E5752DC51 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		CC53403AB4A2D89C204327D2 /* libc++.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = "libc++.tbd"; path = "usr/lib/libc++.tbd"; sourceTree = SDKROOT; };
 		CD98C7E641E041C3A2E5E855 /* ResenhaDesign.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResenhaDesign.swift; sourceTree = "<group>"; };
+		D37823F6AEBFF7A451345AD9 /* ShortcutCaptureController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutCaptureController.swift; sourceTree = "<group>"; };
 		D4A8FD7C33E4604E0E2BE7C1 /* RecordingWaveformView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingWaveformView.swift; sourceTree = "<group>"; };
 		DC280A6E884D7AF1EBD71925 /* WhisperKeyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhisperKeyTests.swift; sourceTree = "<group>"; };
 		F6D551801267264DB250896E /* PanelPlacement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PanelPlacement.swift; sourceTree = "<group>"; };
@@ -161,7 +161,7 @@
 				FD3A8F8F80E9569C5B9B6616 /* ProductPreferences.swift */,
 				D4A8FD7C33E4604E0E2BE7C1 /* RecordingWaveformView.swift */,
 				CD98C7E641E041C3A2E5E855 /* ResenhaDesign.swift */,
-				6C21778039C6CF048E46A91A /* ResenhaServiceProvider.swift */,
+				D37823F6AEBFF7A451345AD9 /* ShortcutCaptureController.swift */,
 				75D558D773F2BC3AB3159027 /* SoundLibrary.swift */,
 				733DACDEB4AB93D5CF9C3903 /* TextInjector.swift */,
 				B3739A1A43D300FD95FA56BD /* TranscriptHistory.swift */,
@@ -291,7 +291,7 @@
 				5C704B1BDF72D42759556414 /* ProductPreferences.swift in Sources */,
 				6623A7ED527515535110CC64 /* RecordingWaveformView.swift in Sources */,
 				C4A5F5D768D1319B58EE2118 /* ResenhaDesign.swift in Sources */,
-				7A195F12859C4F1568C35E16 /* ResenhaServiceProvider.swift in Sources */,
+				488CDC52580DCA390B89A260 /* ShortcutCaptureController.swift in Sources */,
 				4606CD9D92C6ACAA3C397C20 /* SoundLibrary.swift in Sources */,
 				726C0EFD16B67C19F84BC57B /* TextInjector.swift in Sources */,
 				05000D0D3D17971B45BD1891 /* TranscriptHistory.swift in Sources */,
@@ -355,7 +355,7 @@
 			buildSettings = {
 				ARCHS = arm64;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CODE_SIGN_ENTITLEMENTS = Config/ResenhaStore.entitlements;
+				CODE_SIGN_ENTITLEMENTS = Config/Resenha.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
@@ -366,7 +366,7 @@
 					"\"Frameworks\"",
 				);
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = "Config/ResenhaStore-Info.plist";
+				INFOPLIST_FILE = "Config/Resenha-Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -503,7 +503,7 @@
 			buildSettings = {
 				ARCHS = arm64;
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				CODE_SIGN_ENTITLEMENTS = Config/ResenhaStore.entitlements;
+				CODE_SIGN_ENTITLEMENTS = Config/Resenha.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
@@ -514,7 +514,7 @@
 					"\"Frameworks\"",
 				);
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = "Config/ResenhaStore-Info.plist";
+				INFOPLIST_FILE = "Config/Resenha-Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",

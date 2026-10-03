@@ -32,7 +32,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         openSettings: { [weak self] permission in self?.openSettings(for: permission) }
     )
     private lazy var settingsController = ProductSettingsWindowController(preferences: preferences)
-    private lazy var serviceProvider = ResenhaServiceProvider()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         AudioRecorder.cleanupStaleRecordings()
@@ -59,19 +58,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             onRecordingLevel: { [weak self] level in self?.menuController.updateRecordingLevel(level) },
             onTranscript: { [weak self] text in
                 self?.recordTranscript(text)
-                self?.serviceProvider.complete(with: text)
             },
-            onFailure: { [weak self] error in
-                self?.serviceProvider.fail(with: error.title)
-            }
+            onFailure: { _ in }
         ))
-        serviceProvider.beginDictation = { [weak self] in
-            guard let self else { return }
-            self.hotkey.armServiceRelease()
-            self.handleHotkeyPress(targetIsSelf: false)
-        }
-        NSApp.servicesProvider = serviceProvider
-        NSUpdateDynamicServices()
         configureHotkeyRouting()
         configureMenuBar()
         menuController.updateLanguage(preferences.transcriptionLanguage)
@@ -127,6 +116,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         interaction.isRequestingPermission = true
         updateStatusItem()
         permissions.requestInputMonitoring()
+        permissions.requestAccessibility()
         Task {
             defer {
                 interaction.isRequestingPermission = false

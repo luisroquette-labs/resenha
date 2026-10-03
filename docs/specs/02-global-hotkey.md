@@ -1,36 +1,28 @@
-# SPEC-002 — Global Hotkey
+# SPEC-002 — Global hotkey
 
-Status: implemented for Store 1.0
+Status: implemented for direct distribution
 
 ## Decision
 
-Store 1.0 uses the macOS Service **Ditar com Resenha** for automatic insertion, with default shortcut **Control + Option + Space**. A listen-only event tap must also start capture directly from the shortcut so dictation never appears dead when macOS has not activated the Service binding. The same monitor observes the matching release. A direct invocation keeps the completed transcript on the clipboard; a compatible Service request additionally returns it to the active field.
+The user records the push-to-talk shortcut in Resenha. New installations default to **right Option**; existing legacy presets migrate automatically. A listen-only event tap observes the exact chosen press and release anywhere on macOS.
 
 ## Requirements
 
-- Start from the configured global shortcut whenever permissions are ready.
-- Attach both press and release handlers before starting the event tap.
-- If a compatible editable field also invokes the Service, coalesce both paths into one recording.
-- Arm Service release monitoring after a Services request without duplicating the active press.
-- Stop only on the matching key-up transition.
-- Suppress no shortcut or unrelated keyboard input.
-- Disable monitoring cleanly when the app terminates.
-- Re-enable an event tap if macOS disables it because of timeout.
+- Accept an ordinary key, a modified key chord, or one left/right modifier key.
+- Persist key code, normalized modifiers, side-specific label and modifier-only behavior.
+- Apply a changed shortcut immediately without restarting the app.
+- Match the exact modifier set and ignore auto-repeat or duplicate edges.
+- Suppress no global keyboard event and store no unrelated keystrokes.
+- Stop monitoring when permission is lost or the app terminates.
+- Re-enable a tap disabled by macOS timeout.
 
 ## Permissions
 
-The listen-only event tap requires Input Monitoring. Text return through `NSServices` requires no Accessibility permission. Without Input Monitoring, show the exact missing permission and open System Settings only after explicit user action.
-
-## Edge cases
-
-- Auto-repeat or duplicate flag events: ignore.
-- Service invoked while another attempt is active: return a bounded error.
-- Permission revoked while running: stop monitoring and expose the error.
-- Hotkey pressed during transcription: ignore.
+Input Monitoring is required for the global listen-only tap. Accessibility is separately required for insertion; the hotkey remains stopped until all required permissions are ready.
 
 ## Acceptance
 
-- Invoking another shortcut alone does nothing.
-- One physical press starts one recording; its matching release stops it once.
-- A simultaneous Service request and global press still produce exactly one recording.
-- The configured Service works in the supported TextEdit, browser and terminal matrix.
+- Right Option produces exactly one press and one release.
+- An arbitrary chord survives app restart and rejects extra modifiers.
+- Changing the shortcut in Settings restarts monitoring with the new value.
+- No System Settings keyboard-shortcut configuration is part of the product flow.

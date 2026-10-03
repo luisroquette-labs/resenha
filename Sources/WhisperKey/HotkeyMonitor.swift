@@ -35,15 +35,10 @@ final class HotkeyMonitor {
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
     private var latch = HotkeyLatch()
-    private var serviceReleaseArmed = false
     private(set) var shortcut: HotkeyShortcut = .rightOption
     var isRunning: Bool { eventTap != nil }
 
     func configure(shortcut: HotkeyShortcut) { self.shortcut = shortcut }
-
-    func armServiceRelease() {
-        serviceReleaseArmed = true
-    }
 
     func start() throws {
         guard eventTap == nil else { return }
@@ -73,7 +68,6 @@ final class HotkeyMonitor {
         if let runLoopSource { CFRunLoopRemoveSource(CFRunLoopGetMain(), runLoopSource, .commonModes) }
         eventTap = nil
         runLoopSource = nil
-        serviceReleaseArmed = false
         _ = latch.interrupt()
     }
 
@@ -81,11 +75,6 @@ final class HotkeyMonitor {
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
             if let eventTap { CGEvent.tapEnable(tap: eventTap, enable: true) }
             if let edge = latch.interrupt() { deliver(edge) }
-            return
-        }
-        if serviceReleaseArmed, type == .keyUp {
-            serviceReleaseArmed = false
-            deliver(.released)
             return
         }
         let keyCode = event.getIntegerValueField(.keyboardEventKeycode)

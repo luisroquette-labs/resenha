@@ -5,7 +5,7 @@ local e de código aberto. Requer Apple Silicon e macOS 14 ou posterior.
 
 Segure o atalho, fale e solte. O Resenha grava só enquanto a combinação está
 pressionada, transcreve com whisper.cpp no próprio Mac e devolve o texto ao
-campo ativo por um Serviço nativo do macOS.
+campo ativo com a permissão de Acessibilidade.
 
 ## O que já funciona
 
@@ -13,7 +13,8 @@ campo ativo por um Serviço nativo do macOS.
 - Whisper embarcado, acelerado por Metal em Apple Silicon; nenhuma instalação de Python.
 - Áudio transitório, clipboard imediato e últimos 10 textos locais e opcionais.
 - HUD compacto com nível real do microfone, sons configuráveis e feedback de erro.
-- App Sandbox, sem conta, anúncios, analytics, backend ou chave de API.
+- Atalho livre configurado dentro do app, inclusive Option direita isolada.
+- Sem conta, anúncios, analytics, backend ou chave de API.
 
 ## Privacidade
 
@@ -37,22 +38,23 @@ xcodegen generate
 open build/Build/Products/Debug/Resenha.app
 ```
 
-O target `WhisperKey` gera um único app sandboxado com bundle ID
+O target `WhisperKey` gera um único app de distribuição direta com bundle ID
 `br.com.luisroquette.Resenha`. Contribuidores podem selecionar seu próprio
 Development Team localmente sem alterar o código versionado.
 
 ## Arquitetura
 
 ```text
-Atalho de Serviço do macOS
+Atalho global escolhido no Resenha
   → AVFoundation (PCM mono, 16 kHz)
   → whisper.cpp + Metal
   → pós-processamento determinístico
-  → NSPasteboard + retorno do Serviço ao campo ativo
+  → NSPasteboard + Command-V no campo ativo
 ```
 
-A inserção usa a cadeia oficial de Serviços do macOS. O binário da App Store
-não usa Accessibility API nem simula `Command + V`.
+A inserção usa Acessibilidade para devolver o foco ao aplicativo original e
+simular `Command + V`. Microfone, Monitoramento de Entrada e Acessibilidade são
+explicados e solicitados separadamente.
 
 ## Desenvolvimento orientado por especificação
 
