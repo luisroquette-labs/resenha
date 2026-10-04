@@ -7,8 +7,9 @@ release_relevant_paths=(
   Resources
   Frameworks
   Vendor/whisper.cpp
-  Scripts
-  site
+  Scripts/archive-release-candidate.sh
+  Scripts/build-whisper-framework.sh
+  Scripts/export-app-store-screenshots.sh
   AppStore
   ':(exclude)AppStore/release-state.json'
   project.yml
@@ -16,9 +17,10 @@ release_relevant_paths=(
   THIRD_PARTY_NOTICES.md
 )
 
-# Deliberately excluded from archive provenance: `.specs/**`, `docs/**`, README files
-# and `AppStore/release-state.json`. They may record evidence in descendant commits but
-# never alter the executable, release tooling, store metadata or conversion assets.
+# Deliberately excluded from archive provenance: `.specs/**`, `docs/**`, README files,
+# the independently tested marketing site, validators and `AppStore/release-state.json`.
+# They may change in descendant commits but cannot alter the archived executable,
+# its build inputs or the App Store submission assets.
 
 release_source_fail() {
   print -u2 "FALHOU: $*"

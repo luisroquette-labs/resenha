@@ -12,7 +12,8 @@ git -C "$fixture" config user.email "release-contract@invalid.example"
 mkdir -p "$fixture/Sources" "$fixture/Scripts" "$fixture/Config" \
   "$fixture/site/assets/product" "$fixture/AppStore/screenshots" "$fixture/docs" "$fixture/.specs"
 print 'release source' > "$fixture/Sources/App.swift"
-print 'release script' > "$fixture/Scripts/release.sh"
+print 'release script' > "$fixture/Scripts/archive-release-candidate.sh"
+print 'validator' > "$fixture/Scripts/site.test.mjs"
 print 'release config' > "$fixture/Config/App.plist"
 print 'site media' > "$fixture/site/assets/product/demo.mp4"
 print 'store media' > "$fixture/AppStore/screenshots/store.png"
@@ -27,8 +28,10 @@ print 'evidence' > "$fixture/docs/release-evidence.md"
 print 'task state' > "$fixture/.specs/release-task.md"
 print 'unrelated user documentation' > "$fixture/README.md"
 print '{"candidate":"recorded"}' > "$fixture/AppStore/release-state.json"
+print 'updated site media' > "$fixture/site/assets/product/demo.mp4"
+print 'updated validator' > "$fixture/Scripts/site.test.mjs"
 git -C "$fixture" add .
-git -C "$fixture" commit -q -m 'metadata-only descendant'
+git -C "$fixture" commit -q -m 'non-binary descendant'
 validate_release_source_commit "$fixture" "$commit"
 
 function assert_relevant_change_rejected() {
@@ -50,9 +53,8 @@ function assert_relevant_change_rejected() {
 }
 
 assert_relevant_change_rejected Sources/App.swift 'release source' 'changed app source' 'app source'
-assert_relevant_change_rejected Scripts/release.sh 'release script' 'changed release script' 'release script'
+assert_relevant_change_rejected Scripts/archive-release-candidate.sh 'release script' 'changed release script' 'archive script'
 assert_relevant_change_rejected Config/App.plist 'release config' 'changed release config' 'release config'
-assert_relevant_change_rejected site/assets/product/demo.mp4 'site media' 'changed site media' 'site media'
 assert_relevant_change_rejected AppStore/screenshots/store.png 'store media' 'changed store media' 'store media'
 
 print 'dirty' >> "$fixture/Sources/App.swift"
@@ -61,7 +63,7 @@ if validate_release_source_commit "$fixture" "$commit" >/dev/null 2>&1; then
   exit 1
 fi
 git -C "$fixture" restore Sources/App.swift
-print 'untracked' > "$fixture/Scripts/untracked.sh"
+print 'untracked' > "$fixture/Scripts/build-whisper-framework.sh"
 if validate_release_source_commit "$fixture" "$commit" >/dev/null 2>&1; then
   print -u2 "FALHOU: contrato aceitou script relevante sem commit"
   exit 1
@@ -70,4 +72,4 @@ if validate_release_source_commit "$fixture" 00000000000000000000000000000000000
   print -u2 "FALHOU: contrato aceitou commit inexistente"
   exit 1
 fi
-print "PASS: descendente só de metadados/docs aceito; fonte, script, config, mídia, worktree e commit inválido rejeitados"
+print "PASS: site/docs/validadores aceitos; fonte, archive script, config, store media, worktree e commit inválido rejeitados"
