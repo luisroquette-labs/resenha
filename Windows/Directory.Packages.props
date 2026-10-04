@@ -1,0 +1,9 @@
+<Project>
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <CentralPackageVersionOverrideEnabled>false</CentralPackageVersionOverrideEnabled>
+  </PropertyGroup>
+  <!-- MSTest.Sdk 4.4.0 supplies its own central PackageVersion items from
+       the exact MSTestVersion/MicrosoftTestingPlatformVersion properties.
+       Production projects deliberately have no third-party packages. -->
+</Project>

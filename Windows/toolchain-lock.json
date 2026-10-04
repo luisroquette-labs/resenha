@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "status": "blocked-awaiting-authorized-windows-host",
+  "requirements": {
+    "dotnetSdk": "10.0.401",
+    "dotnetRuntime": "10.0.12",
+    "mstestSdk": "4.4.0",
+    "microsoftTestingPlatform": "2.4.0",
+    "languageVersion": "14.0",
+    "targetFramework": "net10.0-windows10.0.19041.0",
+    "runtimeIdentifier": "win-x64",
+    "selfContained": true,
+    "msvcToolset": "v143",
+    "innoSetup": "6.7.3",
+    "whisperCommit": "4979e04f5dcaccb36057e059bbaed8a2f5288315"
+  },
+  "approvedHostInventory": null,
+  "requiredInventoryFields": [
+    "anonymousHostId", "authorizationReference", "windowsEdition", "windowsBuild",
+    "architecture", "dotnetSdkVersion", "dotnetRuntimeVersion", "windowsSdkVersion",
+    "msvcCompilerVersion", "msvcCompilerSha256", "linkerVersion", "linkerSha256",
+    "cmakeVersion", "cmakeSha256", "powerShellVersion", "powerShellSha256",
+    "innoCompilerVersion", "innoCompilerSha256", "observedAtUtc"
+  ],
+  "validation": {
+    "lockedRestore": "not-run",
+    "compile": "not-run",
+    "coreTests": "not-run",
+    "platformTests": "not-run",
+    "dependencyLocks": "pending-sdk-generated-restore"
+  },
+  "blockers": [
+    "No authorized Windows host or native toolchain inventory has been supplied.",
+    "The current macOS host has no dotnet SDK or PowerShell in PATH.",
+    "Generate and review all dependency locks with the exact SDK before locked restore; no dependency graph or successful restore is asserted."
+  ]
+}

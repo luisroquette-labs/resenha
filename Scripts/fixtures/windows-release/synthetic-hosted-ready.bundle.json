@@ -1,0 +1,940 @@
+{
+  "warning": "SYNTHETIC TEST FIXTURE ONLY. NOT RELEASE EVIDENCE. NEVER PROMOTE.",
+  "expected": {
+    "sourceCommit": "1111111111111111111111111111111111111111",
+    "publisher": "SYNTHETIC TEST PUBLISHER - NOT A CERTIFICATE",
+    "certificateThumbprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+    "toolSha256": "c62bc27783bb3ba1f6cd3f9f649fe233964193101fb80cf82c7a81c913a1a877",
+    "evaluationTimeUtc": "2026-10-04T15:00:00Z"
+  },
+  "artifactUtf8": "MZ SYNTHETIC TEST DATA ONLY - NOT AN EXECUTABLE\n",
+  "payloadUtf8": {
+    "LICENSES.txt": "SYNTHETIC TEST DATA ONLY LICENSES.txt\n",
+    "Resenha.TargetBroker.exe": "MZ SYNTHETIC TEST DATA ONLY Resenha.TargetBroker.exe\n",
+    "Resenha.exe": "MZ SYNTHETIC TEST DATA ONLY Resenha.exe\n",
+    "native/whisper-cli.exe": "MZ SYNTHETIC TEST DATA ONLY native/whisper-cli.exe\n",
+    "runtime/System.Runtime.dll": "MZ SYNTHETIC TEST DATA ONLY runtime/System.Runtime.dll\n",
+    "unins000.exe": "MZ SYNTHETIC TEST DATA ONLY unins000.exe\n"
+  },
+  "evidenceFiles": {
+    "raw/preflight-15fd465646056c9b03344d6e9994e38c1002251262ad735258ecfd7971f75bb8.json": "{\"synthetic\":true,\"observation\":\"SYNTHETIC ONLY: preflight; no native test was executed.\"}",
+    "Windows/global.json": "SYNTHETIC INPUT ONLY: Windows/global.json",
+    "Windows/toolchain-lock.json": "SYNTHETIC INPUT ONLY: Windows/toolchain-lock.json",
+    "Windows/native/CMakePresets.json": "SYNTHETIC INPUT ONLY: Windows/native/CMakePresets.json",
+    "Windows/model-manifest.json": "SYNTHETIC INPUT ONLY: Windows/model-manifest.json",
+    "Windows/Resenha.Core/packages.lock.json": "SYNTHETIC INPUT ONLY: Windows/Resenha.Core/packages.lock.json",
+    "Windows/Resenha.Core.Tests/packages.lock.json": "SYNTHETIC INPUT ONLY: Windows/Resenha.Core.Tests/packages.lock.json",
+    "Windows/Resenha.Platform/packages.lock.json": "SYNTHETIC INPUT ONLY: Windows/Resenha.Platform/packages.lock.json",
+    "Windows/Resenha.Platform.Tests/packages.lock.json": "SYNTHETIC INPUT ONLY: Windows/Resenha.Platform.Tests/packages.lock.json",
+    "Windows/Resenha.TargetBroker/packages.lock.json": "SYNTHETIC INPUT ONLY: Windows/Resenha.TargetBroker/packages.lock.json",
+    "Windows/Resenha.Windows/packages.lock.json": "SYNTHETIC INPUT ONLY: Windows/Resenha.Windows/packages.lock.json",
+    "raw/scan-installer-309666d131cfa8b16907e0eb2ed2451612529b3789b12e5933a9254c7ceb23c4.json": "{\"synthetic\":true,\"observation\":\"SYNTHETIC ONLY: scan-installer; no native test was executed.\"}",
+    "raw/scan-payload-bf2a7d73480a5ff0cd00e0fe411769a8a3d653903c33656d7d980a4314703fdc.json": "{\"synthetic\":true,\"observation\":\"SYNTHETIC ONLY: scan-payload; no native test was executed.\"}",
+    "raw/corpus-windows10-pt-f540eacc3281ef641648ff6b314cb9681dda6fb00d2920f0089344db7c9e92cd.json": "{\"synthetic\":true,\"observation\":\"SYNTHETIC ONLY: corpus-windows10-pt; no native test was executed.\"}",
+    "raw/corpus-windows10-en-07cebfb6ed678d7c8bf7c3f6a83a456f1d866e2239afcc261f76dd4e3d6a4e57.json": "{\"synthetic\":true,\"observation\":\"SYNTHETIC ONLY: corpus-windows10-en; no native test was executed.\"}",
+    "raw/corpus-windows10-es-f3135362277c29a9cfe7665d2543b13cb6aea5499dafdd93ecba36d7e619e346.json": "{\"synthetic\":true,\"observation\":\"SYNTHETIC ONLY: corpus-windows10-es; no native test was executed.\"}",
+    "raw/corpus-windows11-pt-503ffb46e2dc244dd1b62d89117876c0b92c2d5893b7a3e022b1ac4555e7dea0.json": "{\"synthetic\":true,\"observation\":\"SYNTHETIC ONLY: corpus-windows11-pt; no native test was executed.\"}",
+    "raw/corpus-windows11-en-e35a7f685ba655b29288cd68a4fc1c53875707ef4d884d2af53b263f63f29349.json": "{\"synthetic\":true,\"observation\":\"SYNTHETIC ONLY: corpus-windows11-en; no native test was executed.\"}",
+    "raw/corpus-windows11-es-05ce5eebf9b49bcf48aef59552f98146c4a4cbcd0da20fb1c4fce20a80deb8a0.json": "{\"synthetic\":true,\"observation\":\"SYNTHETIC ONLY: corpus-windows11-es; no native test was executed.\"}",
+    "raw/hosting-759aa2b6f07bb993c355a289607045517a497767c93f83bd02a8c20b4eb617b1.json": "{\"synthetic\":true,\"observation\":\"SYNTHETIC ONLY: hosting; no native test was executed.\"}",
+    "reports/build-0f15d095de91eb522ab3fd1dc8734b72af6c49df1f0b8405848c2c6950a5a4d8.json": "{\"schemaVersion\":1,\"kind\":\"build\",\"evidenceClass\":\"synthetic\",\"sourceCommit\":\"1111111111111111111111111111111111111111\",\"artifactSha256\":\"70cd65a2ec8deb97af3526b9cc6f4129819f7bebc7cd90fbfe1aa6539eb35015\",\"dependsOn\":[],\"observations\":{\"recordedAtUtc\":\"2026-10-04T10:00:00Z\",\"host\":{\"os\":{\"name\":\"windows11\",\"edition\":\"Pro\",\"release\":\"25H2\",\"build\":\"10.0.26200.9999\",\"architecture\":\"x64\"},\"physical\":true,\"authorizationReference\":\"SYNTHETIC-NO-HOST-AUTHORIZATION\"},\"sourceCommit\":\"1111111111111111111111111111111111111111\",\"toolchain\":{\"dotnetSdk\":\"10.0.401\",\"dotnetRuntime\":\"10.0.12\",\"mstestSdk\":\"4.4.0\",\"languageVersion\":\"14.0\",\"targetFramework\":\"net10.0-windows10.0.19041.0\",\"runtimeIdentifier\":\"win-x64\",\"selfContained\":true,\"msvcToolset\":\"v143\",\"windowsSdkVersion\":\"SYNTHETIC-windowsSdkVersion\",\"msvcCompilerVersion\":\"SYNTHETIC-msvcCompilerVersion\",\"msvcCompilerSha256\":\"6fa22a05a360e5fb11c818ae7b3f8fe01c40ee7c7364f95770c3f1d7f63ae395\",\"linkerVersion\":\"SYNTHETIC-linkerVersion\",\"linkerSha256\":\"2930eda5c15a3eb10fe47111cc14c3ae167ba555cf7ad3b7808e73d1ea190fcb\",\"cmakeVersion\":\"SYNTHETIC-cmakeVersion\",\"cmakeSha256\":\"84522d676ac3101b828ff77777975848b786bb14b509f74275ba5ec7eefadaf8\",\"powerShellVersion\":\"7.0.0\",\"powerShellSha256\":\"2a2218ff6742d362fa90239db56eba4dca396758b32a03d16696d58f4b32af2b\",\"innoCompilerVersion\":\"6.7.3\",\"innoCompilerSha256\":\"2f4996c2db6a9b3fa59c117980a632d0c50cae4dfdcb4d2f5f2fd449ae9fd2d0\"},\"preflight\":{\"sourceCommit\":\"1111111111111111111111111111111111111111\",\"exitCode\":0,\"totalTests\":1,\"skippedTests\":0,\"report\":{\"path\":\"raw/preflight-15fd465646056c9b03344d6e9994e38c1002251262ad735258ecfd7971f75bb8.json\",\"sha256\":\"15fd465646056c9b03344d6e9994e38c1002251262ad735258ecfd7971f75bb8\"}},\"inputs\":[{\"path\":\"Windows/global.json\",\"sha256\":\"501f40819be6250388f6eb67a7878082572090f621b571320695970666ca471e\"},{\"path\":\"Windows/toolchain-lock.json\",\"sha256\":\"ad6f65e4c51d4046de2631f3d2afbc66234e4722ba3fd680029ea8de22b3f4c2\"},{\"path\":\"Windows/native/CMakePresets.json\",\"sha256\":\"d09286c1ea5d077eee8c1c11e69ca82ad2400c7ef965a9dfbda8e28078a8530a\"},{\"path\":\"Windows/model-manifest.json\",\"sha256\":\"c85cbc851b21552c20442d1d3bb35102a2ad40f4aec97b41b45f8970c1ee9a86\"},{\"path\":\"Windows/Resenha.Core/packages.lock.json\",\"sha256\":\"0f564914d470d659630de397ee4e665ba8b3b1d92438a5b316056ee1d97d8272\"},{\"path\":\"Windows/Resenha.Core.Tests/packages.lock.json\",\"sha256\":\"d6287efffc7c8a5350b1e0ff1304de7d499d3a55fcc4928784356e1c2692a1ac\"},{\"path\":\"Windows/Resenha.Platform/packages.lock.json\",\"sha256\":\"cdb4362d49578651dd16f9c9063b79c8be4b70ab6babe554bdba04a467e333d5\"},{\"path\":\"Windows/Resenha.Platform.Tests/packages.lock.json\",\"sha256\":\"0ed7406580a874f7989bd67f20651727474ae617ea6a9fb073258a171f7f5ed4\"},{\"path\":\"Windows/Resenha.TargetBroker/packages.lock.json\",\"sha256\":\"ceb2e8696efb8fb37f102db24dee7a87411eeec3bb8b73d2864bf93882b2fb8c\"},{\"path\":\"Windows/Resenha.Windows/packages.lock.json\",\"sha256\":\"950349fafd9a5d63fb53769e82ba8a2edbcee3f21549d06d221099fbc9327158\"}]}}",
+    "reports/payload-58a2d714b666a8789b052beae6b05377ff26b4fa4faaf5abaa871b78398347e4.json": "{\"schemaVersion\":1,\"kind\":\"payload\",\"evidenceClass\":\"synthetic\",\"sourceCommit\":\"1111111111111111111111111111111111111111\",\"artifactSha256\":\"70cd65a2ec8deb97af3526b9cc6f4129819f7bebc7cd90fbfe1aa6539eb35015\",\"dependsOn\":[{\"path\":\"reports/build-0f15d095de91eb522ab3fd1dc8734b72af6c49df1f0b8405848c2c6950a5a4d8.json\",\"sha256\":\"0f15d095de91eb522ab3fd1dc8734b72af6c49df1f0b8405848c2c6950a5a4d8\"}],\"observations\":{\"inventorySha256\":\"66559804558bce6d9d191c2ab5caf55c555da18534f7eeb8aa62b950f60d0e05\",\"files\":[{\"path\":\"LICENSES.txt\",\"byteLength\":38,\"sha256\":\"1f6e9931adf2b2d1524ee1317dd67d8e13ebecef0b91cf0667d8bd3bbe1a9681\",\"isPe\":false},{\"path\":\"Resenha.TargetBroker.exe\",\"byteLength\":53,\"sha256\":\"f77c9466eba2d402dc5bb9b3866f240dd5fa3bf0b55b60425ce4d592fa78f2f1\",\"isPe\":true},{\"path\":\"Resenha.exe\",\"byteLength\":40,\"sha256\":\"d782195d8a5a7993555c6c49ef48102d46d617e5abbc6218c1e89123da1cbe41\",\"isPe\":true},{\"path\":\"native/whisper-cli.exe\",\"byteLength\":51,\"sha256\":\"329780e25e6b880ffb312ca2475fd135058a487c820e22ff2e356bf482f9c6f9\",\"isPe\":true},{\"path\":\"runtime/System.Runtime.dll\",\"byteLength\":55,\"sha256\":\"a29a3c301bb83620f2dc58e3806992f50c855f9f536aea5fe9cecc7135158090\",\"isPe\":true},{\"path\":\"unins000.exe\",\"byteLength\":41,\"sha256\":\"5d6e481820e5e0d740c1a1743f4e70e71c64614ee77fa62d77b2d32f7912b2e4\",\"isPe\":true}]}}",
+    "reports/signatures-722c060e7c516582c6f6f30fd50ac0a7d4719362c47593fb6fdae44e09d9f972.json": "{\"schemaVersion\":1,\"kind\":\"signatures\",\"evidenceClass\":\"synthetic\",\"sourceCommit\":\"1111111111111111111111111111111111111111\",\"artifactSha256\":\"70cd65a2ec8deb97af3526b9cc6f4129819f7bebc7cd90fbfe1aa6539eb35015\",\"dependsOn\":[{\"path\":\"reports/payload-58a2d714b666a8789b052beae6b05377ff26b4fa4faaf5abaa871b78398347e4.json\",\"sha256\":\"58a2d714b666a8789b052beae6b05377ff26b4fa4faaf5abaa871b78398347e4\"}],\"observations\":{\"verifiedAtUtc\":\"2026-10-04T10:20:00Z\",\"publisher\":\"SYNTHETIC TEST PUBLISHER - NOT A CERTIFICATE\",\"certificateThumbprint\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\",\"items\":[{\"path\":\"Resenha.TargetBroker.exe\",\"sha256\":\"f77c9466eba2d402dc5bb9b3866f240dd5fa3bf0b55b60425ce4d592fa78f2f1\",\"authority\":\"release\",\"status\":\"Valid\",\"publisher\":\"SYNTHETIC TEST PUBLISHER - NOT A CERTIFICATE\",\"certificateThumbprint\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\",\"certificateNotBeforeUtc\":\"2026-01-01T00:00:00Z\",\"certificateNotAfterUtc\":\"2027-01-01T00:00:00Z\",\"publiclyTrusted\":true,\"chainTrusted\":true,\"digestAlgorithm\":\"SHA256\",\"timestamp\":{\"atUtc\":\"2026-10-04T10:10:00Z\",\"protocol\":\"RFC3161\",\"status\":\"Valid\",\"chainTrusted\":true}},{\"path\":\"Resenha.exe\",\"sha256\":\"d782195d8a5a7993555c6c49ef48102d46d617e5abbc6218c1e89123da1cbe41\",\"authority\":\"release\",\"status\":\"Valid\",\"publisher\":\"SYNTHETIC TEST PUBLISHER - NOT A CERTIFICATE\",\"certificateThumbprint\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\",\"certificateNotBeforeUtc\":\"2026-01-01T00:00:00Z\",\"certificateNotAfterUtc\":\"2027-01-01T00:00:00Z\",\"publiclyTrusted\":true,\"chainTrusted\":true,\"digestAlgorithm\":\"SHA256\",\"timestamp\":{\"atUtc\":\"2026-10-04T10:10:00Z\",\"protocol\":\"RFC3161\",\"status\":\"Valid\",\"chainTrusted\":true}},{\"path\":\"native/whisper-cli.exe\",\"sha256\":\"329780e25e6b880ffb312ca2475fd135058a487c820e22ff2e356bf482f9c6f9\",\"authority\":\"release\",\"status\":\"Valid\",\"publisher\":\"SYNTHETIC TEST PUBLISHER - NOT A CERTIFICATE\",\"certificateThumbprint\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\",\"certificateNotBeforeUtc\":\"2026-01-01T00:00:00Z\",\"certificateNotAfterUtc\":\"2027-01-01T00:00:00Z\",\"publiclyTrusted\":true,\"chainTrusted\":true,\"digestAlgorithm\":\"SHA256\",\"timestamp\":{\"atUtc\":\"2026-10-04T10:10:00Z\",\"protocol\":\"RFC3161\",\"status\":\"Valid\",\"chainTrusted\":true}},{\"path\":\"runtime/System.Runtime.dll\",\"sha256\":\"a29a3c301bb83620f2dc58e3806992f50c855f9f536aea5fe9cecc7135158090\",\"authority\":\"vendor\",\"status\":\"Valid\",\"publisher\":\"SYNTHETIC VENDOR - NOT A CERTIFICATE\",\"certificateThumbprint\":\"BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB\",\"certificateNotBeforeUtc\":\"2026-01-01T00:00:00Z\",\"certificateNotAfterUtc\":\"2027-01-01T00:00:00Z\",\"publiclyTrusted\":true,\"chainTrusted\":true,\"digestAlgorithm\":\"SHA256\",\"timestamp\":{\"atUtc\":\"2026-09-01T10:00:00Z\",\"protocol\":\"RFC3161\",\"status\":\"Valid\",\"chainTrusted\":true}},{\"path\":\"unins000.exe\",\"sha256\":\"5d6e481820e5e0d740c1a1743f4e70e71c64614ee77fa62d77b2d32f7912b2e4\",\"authority\":\"release\",\"status\":\"Valid\",\"publisher\":\"SYNTHETIC TEST PUBLISHER - NOT A CERTIFICATE\",\"certificateThumbprint\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\",\"certificateNotBeforeUtc\":\"2026-01-01T00:00:00Z\",\"certificateNotAfterUtc\":\"2027-01-01T00:00:00Z\",\"publiclyTrusted\":true,\"chainTrusted\":true,\"digestAlgorithm\":\"SHA256\",\"timestamp\":{\"atUtc\":\"2026-10-04T10:10:00Z\",\"protocol\":\"RFC3161\",\"status\":\"Valid\",\"chainTrusted\":true}},{\"path\":\"Resenha-0.0.0-windows-x64-setup.exe\",\"sha256\":\"70cd65a2ec8deb97af3526b9cc6f4129819f7bebc7cd90fbfe1aa6539eb35015\",\"authority\":\"release\",\"status\":\"Valid\",\"publisher\":\"SYNTHETIC TEST PUBLISHER - NOT A CERTIFICATE\",\"certificateThumbprint\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\",\"certificateNotBeforeUtc\":\"2026-01-01T00:00:00Z\",\"certificateNotAfterUtc\":\"2027-01-01T00:00:00Z\",\"publiclyTrusted\":true,\"chainTrusted\":true,\"digestAlgorithm\":\"SHA256\",\"timestamp\":{\"atUtc\":\"2026-10-04T10:10:00Z\",\"protocol\":\"RFC3161\",\"status\":\"Valid\",\"chainTrusted\":true}}]}}",
+    "reports/scan-73dfc52dc0f8331e5efc2afc7c1d42b3493691fe4eb79ccd49f5f3075cbc1356.json": "{\"schemaVersion\":1,\"kind\":\"scan\",\"evidenceClass\":\"synthetic\",\"sourceCommit\":\"1111111111111111111111111111111111111111\",\"artifactSha256\":\"70cd65a2ec8deb97af3526b9cc6f4129819f7bebc7cd90fbfe1aa6539eb35015\",\"dependsOn\":[{\"path\":\"reports/signatures-722c060e7c516582c6f6f30fd50ac0a7d4719362c47593fb6fdae44e09d9f972.json\",\"sha256\":\"722c060e7c516582c6f6f30fd50ac0a7d4719362c47593fb6fdae44e09d9f972\"}],\"observations\":{\"scanner\":\"Microsoft Defender\",\"engineVersion\":\"SYNTHETIC-ENGINE\",\"platformVersion\":\"SYNTHETIC-PLATFORM\",\"signatureVersion\":\"SYNTHETIC-DEFINITIONS\",\"signatureUpdatedAtUtc\":\"2026-10-04T00:00:00Z\",\"artifactSha256\":\"70cd65a2ec8deb97af3526b9cc6f4129819f7bebc7cd90fbfe1aa6539eb35015\",\"payloadInventorySha256\":\"66559804558bce6d9d191c2ab5caf55c555da18534f7eeb8aa62b950f60d0e05\",\"targets\":[{\"kind\":\"installer\",\"startedAtUtc\":\"2026-10-04T10:30:00Z\",\"completedAtUtc\":\"2026-10-04T10:35:00Z\",\"complete\":true,\"exitCode\":0,\"detections\":0,\"remediations\":0,\"remediationDisabled\":true,\"detailReport\":{\"path\":\"raw/scan-installer-309666d131cfa8b16907e0eb2ed2451612529b3789b12e5933a9254c7ceb23c4.json\",\"sha256\":\"309666d131cfa8b16907e0eb2ed2451612529b3789b12e5933a9254c7ceb23c4\"}},{\"kind\":\"payload\",\"startedAtUtc\":\"2026-10-04T10:30:00Z\",\"completedAtUtc\":\"2026-10-04T10:35:00Z\",\"complete\":true,\"exitCode\":0,\"detections\":0,\"remediations\":0,\"remediationDisabled\":true,\"detailReport\":{\"path\":\"raw/scan-payload-bf2a7d73480a5ff0cd00e0fe411769a8a3d653903c33656d7d980a4314703fdc.json\",\"sha256\":\"bf2a7d73480a5ff0cd00e0fe411769a8a3d653903c33656d7d980a4314703fdc\"}}]}}",
+    "reports/physical-windows10-12cc0653c9bc7d86d47e62c6afb96fa0584d5f59ae8408ebcba207c3b2483526.json": "{\"schemaVersion\":1,\"kind\":\"physical-windows10\",\"evidenceClass\":\"synthetic\",\"sourceCommit\":\"1111111111111111111111111111111111111111\",\"artifactSha256\":\"70cd65a2ec8deb97af3526b9cc6f4129819f7bebc7cd90fbfe1aa6539eb35015\",\"dependsOn\":[{\"path\":\"reports/scan-73dfc52dc0f8331e5efc2afc7c1d42b3493691fe4eb79ccd49f5f3075cbc1356.json\",\"sha256\":\"73dfc52dc0f8331e5efc2afc7c1d42b3493691fe4eb79ccd49f5f3075cbc1356\"}],\"observations\":{\"observedAtUtc\":\"2026-10-04T12:00:00Z\",\"verifier\":\"SYNTHETIC-OBSERVER-NOT-A-PERSON\",\"hardware\":{\"physical\":true,\"cpu\":\"SYNTHETIC-CPU\",\"cpuFeatures\":[\"AVX2\",\"FMA\",\"F16C\",\"SSE4.2\",\"OS_AVX_STATE\"],\"ramGiB\":8,\"microphone\":\"SYNTHETIC-MICROPHONE\"},\"os\":{\"name\":\"windows10\",\"edition\":\"Pro\",\"release\":\"22H2\",\"build\":\"10.0.19045.9999\",\"architecture\":\"x64\"},\"sourceCommit\":\"1111111111111111111111111111111111111111\",\"appVersion\":\"0.0.0\",\"artifactSha256\":\"70cd65a2ec8deb97af3526b9cc6f4129819f7bebc7cd90fbfe1aa6539eb35015\",\"artifactByteLength\":48,\"model\":{\"name\":\"ggml-small-q5_1.bin\",\"byteLength\":190085487,\"sha256\":\"ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb\"},\"checks\":{\"standardUserInstall\":{\"outcome\":\"observed-pass\",\"observation\":\"SYNTHETIC ONLY: standardUserInstall; no physical test executed.\"},\"noDeveloperTools\":{\"outcome\":\"observed-pass\",\"observation\":\"SYNTHETIC ONLY: noDeveloperTools; no physical test executed.\"},\"offlineDictation\":{\"outcome\":\"observed-pass\",\"observation\":\"SYNTHETIC ONLY: offlineDictation; no physical test executed.\"},\"notepad\":{\"outcome\":\"observed-pass\",\"observation\":\"SYNTHETIC ONLY: notepad; no physical test executed.\"},\"chromeInput\":{\"outcome\":\"observed-pass\",\"observation\":\"SYNTHETIC ONLY: chromeInput; no physical test executed.\"},\"chromeContenteditable\":{\"outcome\":\"observed-pass\",\"observation\":\"SYNTHETIC ONLY: chromeContenteditable; no physical test executed.\"},\"abnt2AltGr\":{\"outcome\":\"observed-pass\",\"observation\":\"SYNTHETIC ONLY: abnt2AltGr; no physical test executed.\"},\"focusRace\":{\"outcome\":\"observed-pass\",\"observation\":\"SYNTHETIC ONLY: focusRace; no physical test executed.\"},\"microphonePermission\":{\"outcome\":\"observed-pass\",\"observation\":\"SYNTHETIC ONLY: microphonePermission; no physical test executed.\"},\"microphoneDisconnect\":{\"outcome\":\"observed-pass\",\"observation\":\"SYNTHETIC ONLY: microphoneDisconnect; no physical test executed.\"},\"missingModel\":{\"outcome\":\"observed-pass\",\"observation\":\"SYNTHETIC ONLY: missingModel; no physical test executed.\"},\"corruptModel\":{\"outcome\":\"observed-pass\",\"observation\":\"SYNTHETIC ONLY: corruptModel; no physical test executed.\"},\"inferenceFailure\":{\"outcome\":\"observed-pass\",\"observation\":\"SYNTHETIC ONLY: inferenceFailure; no physical test executed.\"},\"clipboardContention\":{\"outcome\":\"observed-pass\",\"observation\":\"SYNTHETIC ONLY: clipboardContention; no physical test executed.\"},\"blockedInsertion\":{\"outcome\":\"observed-pass\",\"observation\":\"SYNTHETIC ONLY: blockedInsertion; no physical test executed.\"},\"copyAgain\":{\"outcome\":\"observed-pass\",\"observation\":\"SYNTHETIC ONLY: copyAgain; no physical test executed.\"},\"cancelLockSuspend\":{\"outcome\":\"observed-pass\",\"observation\":\"SYNTHETIC ONLY: cancelLockSuspend; no physical test executed.\"},\"temporaryAudioCleanup\":{\"outcome\":\"observed-pass\",\"observation\":\"SYNTHETIC ONLY: temporaryAudioCleanup; no physical test executed.\"},\"spacesNonAsciiPath\":{\"outcome\":\"observed-pass\",\"observation\":\"SYNTHETIC ONLY: spacesNonAsciiPath; no physical test executed.\"},\"uninstall\":{\"outcome\":\"observed-pass\",\"observation\":\"SYNTHETIC ONLY: uninstall; no physical test executed.\"},\"ownedDataRemoval\":{\"outcome\":\"observed-pass\",\"observation\":\"SYNTHETIC ONLY: ownedDataRemoval; no physical test executed.\"},\"unrelatedDataPreserved\":{\"outcome\":\"observed-pass\",\"observation\":\"SYNTHETIC ONLY: unrelatedDataPreserved; no physical test executed.\"}},\"cycles\":[{\"number\":1,\"recordings\":1,\"clipboardCommits\":1,\"insertions\":1,\"returnedIdle\":true,\"observation\":\"SYNTHETIC ONLY: cycle 1; no dictation executed.\"},{\"number\":2,\"recordings\":1,\"clipboardCommits\":1,\"insertions\":1,\"returnedIdle\":true,\"observation\":\"SYNTHETIC ONLY: cycle 2; no dictation executed.\"},{\"number\":3,\"recordings\":1,\"clipboardCommits\":1,\"insertions\":1,\"returnedIdle\":true,\"observation\":\"SYNTHETIC ONLY: cycle 3; no dictation executed.\"},{\"number\":4,\"recordings\":1,\"clipboardCommits\":1,\"insertions\":1,\"returnedIdle\":true,\"observation\":\"SYNTHETIC ONLY: cycle 4; no dictation executed.\"},{\"number\":5,\"recordings\":1,\"clipboardCommits\":1,\"insertions\":1,\"returnedIdle\":true,\"observation\":\"SYNTHETIC ONLY: cycle 5; no dictation executed.\"},{\"number\":6,\"recordings\":1,\"clipboardCommits\":1,\"insertions\":1,\"returnedIdle\":true,\"observation\":\"SYNTHETIC ONLY: cycle 6; no dictation executed.\"},{\"number\":7,\"recordings\":1,\"clipboardCommits\":1,\"insertions\":1,\"returnedIdle\":true,\"observation\":\"SYNTHETIC ONLY: cycle 7; no dictation executed.\"},{\"number\":8,\"recordings\":1,\"clipboardCommits\":1,\"insertions\":1,\"returnedIdle\":true,\"observation\":\"SYNTHETIC ONLY: cycle 8; no dictation executed.\"},{\"number\":9,\"recordings\":1,\"clipboardCommits\":1,\"insertions\":1,\"returnedIdle\":true,\"observation\":\"SYNTHETIC ONLY: cycle 9; no dictation executed.\"},{\"number\":10,\"recordings\":1,\"clipboardCommits\":1,\"insertions\":1,\"returnedIdle\":true,\"observation\":\"SYNTHETIC ONLY: cycle 10; no dictation executed.\"}],\"corpus\":[{\"language\":\"pt\",\"utterances\":5,\"wordErrorRate\":0.1,\"anglicismRetention\":1,\"networkDisconnected\":true,\"silenceProducedNoText\":true,\"report\":{\"path\":\"raw/corpus-windows10-pt-f540eacc3281ef641648ff6b314cb9681dda6fb00d2920f0089344db7c9e92cd.json\",\"sha256\":\"f540eacc3281ef641648ff6b314cb9681dda6fb00d2920f0089344db7c9e92cd\"}},{\"language\":\"en\",\"utterances\":5,\"wordErrorRate\":0.1,\"anglicismRetention\":\"not-applicable\",\"networkDisconnected\":true,\"silenceProducedNoText\":true,\"report\":{\"path\":\"raw/corpus-windows10-en-07cebfb6ed678d7c8bf7c3f6a83a456f1d866e2239afcc261f76dd4e3d6a4e57.json\",\"sha256\":\"07cebfb6ed678d7c8bf7c3f6a83a456f1d866e2239afcc261f76dd4e3d6a4e57\"}},{\"language\":\"es\",\"utterances\":5,\"wordErrorRate\":0.1,\"anglicismRetention\":1,\"networkDisconnected\":true,\"silenceProducedNoText\":true,\"report\":{\"path\":\"raw/corpus-windows10-es-f3135362277c29a9cfe7665d2543b13cb6aea5499dafdd93ecba36d7e619e346.json\",\"sha256\":\"f3135362277c29a9cfe7665d2543b13cb6aea5499dafdd93ecba36d7e619e346\"}}]}}",
+    "reports/physical-windows11-d3c69977574c9f015fd71dcd1016afb05cc56580cadfb6cc22bc463f388c5bc9.json": "{\"schemaVersion\":1,\"kind\":\"physical-windows11\",\"evidenceClass\":\"synthetic\",\"sourceCommit\":\"1111111111111111111111111111111111111111\",\"artifactSha256\":\"70cd65a2ec8deb97af3526b9cc6f4129819f7bebc7cd90fbfe1aa6539eb35015\",\"dependsOn\":[{\"path\":\"reports/scan-73dfc52dc0f8331e5efc2afc7c1d42b3493691fe4eb79ccd49f5f3075cbc1356.json\",\"sha256\":\"73dfc52dc0f8331e5efc2afc7c1d42b3493691fe4eb79ccd49f5f3075cbc1356\"}],\"observations\":{\"observedAtUtc\":\"2026-10-04T12:00:00Z\",\"verifier\":\"SYNTHETIC-OBSERVER-NOT-A-PERSON\",\"hardware\":{\"physical\":true,\"cpu\":\"SYNTHETIC-CPU\",\"cpuFeatures\":[\"AVX2\",\"FMA\",\"F16C\",\"SSE4.2\",\"OS_AVX_STATE\"],\"ramGiB\":8,\"microphone\":\"SYNTHETIC-MICROPHONE\"},\"os\":{\"name\":\"windows11\",\"edition\":\"Pro\",\"release\":\"25H2\",\"build\":\"10.0.26200.9999\",\"architecture\":\"x64\"},\"sourceCommit\":\"1111111111111111111111111111111111111111\",\"appVersion\":\"0.0.0\",\"artifactSha256\":\"70cd65a2ec8deb97af3526b9cc6f4129819f7bebc7cd90fbfe1aa6539eb35015\",\"artifactByteLength\":48,\"model\":{\"name\":\"ggml-small-q5_1.bin\",\"byteLength\":190085487,\"sha256\":\"ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb\"},\"checks\":{\"standardUserInstall\":{\"outcome\":\"observed-pass\",\"observation\":\"SYNTHETIC ONLY: standardUserInstall; no physical test executed.\"},\"noDeveloperTools\":{\"outcome\":\"observed-pass\",\"observation\":\"SYNTHETIC ONLY: noDeveloperTools; no physical test executed.\"},\"offlineDictation\":{\"outcome\":\"observed-pass\",\"observation\":\"SYNTHETIC ONLY: offlineDictation; no physical test executed.\"},\"notepad\":{\"outcome\":\"observed-pass\",\"observation\":\"SYNTHETIC ONLY: notepad; no physical test executed.\"},\"chromeInput\":{\"outcome\":\"observed-pass\",\"observation\":\"SYNTHETIC ONLY: chromeInput; no physical test executed.\"},\"chromeContenteditable\":{\"outcome\":\"observed-pass\",\"observation\":\"SYNTHETIC ONLY: chromeContenteditable; no physical test executed.\"},\"abnt2AltGr\":{\"outcome\":\"observed-pass\",\"observation\":\"SYNTHETIC ONLY: abnt2AltGr; no physical test executed.\"},\"focusRace\":{\"outcome\":\"observed-pass\",\"observation\":\"SYNTHETIC ONLY: focusRace; no physical test executed.\"},\"microphonePermission\":{\"outcome\":\"observed-pass\",\"observation\":\"SYNTHETIC ONLY: microphonePermission; no physical test executed.\"},\"microphoneDisconnect\":{\"outcome\":\"observed-pass\",\"observation\":\"SYNTHETIC ONLY: microphoneDisconnect; no physical test executed.\"},\"missingModel\":{\"outcome\":\"observed-pass\",\"observation\":\"SYNTHETIC ONLY: missingModel; no physical test executed.\"},\"corruptModel\":{\"outcome\":\"observed-pass\",\"observation\":\"SYNTHETIC ONLY: corruptModel; no physical test executed.\"},\"inferenceFailure\":{\"outcome\":\"observed-pass\",\"observation\":\"SYNTHETIC ONLY: inferenceFailure; no physical test executed.\"},\"clipboardContention\":{\"outcome\":\"observed-pass\",\"observation\":\"SYNTHETIC ONLY: clipboardContention; no physical test executed.\"},\"blockedInsertion\":{\"outcome\":\"observed-pass\",\"observation\":\"SYNTHETIC ONLY: blockedInsertion; no physical test executed.\"},\"copyAgain\":{\"outcome\":\"observed-pass\",\"observation\":\"SYNTHETIC ONLY: copyAgain; no physical test executed.\"},\"cancelLockSuspend\":{\"outcome\":\"observed-pass\",\"observation\":\"SYNTHETIC ONLY: cancelLockSuspend; no physical test executed.\"},\"temporaryAudioCleanup\":{\"outcome\":\"observed-pass\",\"observation\":\"SYNTHETIC ONLY: temporaryAudioCleanup; no physical test executed.\"},\"spacesNonAsciiPath\":{\"outcome\":\"observed-pass\",\"observation\":\"SYNTHETIC ONLY: spacesNonAsciiPath; no physical test executed.\"},\"uninstall\":{\"outcome\":\"observed-pass\",\"observation\":\"SYNTHETIC ONLY: uninstall; no physical test executed.\"},\"ownedDataRemoval\":{\"outcome\":\"observed-pass\",\"observation\":\"SYNTHETIC ONLY: ownedDataRemoval; no physical test executed.\"},\"unrelatedDataPreserved\":{\"outcome\":\"observed-pass\",\"observation\":\"SYNTHETIC ONLY: unrelatedDataPreserved; no physical test executed.\"}},\"cycles\":[{\"number\":1,\"recordings\":1,\"clipboardCommits\":1,\"insertions\":1,\"returnedIdle\":true,\"observation\":\"SYNTHETIC ONLY: cycle 1; no dictation executed.\"},{\"number\":2,\"recordings\":1,\"clipboardCommits\":1,\"insertions\":1,\"returnedIdle\":true,\"observation\":\"SYNTHETIC ONLY: cycle 2; no dictation executed.\"},{\"number\":3,\"recordings\":1,\"clipboardCommits\":1,\"insertions\":1,\"returnedIdle\":true,\"observation\":\"SYNTHETIC ONLY: cycle 3; no dictation executed.\"},{\"number\":4,\"recordings\":1,\"clipboardCommits\":1,\"insertions\":1,\"returnedIdle\":true,\"observation\":\"SYNTHETIC ONLY: cycle 4; no dictation executed.\"},{\"number\":5,\"recordings\":1,\"clipboardCommits\":1,\"insertions\":1,\"returnedIdle\":true,\"observation\":\"SYNTHETIC ONLY: cycle 5; no dictation executed.\"},{\"number\":6,\"recordings\":1,\"clipboardCommits\":1,\"insertions\":1,\"returnedIdle\":true,\"observation\":\"SYNTHETIC ONLY: cycle 6; no dictation executed.\"},{\"number\":7,\"recordings\":1,\"clipboardCommits\":1,\"insertions\":1,\"returnedIdle\":true,\"observation\":\"SYNTHETIC ONLY: cycle 7; no dictation executed.\"},{\"number\":8,\"recordings\":1,\"clipboardCommits\":1,\"insertions\":1,\"returnedIdle\":true,\"observation\":\"SYNTHETIC ONLY: cycle 8; no dictation executed.\"},{\"number\":9,\"recordings\":1,\"clipboardCommits\":1,\"insertions\":1,\"returnedIdle\":true,\"observation\":\"SYNTHETIC ONLY: cycle 9; no dictation executed.\"},{\"number\":10,\"recordings\":1,\"clipboardCommits\":1,\"insertions\":1,\"returnedIdle\":true,\"observation\":\"SYNTHETIC ONLY: cycle 10; no dictation executed.\"}],\"corpus\":[{\"language\":\"pt\",\"utterances\":5,\"wordErrorRate\":0.1,\"anglicismRetention\":1,\"networkDisconnected\":true,\"silenceProducedNoText\":true,\"report\":{\"path\":\"raw/corpus-windows11-pt-503ffb46e2dc244dd1b62d89117876c0b92c2d5893b7a3e022b1ac4555e7dea0.json\",\"sha256\":\"503ffb46e2dc244dd1b62d89117876c0b92c2d5893b7a3e022b1ac4555e7dea0\"}},{\"language\":\"en\",\"utterances\":5,\"wordErrorRate\":0.1,\"anglicismRetention\":\"not-applicable\",\"networkDisconnected\":true,\"silenceProducedNoText\":true,\"report\":{\"path\":\"raw/corpus-windows11-en-e35a7f685ba655b29288cd68a4fc1c53875707ef4d884d2af53b263f63f29349.json\",\"sha256\":\"e35a7f685ba655b29288cd68a4fc1c53875707ef4d884d2af53b263f63f29349\"}},{\"language\":\"es\",\"utterances\":5,\"wordErrorRate\":0.1,\"anglicismRetention\":1,\"networkDisconnected\":true,\"silenceProducedNoText\":true,\"report\":{\"path\":\"raw/corpus-windows11-es-05ce5eebf9b49bcf48aef59552f98146c4a4cbcd0da20fb1c4fce20a80deb8a0.json\",\"sha256\":\"05ce5eebf9b49bcf48aef59552f98146c4a4cbcd0da20fb1c4fce20a80deb8a0\"}}]}}",
+    "reports/hosting-1bbe649e59b3c40dca8e5ebcf8f92f59862ea6c74b096cf932cf27a56a9fc15d.json": "{\"schemaVersion\":1,\"kind\":\"hosting\",\"evidenceClass\":\"synthetic\",\"sourceCommit\":\"1111111111111111111111111111111111111111\",\"artifactSha256\":\"70cd65a2ec8deb97af3526b9cc6f4129819f7bebc7cd90fbfe1aa6539eb35015\",\"dependsOn\":[{\"path\":\"reports/physical-windows10-12cc0653c9bc7d86d47e62c6afb96fa0584d5f59ae8408ebcba207c3b2483526.json\",\"sha256\":\"12cc0653c9bc7d86d47e62c6afb96fa0584d5f59ae8408ebcba207c3b2483526\"},{\"path\":\"reports/physical-windows11-d3c69977574c9f015fd71dcd1016afb05cc56580cadfb6cc22bc463f388c5bc9.json\",\"sha256\":\"d3c69977574c9f015fd71dcd1016afb05cc56580cadfb6cc22bc463f388c5bc9\"}],\"observations\":{\"url\":\"https://github.com/luisroquette/resenha/releases/download/windows-v0.0.0/Resenha-0.0.0-windows-x64-setup.exe\",\"releaseTag\":\"windows-v0.0.0\",\"releaseId\":\"1\",\"assetId\":\"2\",\"immutableRelease\":true,\"downloadedAtUtc\":\"2026-10-04T13:00:00Z\",\"downloadedByteLength\":48,\"downloadedSha256\":\"70cd65a2ec8deb97af3526b9cc6f4129819f7bebc7cd90fbfe1aa6539eb35015\",\"browser\":\"SYNTHETIC-BROWSER\",\"os\":{\"name\":\"windows11\",\"edition\":\"Pro\",\"release\":\"25H2\",\"build\":\"10.0.26200.9999\",\"architecture\":\"x64\"},\"physical\":true,\"markOfTheWebZoneId\":3,\"smartScreen\":\"reputation-warning\",\"publisherDisplay\":\"SYNTHETIC TEST PUBLISHER - NOT A CERTIFICATE\",\"reputationDisclosure\":\"SYNTHETIC warning disclosure; no actual browser download.\",\"detailReport\":{\"path\":\"raw/hosting-759aa2b6f07bb993c355a289607045517a497767c93f83bd02a8c20b4eb617b1.json\",\"sha256\":\"759aa2b6f07bb993c355a289607045517a497767c93f83bd02a8c20b4eb617b1\"}}}",
+    "reports/verification-899dc86d15ffcd47415dd8860c23b080542364d6471e56d14ac17d5a3519cdab.json": "{\"schemaVersion\":1,\"kind\":\"verification\",\"evidenceClass\":\"synthetic\",\"sourceCommit\":\"1111111111111111111111111111111111111111\",\"artifactSha256\":\"70cd65a2ec8deb97af3526b9cc6f4129819f7bebc7cd90fbfe1aa6539eb35015\",\"dependsOn\":[{\"path\":\"reports/build-0f15d095de91eb522ab3fd1dc8734b72af6c49df1f0b8405848c2c6950a5a4d8.json\",\"sha256\":\"0f15d095de91eb522ab3fd1dc8734b72af6c49df1f0b8405848c2c6950a5a4d8\"},{\"path\":\"reports/payload-58a2d714b666a8789b052beae6b05377ff26b4fa4faaf5abaa871b78398347e4.json\",\"sha256\":\"58a2d714b666a8789b052beae6b05377ff26b4fa4faaf5abaa871b78398347e4\"},{\"path\":\"reports/signatures-722c060e7c516582c6f6f30fd50ac0a7d4719362c47593fb6fdae44e09d9f972.json\",\"sha256\":\"722c060e7c516582c6f6f30fd50ac0a7d4719362c47593fb6fdae44e09d9f972\"},{\"path\":\"reports/scan-73dfc52dc0f8331e5efc2afc7c1d42b3493691fe4eb79ccd49f5f3075cbc1356.json\",\"sha256\":\"73dfc52dc0f8331e5efc2afc7c1d42b3493691fe4eb79ccd49f5f3075cbc1356\"},{\"path\":\"reports/physical-windows10-12cc0653c9bc7d86d47e62c6afb96fa0584d5f59ae8408ebcba207c3b2483526.json\",\"sha256\":\"12cc0653c9bc7d86d47e62c6afb96fa0584d5f59ae8408ebcba207c3b2483526\"},{\"path\":\"reports/physical-windows11-d3c69977574c9f015fd71dcd1016afb05cc56580cadfb6cc22bc463f388c5bc9.json\",\"sha256\":\"d3c69977574c9f015fd71dcd1016afb05cc56580cadfb6cc22bc463f388c5bc9\"},{\"path\":\"reports/hosting-1bbe649e59b3c40dca8e5ebcf8f92f59862ea6c74b096cf932cf27a56a9fc15d.json\",\"sha256\":\"1bbe649e59b3c40dca8e5ebcf8f92f59862ea6c74b096cf932cf27a56a9fc15d\"}],\"observations\":{\"tool\":\"Scripts/windows/verify-release.ps1\",\"toolSha256\":\"c62bc27783bb3ba1f6cd3f9f649fe233964193101fb80cf82c7a81c913a1a877\",\"verifiedAtUtc\":\"2026-10-04T14:00:00Z\",\"sourceCommit\":\"1111111111111111111111111111111111111111\",\"artifactSha256\":\"70cd65a2ec8deb97af3526b9cc6f4129819f7bebc7cd90fbfe1aa6539eb35015\",\"payloadInventorySha256\":\"66559804558bce6d9d191c2ab5caf55c555da18534f7eeb8aa62b950f60d0e05\",\"stage\":\"hosted-ready\",\"exitCode\":0}}"
+  },
+  "manifest": {
+    "schemaVersion": 1,
+    "evidenceClass": "synthetic",
+    "stage": "hosted-ready",
+    "platform": "windows",
+    "architecture": "x64",
+    "version": "0.0.0",
+    "filename": "Resenha-0.0.0-windows-x64-setup.exe",
+    "byteLength": 48,
+    "sha256": "70cd65a2ec8deb97af3526b9cc6f4129819f7bebc7cd90fbfe1aa6539eb35015",
+    "sourceCommit": "1111111111111111111111111111111111111111",
+    "whisperCommit": "4979e04f5dcaccb36057e059bbaed8a2f5288315",
+    "model": {
+      "name": "ggml-small-q5_1.bin",
+      "byteLength": 190085487,
+      "sha256": "ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb"
+    },
+    "requirements": {
+      "windows10": {
+        "release": "22H2",
+        "build": "10.0.19045",
+        "editions": [
+          "Home",
+          "Pro"
+        ]
+      },
+      "windows11": {
+        "release": "25H2",
+        "build": "10.0.26200",
+        "editions": [
+          "Home",
+          "Pro"
+        ]
+      },
+      "cpuFeatures": [
+        "AVX2",
+        "FMA",
+        "F16C",
+        "SSE4.2",
+        "OS_AVX_STATE"
+      ],
+      "minimumRamGiB": 8,
+      "minimumExtraDiskGiB": 1
+    },
+    "build": {
+      "recordedAtUtc": "2026-10-04T10:00:00Z",
+      "host": {
+        "os": {
+          "name": "windows11",
+          "edition": "Pro",
+          "release": "25H2",
+          "build": "10.0.26200.9999",
+          "architecture": "x64"
+        },
+        "physical": true,
+        "authorizationReference": "SYNTHETIC-NO-HOST-AUTHORIZATION"
+      },
+      "sourceCommit": "1111111111111111111111111111111111111111",
+      "toolchain": {
+        "dotnetSdk": "10.0.401",
+        "dotnetRuntime": "10.0.12",
+        "mstestSdk": "4.4.0",
+        "languageVersion": "14.0",
+        "targetFramework": "net10.0-windows10.0.19041.0",
+        "runtimeIdentifier": "win-x64",
+        "selfContained": true,
+        "msvcToolset": "v143",
+        "windowsSdkVersion": "SYNTHETIC-windowsSdkVersion",
+        "msvcCompilerVersion": "SYNTHETIC-msvcCompilerVersion",
+        "msvcCompilerSha256": "6fa22a05a360e5fb11c818ae7b3f8fe01c40ee7c7364f95770c3f1d7f63ae395",
+        "linkerVersion": "SYNTHETIC-linkerVersion",
+        "linkerSha256": "2930eda5c15a3eb10fe47111cc14c3ae167ba555cf7ad3b7808e73d1ea190fcb",
+        "cmakeVersion": "SYNTHETIC-cmakeVersion",
+        "cmakeSha256": "84522d676ac3101b828ff77777975848b786bb14b509f74275ba5ec7eefadaf8",
+        "powerShellVersion": "7.0.0",
+        "powerShellSha256": "2a2218ff6742d362fa90239db56eba4dca396758b32a03d16696d58f4b32af2b",
+        "innoCompilerVersion": "6.7.3",
+        "innoCompilerSha256": "2f4996c2db6a9b3fa59c117980a632d0c50cae4dfdcb4d2f5f2fd449ae9fd2d0"
+      },
+      "preflight": {
+        "sourceCommit": "1111111111111111111111111111111111111111",
+        "exitCode": 0,
+        "totalTests": 1,
+        "skippedTests": 0,
+        "report": {
+          "path": "raw/preflight-15fd465646056c9b03344d6e9994e38c1002251262ad735258ecfd7971f75bb8.json",
+          "sha256": "15fd465646056c9b03344d6e9994e38c1002251262ad735258ecfd7971f75bb8"
+        }
+      },
+      "inputs": [
+        {
+          "path": "Windows/global.json",
+          "sha256": "501f40819be6250388f6eb67a7878082572090f621b571320695970666ca471e"
+        },
+        {
+          "path": "Windows/toolchain-lock.json",
+          "sha256": "ad6f65e4c51d4046de2631f3d2afbc66234e4722ba3fd680029ea8de22b3f4c2"
+        },
+        {
+          "path": "Windows/native/CMakePresets.json",
+          "sha256": "d09286c1ea5d077eee8c1c11e69ca82ad2400c7ef965a9dfbda8e28078a8530a"
+        },
+        {
+          "path": "Windows/model-manifest.json",
+          "sha256": "c85cbc851b21552c20442d1d3bb35102a2ad40f4aec97b41b45f8970c1ee9a86"
+        },
+        {
+          "path": "Windows/Resenha.Core/packages.lock.json",
+          "sha256": "0f564914d470d659630de397ee4e665ba8b3b1d92438a5b316056ee1d97d8272"
+        },
+        {
+          "path": "Windows/Resenha.Core.Tests/packages.lock.json",
+          "sha256": "d6287efffc7c8a5350b1e0ff1304de7d499d3a55fcc4928784356e1c2692a1ac"
+        },
+        {
+          "path": "Windows/Resenha.Platform/packages.lock.json",
+          "sha256": "cdb4362d49578651dd16f9c9063b79c8be4b70ab6babe554bdba04a467e333d5"
+        },
+        {
+          "path": "Windows/Resenha.Platform.Tests/packages.lock.json",
+          "sha256": "0ed7406580a874f7989bd67f20651727474ae617ea6a9fb073258a171f7f5ed4"
+        },
+        {
+          "path": "Windows/Resenha.TargetBroker/packages.lock.json",
+          "sha256": "ceb2e8696efb8fb37f102db24dee7a87411eeec3bb8b73d2864bf93882b2fb8c"
+        },
+        {
+          "path": "Windows/Resenha.Windows/packages.lock.json",
+          "sha256": "950349fafd9a5d63fb53769e82ba8a2edbcee3f21549d06d221099fbc9327158"
+        }
+      ],
+      "report": {
+        "path": "reports/build-0f15d095de91eb522ab3fd1dc8734b72af6c49df1f0b8405848c2c6950a5a4d8.json",
+        "sha256": "0f15d095de91eb522ab3fd1dc8734b72af6c49df1f0b8405848c2c6950a5a4d8"
+      }
+    },
+    "payload": {
+      "inventorySha256": "66559804558bce6d9d191c2ab5caf55c555da18534f7eeb8aa62b950f60d0e05",
+      "files": [
+        {
+          "path": "LICENSES.txt",
+          "byteLength": 38,
+          "sha256": "1f6e9931adf2b2d1524ee1317dd67d8e13ebecef0b91cf0667d8bd3bbe1a9681",
+          "isPe": false
+        },
+        {
+          "path": "Resenha.TargetBroker.exe",
+          "byteLength": 53,
+          "sha256": "f77c9466eba2d402dc5bb9b3866f240dd5fa3bf0b55b60425ce4d592fa78f2f1",
+          "isPe": true
+        },
+        {
+          "path": "Resenha.exe",
+          "byteLength": 40,
+          "sha256": "d782195d8a5a7993555c6c49ef48102d46d617e5abbc6218c1e89123da1cbe41",
+          "isPe": true
+        },
+        {
+          "path": "native/whisper-cli.exe",
+          "byteLength": 51,
+          "sha256": "329780e25e6b880ffb312ca2475fd135058a487c820e22ff2e356bf482f9c6f9",
+          "isPe": true
+        },
+        {
+          "path": "runtime/System.Runtime.dll",
+          "byteLength": 55,
+          "sha256": "a29a3c301bb83620f2dc58e3806992f50c855f9f536aea5fe9cecc7135158090",
+          "isPe": true
+        },
+        {
+          "path": "unins000.exe",
+          "byteLength": 41,
+          "sha256": "5d6e481820e5e0d740c1a1743f4e70e71c64614ee77fa62d77b2d32f7912b2e4",
+          "isPe": true
+        }
+      ],
+      "report": {
+        "path": "reports/payload-58a2d714b666a8789b052beae6b05377ff26b4fa4faaf5abaa871b78398347e4.json",
+        "sha256": "58a2d714b666a8789b052beae6b05377ff26b4fa4faaf5abaa871b78398347e4"
+      }
+    },
+    "signatures": {
+      "verifiedAtUtc": "2026-10-04T10:20:00Z",
+      "publisher": "SYNTHETIC TEST PUBLISHER - NOT A CERTIFICATE",
+      "certificateThumbprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+      "items": [
+        {
+          "path": "Resenha.TargetBroker.exe",
+          "sha256": "f77c9466eba2d402dc5bb9b3866f240dd5fa3bf0b55b60425ce4d592fa78f2f1",
+          "authority": "release",
+          "status": "Valid",
+          "publisher": "SYNTHETIC TEST PUBLISHER - NOT A CERTIFICATE",
+          "certificateThumbprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "certificateNotBeforeUtc": "2026-01-01T00:00:00Z",
+          "certificateNotAfterUtc": "2027-01-01T00:00:00Z",
+          "publiclyTrusted": true,
+          "chainTrusted": true,
+          "digestAlgorithm": "SHA256",
+          "timestamp": {
+            "atUtc": "2026-10-04T10:10:00Z",
+            "protocol": "RFC3161",
+            "status": "Valid",
+            "chainTrusted": true
+          }
+        },
+        {
+          "path": "Resenha.exe",
+          "sha256": "d782195d8a5a7993555c6c49ef48102d46d617e5abbc6218c1e89123da1cbe41",
+          "authority": "release",
+          "status": "Valid",
+          "publisher": "SYNTHETIC TEST PUBLISHER - NOT A CERTIFICATE",
+          "certificateThumbprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "certificateNotBeforeUtc": "2026-01-01T00:00:00Z",
+          "certificateNotAfterUtc": "2027-01-01T00:00:00Z",
+          "publiclyTrusted": true,
+          "chainTrusted": true,
+          "digestAlgorithm": "SHA256",
+          "timestamp": {
+            "atUtc": "2026-10-04T10:10:00Z",
+            "protocol": "RFC3161",
+            "status": "Valid",
+            "chainTrusted": true
+          }
+        },
+        {
+          "path": "native/whisper-cli.exe",
+          "sha256": "329780e25e6b880ffb312ca2475fd135058a487c820e22ff2e356bf482f9c6f9",
+          "authority": "release",
+          "status": "Valid",
+          "publisher": "SYNTHETIC TEST PUBLISHER - NOT A CERTIFICATE",
+          "certificateThumbprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "certificateNotBeforeUtc": "2026-01-01T00:00:00Z",
+          "certificateNotAfterUtc": "2027-01-01T00:00:00Z",
+          "publiclyTrusted": true,
+          "chainTrusted": true,
+          "digestAlgorithm": "SHA256",
+          "timestamp": {
+            "atUtc": "2026-10-04T10:10:00Z",
+            "protocol": "RFC3161",
+            "status": "Valid",
+            "chainTrusted": true
+          }
+        },
+        {
+          "path": "runtime/System.Runtime.dll",
+          "sha256": "a29a3c301bb83620f2dc58e3806992f50c855f9f536aea5fe9cecc7135158090",
+          "authority": "vendor",
+          "status": "Valid",
+          "publisher": "SYNTHETIC VENDOR - NOT A CERTIFICATE",
+          "certificateThumbprint": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+          "certificateNotBeforeUtc": "2026-01-01T00:00:00Z",
+          "certificateNotAfterUtc": "2027-01-01T00:00:00Z",
+          "publiclyTrusted": true,
+          "chainTrusted": true,
+          "digestAlgorithm": "SHA256",
+          "timestamp": {
+            "atUtc": "2026-09-01T10:00:00Z",
+            "protocol": "RFC3161",
+            "status": "Valid",
+            "chainTrusted": true
+          }
+        },
+        {
+          "path": "unins000.exe",
+          "sha256": "5d6e481820e5e0d740c1a1743f4e70e71c64614ee77fa62d77b2d32f7912b2e4",
+          "authority": "release",
+          "status": "Valid",
+          "publisher": "SYNTHETIC TEST PUBLISHER - NOT A CERTIFICATE",
+          "certificateThumbprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "certificateNotBeforeUtc": "2026-01-01T00:00:00Z",
+          "certificateNotAfterUtc": "2027-01-01T00:00:00Z",
+          "publiclyTrusted": true,
+          "chainTrusted": true,
+          "digestAlgorithm": "SHA256",
+          "timestamp": {
+            "atUtc": "2026-10-04T10:10:00Z",
+            "protocol": "RFC3161",
+            "status": "Valid",
+            "chainTrusted": true
+          }
+        },
+        {
+          "path": "Resenha-0.0.0-windows-x64-setup.exe",
+          "sha256": "70cd65a2ec8deb97af3526b9cc6f4129819f7bebc7cd90fbfe1aa6539eb35015",
+          "authority": "release",
+          "status": "Valid",
+          "publisher": "SYNTHETIC TEST PUBLISHER - NOT A CERTIFICATE",
+          "certificateThumbprint": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "certificateNotBeforeUtc": "2026-01-01T00:00:00Z",
+          "certificateNotAfterUtc": "2027-01-01T00:00:00Z",
+          "publiclyTrusted": true,
+          "chainTrusted": true,
+          "digestAlgorithm": "SHA256",
+          "timestamp": {
+            "atUtc": "2026-10-04T10:10:00Z",
+            "protocol": "RFC3161",
+            "status": "Valid",
+            "chainTrusted": true
+          }
+        }
+      ],
+      "report": {
+        "path": "reports/signatures-722c060e7c516582c6f6f30fd50ac0a7d4719362c47593fb6fdae44e09d9f972.json",
+        "sha256": "722c060e7c516582c6f6f30fd50ac0a7d4719362c47593fb6fdae44e09d9f972"
+      }
+    },
+    "scan": {
+      "scanner": "Microsoft Defender",
+      "engineVersion": "SYNTHETIC-ENGINE",
+      "platformVersion": "SYNTHETIC-PLATFORM",
+      "signatureVersion": "SYNTHETIC-DEFINITIONS",
+      "signatureUpdatedAtUtc": "2026-10-04T00:00:00Z",
+      "artifactSha256": "70cd65a2ec8deb97af3526b9cc6f4129819f7bebc7cd90fbfe1aa6539eb35015",
+      "payloadInventorySha256": "66559804558bce6d9d191c2ab5caf55c555da18534f7eeb8aa62b950f60d0e05",
+      "targets": [
+        {
+          "kind": "installer",
+          "startedAtUtc": "2026-10-04T10:30:00Z",
+          "completedAtUtc": "2026-10-04T10:35:00Z",
+          "complete": true,
+          "exitCode": 0,
+          "detections": 0,
+          "remediations": 0,
+          "remediationDisabled": true,
+          "detailReport": {
+            "path": "raw/scan-installer-309666d131cfa8b16907e0eb2ed2451612529b3789b12e5933a9254c7ceb23c4.json",
+            "sha256": "309666d131cfa8b16907e0eb2ed2451612529b3789b12e5933a9254c7ceb23c4"
+          }
+        },
+        {
+          "kind": "payload",
+          "startedAtUtc": "2026-10-04T10:30:00Z",
+          "completedAtUtc": "2026-10-04T10:35:00Z",
+          "complete": true,
+          "exitCode": 0,
+          "detections": 0,
+          "remediations": 0,
+          "remediationDisabled": true,
+          "detailReport": {
+            "path": "raw/scan-payload-bf2a7d73480a5ff0cd00e0fe411769a8a3d653903c33656d7d980a4314703fdc.json",
+            "sha256": "bf2a7d73480a5ff0cd00e0fe411769a8a3d653903c33656d7d980a4314703fdc"
+          }
+        }
+      ],
+      "report": {
+        "path": "reports/scan-73dfc52dc0f8331e5efc2afc7c1d42b3493691fe4eb79ccd49f5f3075cbc1356.json",
+        "sha256": "73dfc52dc0f8331e5efc2afc7c1d42b3493691fe4eb79ccd49f5f3075cbc1356"
+      }
+    },
+    "physical": [
+      {
+        "observedAtUtc": "2026-10-04T12:00:00Z",
+        "verifier": "SYNTHETIC-OBSERVER-NOT-A-PERSON",
+        "hardware": {
+          "physical": true,
+          "cpu": "SYNTHETIC-CPU",
+          "cpuFeatures": [
+            "AVX2",
+            "FMA",
+            "F16C",
+            "SSE4.2",
+            "OS_AVX_STATE"
+          ],
+          "ramGiB": 8,
+          "microphone": "SYNTHETIC-MICROPHONE"
+        },
+        "os": {
+          "name": "windows10",
+          "edition": "Pro",
+          "release": "22H2",
+          "build": "10.0.19045.9999",
+          "architecture": "x64"
+        },
+        "sourceCommit": "1111111111111111111111111111111111111111",
+        "appVersion": "0.0.0",
+        "artifactSha256": "70cd65a2ec8deb97af3526b9cc6f4129819f7bebc7cd90fbfe1aa6539eb35015",
+        "artifactByteLength": 48,
+        "model": {
+          "name": "ggml-small-q5_1.bin",
+          "byteLength": 190085487,
+          "sha256": "ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb"
+        },
+        "checks": {
+          "standardUserInstall": {
+            "outcome": "observed-pass",
+            "observation": "SYNTHETIC ONLY: standardUserInstall; no physical test executed."
+          },
+          "noDeveloperTools": {
+            "outcome": "observed-pass",
+            "observation": "SYNTHETIC ONLY: noDeveloperTools; no physical test executed."
+          },
+          "offlineDictation": {
+            "outcome": "observed-pass",
+            "observation": "SYNTHETIC ONLY: offlineDictation; no physical test executed."
+          },
+          "notepad": {
+            "outcome": "observed-pass",
+            "observation": "SYNTHETIC ONLY: notepad; no physical test executed."
+          },
+          "chromeInput": {
+            "outcome": "observed-pass",
+            "observation": "SYNTHETIC ONLY: chromeInput; no physical test executed."
+          },
+          "chromeContenteditable": {
+            "outcome": "observed-pass",
+            "observation": "SYNTHETIC ONLY: chromeContenteditable; no physical test executed."
+          },
+          "abnt2AltGr": {
+            "outcome": "observed-pass",
+            "observation": "SYNTHETIC ONLY: abnt2AltGr; no physical test executed."
+          },
+          "focusRace": {
+            "outcome": "observed-pass",
+            "observation": "SYNTHETIC ONLY: focusRace; no physical test executed."
+          },
+          "microphonePermission": {
+            "outcome": "observed-pass",
+            "observation": "SYNTHETIC ONLY: microphonePermission; no physical test executed."
+          },
+          "microphoneDisconnect": {
+            "outcome": "observed-pass",
+            "observation": "SYNTHETIC ONLY: microphoneDisconnect; no physical test executed."
+          },
+          "missingModel": {
+            "outcome": "observed-pass",
+            "observation": "SYNTHETIC ONLY: missingModel; no physical test executed."
+          },
+          "corruptModel": {
+            "outcome": "observed-pass",
+            "observation": "SYNTHETIC ONLY: corruptModel; no physical test executed."
+          },
+          "inferenceFailure": {
+            "outcome": "observed-pass",
+            "observation": "SYNTHETIC ONLY: inferenceFailure; no physical test executed."
+          },
+          "clipboardContention": {
+            "outcome": "observed-pass",
+            "observation": "SYNTHETIC ONLY: clipboardContention; no physical test executed."
+          },
+          "blockedInsertion": {
+            "outcome": "observed-pass",
+            "observation": "SYNTHETIC ONLY: blockedInsertion; no physical test executed."
+          },
+          "copyAgain": {
+            "outcome": "observed-pass",
+            "observation": "SYNTHETIC ONLY: copyAgain; no physical test executed."
+          },
+          "cancelLockSuspend": {
+            "outcome": "observed-pass",
+            "observation": "SYNTHETIC ONLY: cancelLockSuspend; no physical test executed."
+          },
+          "temporaryAudioCleanup": {
+            "outcome": "observed-pass",
+            "observation": "SYNTHETIC ONLY: temporaryAudioCleanup; no physical test executed."
+          },
+          "spacesNonAsciiPath": {
+            "outcome": "observed-pass",
+            "observation": "SYNTHETIC ONLY: spacesNonAsciiPath; no physical test executed."
+          },
+          "uninstall": {
+            "outcome": "observed-pass",
+            "observation": "SYNTHETIC ONLY: uninstall; no physical test executed."
+          },
+          "ownedDataRemoval": {
+            "outcome": "observed-pass",
+            "observation": "SYNTHETIC ONLY: ownedDataRemoval; no physical test executed."
+          },
+          "unrelatedDataPreserved": {
+            "outcome": "observed-pass",
+            "observation": "SYNTHETIC ONLY: unrelatedDataPreserved; no physical test executed."
+          }
+        },
+        "cycles": [
+          {
+            "number": 1,
+            "recordings": 1,
+            "clipboardCommits": 1,
+            "insertions": 1,
+            "returnedIdle": true,
+            "observation": "SYNTHETIC ONLY: cycle 1; no dictation executed."
+          },
+          {
+            "number": 2,
+            "recordings": 1,
+            "clipboardCommits": 1,
+            "insertions": 1,
+            "returnedIdle": true,
+            "observation": "SYNTHETIC ONLY: cycle 2; no dictation executed."
+          },
+          {
+            "number": 3,
+            "recordings": 1,
+            "clipboardCommits": 1,
+            "insertions": 1,
+            "returnedIdle": true,
+            "observation": "SYNTHETIC ONLY: cycle 3; no dictation executed."
+          },
+          {
+            "number": 4,
+            "recordings": 1,
+            "clipboardCommits": 1,
+            "insertions": 1,
+            "returnedIdle": true,
+            "observation": "SYNTHETIC ONLY: cycle 4; no dictation executed."
+          },
+          {
+            "number": 5,
+            "recordings": 1,
+            "clipboardCommits": 1,
+            "insertions": 1,
+            "returnedIdle": true,
+            "observation": "SYNTHETIC ONLY: cycle 5; no dictation executed."
+          },
+          {
+            "number": 6,
+            "recordings": 1,
+            "clipboardCommits": 1,
+            "insertions": 1,
+            "returnedIdle": true,
+            "observation": "SYNTHETIC ONLY: cycle 6; no dictation executed."
+          },
+          {
+            "number": 7,
+            "recordings": 1,
+            "clipboardCommits": 1,
+            "insertions": 1,
+            "returnedIdle": true,
+            "observation": "SYNTHETIC ONLY: cycle 7; no dictation executed."
+          },
+          {
+            "number": 8,
+            "recordings": 1,
+            "clipboardCommits": 1,
+            "insertions": 1,
+            "returnedIdle": true,
+            "observation": "SYNTHETIC ONLY: cycle 8; no dictation executed."
+          },
+          {
+            "number": 9,
+            "recordings": 1,
+            "clipboardCommits": 1,
+            "insertions": 1,
+            "returnedIdle": true,
+            "observation": "SYNTHETIC ONLY: cycle 9; no dictation executed."
+          },
+          {
+            "number": 10,
+            "recordings": 1,
+            "clipboardCommits": 1,
+            "insertions": 1,
+            "returnedIdle": true,
+            "observation": "SYNTHETIC ONLY: cycle 10; no dictation executed."
+          }
+        ],
+        "corpus": [
+          {
+            "language": "pt",
+            "utterances": 5,
+            "wordErrorRate": 0.1,
+            "anglicismRetention": 1,
+            "networkDisconnected": true,
+            "silenceProducedNoText": true,
+            "report": {
+              "path": "raw/corpus-windows10-pt-f540eacc3281ef641648ff6b314cb9681dda6fb00d2920f0089344db7c9e92cd.json",
+              "sha256": "f540eacc3281ef641648ff6b314cb9681dda6fb00d2920f0089344db7c9e92cd"
+            }
+          },
+          {
+            "language": "en",
+            "utterances": 5,
+            "wordErrorRate": 0.1,
+            "anglicismRetention": "not-applicable",
+            "networkDisconnected": true,
+            "silenceProducedNoText": true,
+            "report": {
+              "path": "raw/corpus-windows10-en-07cebfb6ed678d7c8bf7c3f6a83a456f1d866e2239afcc261f76dd4e3d6a4e57.json",
+              "sha256": "07cebfb6ed678d7c8bf7c3f6a83a456f1d866e2239afcc261f76dd4e3d6a4e57"
+            }
+          },
+          {
+            "language": "es",
+            "utterances": 5,
+            "wordErrorRate": 0.1,
+            "anglicismRetention": 1,
+            "networkDisconnected": true,
+            "silenceProducedNoText": true,
+            "report": {
+              "path": "raw/corpus-windows10-es-f3135362277c29a9cfe7665d2543b13cb6aea5499dafdd93ecba36d7e619e346.json",
+              "sha256": "f3135362277c29a9cfe7665d2543b13cb6aea5499dafdd93ecba36d7e619e346"
+            }
+          }
+        ],
+        "report": {
+          "path": "reports/physical-windows10-12cc0653c9bc7d86d47e62c6afb96fa0584d5f59ae8408ebcba207c3b2483526.json",
+          "sha256": "12cc0653c9bc7d86d47e62c6afb96fa0584d5f59ae8408ebcba207c3b2483526"
+        }
+      },
+      {
+        "observedAtUtc": "2026-10-04T12:00:00Z",
+        "verifier": "SYNTHETIC-OBSERVER-NOT-A-PERSON",
+        "hardware": {
+          "physical": true,
+          "cpu": "SYNTHETIC-CPU",
+          "cpuFeatures": [
+            "AVX2",
+            "FMA",
+            "F16C",
+            "SSE4.2",
+            "OS_AVX_STATE"
+          ],
+          "ramGiB": 8,
+          "microphone": "SYNTHETIC-MICROPHONE"
+        },
+        "os": {
+          "name": "windows11",
+          "edition": "Pro",
+          "release": "25H2",
+          "build": "10.0.26200.9999",
+          "architecture": "x64"
+        },
+        "sourceCommit": "1111111111111111111111111111111111111111",
+        "appVersion": "0.0.0",
+        "artifactSha256": "70cd65a2ec8deb97af3526b9cc6f4129819f7bebc7cd90fbfe1aa6539eb35015",
+        "artifactByteLength": 48,
+        "model": {
+          "name": "ggml-small-q5_1.bin",
+          "byteLength": 190085487,
+          "sha256": "ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb"
+        },
+        "checks": {
+          "standardUserInstall": {
+            "outcome": "observed-pass",
+            "observation": "SYNTHETIC ONLY: standardUserInstall; no physical test executed."
+          },
+          "noDeveloperTools": {
+            "outcome": "observed-pass",
+            "observation": "SYNTHETIC ONLY: noDeveloperTools; no physical test executed."
+          },
+          "offlineDictation": {
+            "outcome": "observed-pass",
+            "observation": "SYNTHETIC ONLY: offlineDictation; no physical test executed."
+          },
+          "notepad": {
+            "outcome": "observed-pass",
+            "observation": "SYNTHETIC ONLY: notepad; no physical test executed."
+          },
+          "chromeInput": {
+            "outcome": "observed-pass",
+            "observation": "SYNTHETIC ONLY: chromeInput; no physical test executed."
+          },
+          "chromeContenteditable": {
+            "outcome": "observed-pass",
+            "observation": "SYNTHETIC ONLY: chromeContenteditable; no physical test executed."
+          },
+          "abnt2AltGr": {
+            "outcome": "observed-pass",
+            "observation": "SYNTHETIC ONLY: abnt2AltGr; no physical test executed."
+          },
+          "focusRace": {
+            "outcome": "observed-pass",
+            "observation": "SYNTHETIC ONLY: focusRace; no physical test executed."
+          },
+          "microphonePermission": {
+            "outcome": "observed-pass",
+            "observation": "SYNTHETIC ONLY: microphonePermission; no physical test executed."
+          },
+          "microphoneDisconnect": {
+            "outcome": "observed-pass",
+            "observation": "SYNTHETIC ONLY: microphoneDisconnect; no physical test executed."
+          },
+          "missingModel": {
+            "outcome": "observed-pass",
+            "observation": "SYNTHETIC ONLY: missingModel; no physical test executed."
+          },
+          "corruptModel": {
+            "outcome": "observed-pass",
+            "observation": "SYNTHETIC ONLY: corruptModel; no physical test executed."
+          },
+          "inferenceFailure": {
+            "outcome": "observed-pass",
+            "observation": "SYNTHETIC ONLY: inferenceFailure; no physical test executed."
+          },
+          "clipboardContention": {
+            "outcome": "observed-pass",
+            "observation": "SYNTHETIC ONLY: clipboardContention; no physical test executed."
+          },
+          "blockedInsertion": {
+            "outcome": "observed-pass",
+            "observation": "SYNTHETIC ONLY: blockedInsertion; no physical test executed."
+          },
+          "copyAgain": {
+            "outcome": "observed-pass",
+            "observation": "SYNTHETIC ONLY: copyAgain; no physical test executed."
+          },
+          "cancelLockSuspend": {
+            "outcome": "observed-pass",
+            "observation": "SYNTHETIC ONLY: cancelLockSuspend; no physical test executed."
+          },
+          "temporaryAudioCleanup": {
+            "outcome": "observed-pass",
+            "observation": "SYNTHETIC ONLY: temporaryAudioCleanup; no physical test executed."
+          },
+          "spacesNonAsciiPath": {
+            "outcome": "observed-pass",
+            "observation": "SYNTHETIC ONLY: spacesNonAsciiPath; no physical test executed."
+          },
+          "uninstall": {
+            "outcome": "observed-pass",
+            "observation": "SYNTHETIC ONLY: uninstall; no physical test executed."
+          },
+          "ownedDataRemoval": {
+            "outcome": "observed-pass",
+            "observation": "SYNTHETIC ONLY: ownedDataRemoval; no physical test executed."
+          },
+          "unrelatedDataPreserved": {
+            "outcome": "observed-pass",
+            "observation": "SYNTHETIC ONLY: unrelatedDataPreserved; no physical test executed."
+          }
+        },
+        "cycles": [
+          {
+            "number": 1,
+            "recordings": 1,
+            "clipboardCommits": 1,
+            "insertions": 1,
+            "returnedIdle": true,
+            "observation": "SYNTHETIC ONLY: cycle 1; no dictation executed."
+          },
+          {
+            "number": 2,
+            "recordings": 1,
+            "clipboardCommits": 1,
+            "insertions": 1,
+            "returnedIdle": true,
+            "observation": "SYNTHETIC ONLY: cycle 2; no dictation executed."
+          },
+          {
+            "number": 3,
+            "recordings": 1,
+            "clipboardCommits": 1,
+            "insertions": 1,
+            "returnedIdle": true,
+            "observation": "SYNTHETIC ONLY: cycle 3; no dictation executed."
+          },
+          {
+            "number": 4,
+            "recordings": 1,
+            "clipboardCommits": 1,
+            "insertions": 1,
+            "returnedIdle": true,
+            "observation": "SYNTHETIC ONLY: cycle 4; no dictation executed."
+          },
+          {
+            "number": 5,
+            "recordings": 1,
+            "clipboardCommits": 1,
+            "insertions": 1,
+            "returnedIdle": true,
+            "observation": "SYNTHETIC ONLY: cycle 5; no dictation executed."
+          },
+          {
+            "number": 6,
+            "recordings": 1,
+            "clipboardCommits": 1,
+            "insertions": 1,
+            "returnedIdle": true,
+            "observation": "SYNTHETIC ONLY: cycle 6; no dictation executed."
+          },
+          {
+            "number": 7,
+            "recordings": 1,
+            "clipboardCommits": 1,
+            "insertions": 1,
+            "returnedIdle": true,
+            "observation": "SYNTHETIC ONLY: cycle 7; no dictation executed."
+          },
+          {
+            "number": 8,
+            "recordings": 1,
+            "clipboardCommits": 1,
+            "insertions": 1,
+            "returnedIdle": true,
+            "observation": "SYNTHETIC ONLY: cycle 8; no dictation executed."
+          },
+          {
+            "number": 9,
+            "recordings": 1,
+            "clipboardCommits": 1,
+            "insertions": 1,
+            "returnedIdle": true,
+            "observation": "SYNTHETIC ONLY: cycle 9; no dictation executed."
+          },
+          {
+            "number": 10,
+            "recordings": 1,
+            "clipboardCommits": 1,
+            "insertions": 1,
+            "returnedIdle": true,
+            "observation": "SYNTHETIC ONLY: cycle 10; no dictation executed."
+          }
+        ],
+        "corpus": [
+          {
+            "language": "pt",
+            "utterances": 5,
+            "wordErrorRate": 0.1,
+            "anglicismRetention": 1,
+            "networkDisconnected": true,
+            "silenceProducedNoText": true,
+            "report": {
+              "path": "raw/corpus-windows11-pt-503ffb46e2dc244dd1b62d89117876c0b92c2d5893b7a3e022b1ac4555e7dea0.json",
+              "sha256": "503ffb46e2dc244dd1b62d89117876c0b92c2d5893b7a3e022b1ac4555e7dea0"
+            }
+          },
+          {
+            "language": "en",
+            "utterances": 5,
+            "wordErrorRate": 0.1,
+            "anglicismRetention": "not-applicable",
+            "networkDisconnected": true,
+            "silenceProducedNoText": true,
+            "report": {
+              "path": "raw/corpus-windows11-en-e35a7f685ba655b29288cd68a4fc1c53875707ef4d884d2af53b263f63f29349.json",
+              "sha256": "e35a7f685ba655b29288cd68a4fc1c53875707ef4d884d2af53b263f63f29349"
+            }
+          },
+          {
+            "language": "es",
+            "utterances": 5,
+            "wordErrorRate": 0.1,
+            "anglicismRetention": 1,
+            "networkDisconnected": true,
+            "silenceProducedNoText": true,
+            "report": {
+              "path": "raw/corpus-windows11-es-05ce5eebf9b49bcf48aef59552f98146c4a4cbcd0da20fb1c4fce20a80deb8a0.json",
+              "sha256": "05ce5eebf9b49bcf48aef59552f98146c4a4cbcd0da20fb1c4fce20a80deb8a0"
+            }
+          }
+        ],
+        "report": {
+          "path": "reports/physical-windows11-d3c69977574c9f015fd71dcd1016afb05cc56580cadfb6cc22bc463f388c5bc9.json",
+          "sha256": "d3c69977574c9f015fd71dcd1016afb05cc56580cadfb6cc22bc463f388c5bc9"
+        }
+      }
+    ],
+    "hosting": {
+      "url": "https://github.com/luisroquette/resenha/releases/download/windows-v0.0.0/Resenha-0.0.0-windows-x64-setup.exe",
+      "releaseTag": "windows-v0.0.0",
+      "releaseId": "1",
+      "assetId": "2",
+      "immutableRelease": true,
+      "downloadedAtUtc": "2026-10-04T13:00:00Z",
+      "downloadedByteLength": 48,
+      "downloadedSha256": "70cd65a2ec8deb97af3526b9cc6f4129819f7bebc7cd90fbfe1aa6539eb35015",
+      "browser": "SYNTHETIC-BROWSER",
+      "os": {
+        "name": "windows11",
+        "edition": "Pro",
+        "release": "25H2",
+        "build": "10.0.26200.9999",
+        "architecture": "x64"
+      },
+      "physical": true,
+      "markOfTheWebZoneId": 3,
+      "smartScreen": "reputation-warning",
+      "publisherDisplay": "SYNTHETIC TEST PUBLISHER - NOT A CERTIFICATE",
+      "reputationDisclosure": "SYNTHETIC warning disclosure; no actual browser download.",
+      "detailReport": {
+        "path": "raw/hosting-759aa2b6f07bb993c355a289607045517a497767c93f83bd02a8c20b4eb617b1.json",
+        "sha256": "759aa2b6f07bb993c355a289607045517a497767c93f83bd02a8c20b4eb617b1"
+      },
+      "report": {
+        "path": "reports/hosting-1bbe649e59b3c40dca8e5ebcf8f92f59862ea6c74b096cf932cf27a56a9fc15d.json",
+        "sha256": "1bbe649e59b3c40dca8e5ebcf8f92f59862ea6c74b096cf932cf27a56a9fc15d"
+      }
+    },
+    "verification": {
+      "tool": "Scripts/windows/verify-release.ps1",
+      "toolSha256": "c62bc27783bb3ba1f6cd3f9f649fe233964193101fb80cf82c7a81c913a1a877",
+      "verifiedAtUtc": "2026-10-04T14:00:00Z",
+      "sourceCommit": "1111111111111111111111111111111111111111",
+      "artifactSha256": "70cd65a2ec8deb97af3526b9cc6f4129819f7bebc7cd90fbfe1aa6539eb35015",
+      "payloadInventorySha256": "66559804558bce6d9d191c2ab5caf55c555da18534f7eeb8aa62b950f60d0e05",
+      "stage": "hosted-ready",
+      "exitCode": 0,
+      "report": {
+        "path": "reports/verification-899dc86d15ffcd47415dd8860c23b080542364d6471e56d14ac17d5a3519cdab.json",
+        "sha256": "899dc86d15ffcd47415dd8860c23b080542364d6471e56d14ac17d5a3519cdab"
+      }
+    }
+  }
+}
