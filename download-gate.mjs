@@ -22,7 +22,7 @@ function createGate() {
   const dialog = document.createElement('dialog');
   dialog.className = 'download-gate';
   dialog.setAttribute('aria-labelledby', 'download-gate-title');
-  dialog.innerHTML = `<div class="download-gate-shell"><button class="download-gate-close" type="button" aria-label="Fechar formulário">×</button><div class="download-gate-heading"><p class="kicker">Download gratuito</p><h2 id="download-gate-title">Um passo antes de baixar.</h2><p>Informe nome e e-mail. O download do DMG notarizado começa logo após o envio.</p></div><iframe title="Liberar download do Resenha" loading="eager" referrerpolicy="strict-origin-when-cross-origin"></iframe><p class="download-gate-privacy">Seus dados seguem para o CRM/Trello da CF Gauss. Nenhum dado pessoal é enviado ao GA4.</p></div>`;
+  dialog.innerHTML = `<div class="download-gate-shell"><button class="download-gate-close" type="button" aria-label="Fechar formulário">×</button><div class="download-gate-heading"><p class="kicker">Download gratuito</p><h2 id="download-gate-title">Um passo antes de baixar.</h2><p>Informe nome, e-mail e WhatsApp. O download do DMG notarizado começa logo após o envio.</p></div><iframe title="Liberar download do Resenha" loading="eager" referrerpolicy="strict-origin-when-cross-origin"></iframe><p class="download-gate-privacy">Seus dados seguem para o CRM/Trello da CF Gauss. Nenhum dado pessoal é enviado ao GA4.</p></div>`;
   const frame = dialog.querySelector('iframe');
   dialog.querySelector('.download-gate-close').addEventListener('click', () => dialog.close());
   dialog.addEventListener('click', event => { if (event.target === dialog) dialog.close(); });

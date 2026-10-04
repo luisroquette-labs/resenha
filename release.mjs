@@ -1,4 +1,4 @@
-import { openDownloadGate } from './download-gate.mjs';
+import { openDownloadGate } from './download-gate.mjs?v=20261004-2';
 
 const copy = Object.freeze({
   macos: { label: 'Download em preparação', ready: 'Baixar para macOS', reason: 'Ainda não há um instalador público verificado.' },
