@@ -7,6 +7,8 @@ import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import { releaseState, resolveDestination } from '../site/release.mjs';
+import { consentState, GA4_ID, GTM_ID } from '../site/analytics.mjs';
+import { DOWNLOAD_URL, EMBED_ORIGIN, FORM_ID, FORM_URL, isFormMessage } from '../site/download-gate.mjs';
 import { createPreviewServer } from './site.mjs';
 
 // Synthetic destinations are never fetched; browser audits must intercept them.
@@ -102,6 +104,29 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
       for (const record of [null, undefined, {}, '', [], { state: 'published' }]) assert.equal(resolveDestination(channel, record).active, false);
     assert.equal(resolveDestination('__proto__', macos).active, false);
   });
+  test('download gate accepts only the exact CF Gauss iframe and form', () => {
+    const iframeWindow = {};
+    const valid = { origin: EMBED_ORIGIN, source: iframeWindow, data: { source: 'cfgauss-embed-form', formId: FORM_ID, event: 'success' } };
+    assert.equal(isFormMessage(valid, iframeWindow), true);
+    assert.equal(isFormMessage({ ...valid, origin: 'https://example.com' }, iframeWindow), false);
+    assert.equal(isFormMessage({ ...valid, source: {} }, iframeWindow), false);
+    assert.equal(isFormMessage({ ...valid, data: { ...valid.data, formId: 'outro-form' } }, iframeWindow), false);
+    assert.match(FORM_URL, /^https:\/\/cfgauss\.com\.br\/t\/formembed-/u);
+    assert.match(DOWNLOAD_URL, /^https:\/\/cfgauss\.com\.br\/t\/formredirect-/u);
+    assert.match(execFileSync(process.execPath, ['--input-type=module', '-e',
+      `import(${JSON.stringify(new URL('../site/download-gate.mjs', import.meta.url).href)}).then(() => process.stdout.write('ok'))`],
+    { encoding: 'utf8', timeout: 5000 }), /^ok$/u);
+  });
+  test('Consent Mode v2 denies analytics and all advertising signals by default', () => {
+    const denied = consentState(false);
+    assert.equal(denied.analytics_storage, 'denied');
+    assert.equal(denied.ad_storage, 'denied');
+    assert.equal(denied.ad_user_data, 'denied');
+    assert.equal(denied.ad_personalization, 'denied');
+    assert.equal(consentState(true).analytics_storage, 'granted');
+    assert.match(GTM_ID, /^GTM-[A-Z0-9]+$/u);
+    assert.match(GA4_ID, /^G-[A-Z0-9]+$/u);
+  });
   test('CK-7: malformed evidence and concrete-destination partitions', () => {
     for (const fixture of destinationFixtures.slice(30)) {
       for (const change of [r => { r.evidence.channel = 'other'; }, r => { r.evidence.verifiedAt = 'invalid'; },
@@ -140,6 +165,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
     await writeFile(join(root, 'styles.css'), 'body {}');
     await writeFile(join(root, 'release.mjs'), 'export const test = true;');
     await writeFile(join(root, 'media.mjs'), 'export const test = true;');
+    await writeFile(join(root, 'analytics.mjs'), 'export const test = true;');
+    await writeFile(join(root, 'download-gate.mjs'), 'export const test = true;');
     await writeFile(join(fixtureRoot, 'outside.txt'), 'OWNED_OUTSIDE_SENTINEL');
     await symlink(join(fixtureRoot, 'outside.txt'), join(root, 'escape.txt'));
     try {
@@ -152,7 +179,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
           const head = await get(preview.origin, prefix, 'HEAD');
           assert.equal(head.status, 200); assert.equal(head.body, '');
           assert.match(head.headers['content-type'], /text\/html/u);
-          for (const [name, type] of [['styles.css', 'text/css'], ['release.mjs', 'text/javascript'], ['media.mjs', 'text/javascript']]) {
+          for (const [name, type] of [['styles.css', 'text/css'], ['release.mjs', 'text/javascript'], ['media.mjs', 'text/javascript'], ['analytics.mjs', 'text/javascript'], ['download-gate.mjs', 'text/javascript']]) {
             assert.ok((await get(preview.origin, prefix + name)).headers['content-type'].startsWith(type));
           }
           for (const path of ['../outside.txt', '%2e%2e/outside.txt', '%2e%2e%2foutside.txt', '%ZZ', '%00', 'escape.txt', '%5c..%5coutside.txt', '/outside.txt']) {
@@ -199,6 +226,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
         assert.doesNotMatch(html, /href="(?:|#|https?:\/\/(?:github\.com|apps\.apple\.com)[^"]*)"/u);
         assert.match(html, /rel="canonical"/u);
         assert.match(html, /application\/ld\+json/u);
+        assert.equal((await get(preview.origin, prefix + 'googleb0847bf7435d170c.html')).body.trim(), 'google-site-verification: googleb0847bf7435d170c.html');
+        assert.match(html, /analytics\.mjs\?v=20261004-1/u);
         assert.doesNotMatch(html, /aggregateRating/u);
         assert.doesNotMatch(html, /<(?:form|input|iframe)\b/iu);
         assert.match(html, /<details[\s>]/u); assert.match(html, /<summary[\s>]/u);
@@ -221,18 +250,23 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
         assert.match(html, /class="hero-stamp"/u);
         assert.ok((html.match(/data-reveal/gu) ?? []).length >= 8);
         assert.match(html, /type="module"/u);
-        assert.match(html, /styles\.css\?v=20261003-2/u);
-        assert.match(html, /release\.mjs\?v=20261004-1/u);
+        assert.match(html, /styles\.css\?v=20261004-3/u);
+        assert.match(html, /release\.mjs\?v=20261004-2/u);
         assert.match(html, /media\.mjs\?v=20261003-2/u);
         const media = await get(preview.origin, prefix + 'media.mjs');
         assert.equal(media.status, 200);
         assert.match(media.body, /IntersectionObserver/u);
         assert.match(media.body, /prefers-reduced-motion/u);
+        const gate = await get(preview.origin, prefix + 'download-gate.mjs');
+        assert.match(gate.body, /analytics\.mjs\?v=20261004-1/u);
         const privacy = await get(preview.origin, prefix + 'privacy/');
         assert.equal(privacy.status, 200);
         assert.match(privacy.body, /Sua voz fica no seu Mac/u);
         assert.match(privacy.body, /Acessibilidade devolve o foco/u);
         assert.match(privacy.body, /não lê o conteúdo de outros apps/u);
+        assert.match(privacy.body, /Consent Mode v2/u);
+        assert.match(privacy.body, /negado por padrão/u);
+        assert.match(privacy.body, /CRM\/Trello/u);
         const comparison = await get(preview.origin, prefix + 'alternativa-wispr-flow/');
         assert.equal(comparison.status, 200);
         assert.match(comparison.body, /<title>Alternativa gratuita e sem limite ao Wispr Flow \| Resenha<\/title>/u);
@@ -241,7 +275,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
         assert.match(comparison.body, /wisprflow\.ai\/pricing/u);
         assert.match(comparison.body, /application\/ld\+json/u);
         assert.match(comparison.body, /src="\.\.\/media\.mjs\?v=20261003-2"/u);
-        assert.match(comparison.body, /src="\.\.\/release\.mjs\?v=20261004-1"/u);
+        assert.match(comparison.body, /src="\.\.\/release\.mjs\?v=20261004-2"/u);
+        assert.match(comparison.body, /src="\.\.\/analytics\.mjs\?v=20261004-1"/u);
         assert.ok((comparison.body.match(/data-reveal/gu) ?? []).length >= 5);
         const robots = await get(preview.origin, prefix + 'robots.txt');
         assert.equal(robots.status, 200);
