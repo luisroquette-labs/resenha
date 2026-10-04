@@ -1,3 +1,5 @@
+import { openDownloadGate } from './download-gate.mjs';
+
 const copy = Object.freeze({
   macos: { label: 'Download em preparação', ready: 'Baixar para macOS', reason: 'Ainda não há um instalador público verificado.' },
   source: { label: 'Código público em preparação', ready: 'Ver código no GitHub', reason: 'O repositório público ainda não foi publicado.' },
@@ -57,10 +59,16 @@ export function applyReleaseState(root, state = releaseState) {
   for (const slot of root.querySelectorAll('[data-release-channel]')) {
     const channel = slot.dataset.releaseChannel;
     const result = resolveDestination(channel, state?.[channel]);
-    const action = slot.ownerDocument.createElement(result.active ? 'a' : 'span');
+    const gatedDownload = result.active && channel === 'macos';
+    const action = slot.ownerDocument.createElement(result.active ? (gatedDownload ? 'button' : 'a') : 'span');
     action.className = 'release-action';
     action.textContent = result.label;
-    if (result.active) action.href = result.href;
+    if (gatedDownload) {
+      action.type = 'button';
+      action.dataset.downloadGate = 'true';
+      action.setAttribute('aria-haspopup', 'dialog');
+      action.addEventListener('click', openDownloadGate);
+    } else if (result.active) action.href = result.href;
     else action.setAttribute('aria-disabled', 'true');
     const reason = slot.ownerDocument.createElement('p');
     reason.className = 'release-reason';

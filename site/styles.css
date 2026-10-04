@@ -215,10 +215,30 @@ kbd { padding: 10px 15px; border: 1px solid var(--line); border-bottom-width: 3p
 .download-copy > p:last-child { color: var(--muted); font-size: 13px; }
 .download-actions { position: relative; z-index: 1; }
 .release-slot { min-height: 69px; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 4px; border-top: 1px solid var(--line); }
-.release-slot strong, .release-action { font-size: 13px; font-weight: 650; }
+.release-slot strong, .release-action { font: 650 13px var(--sans); }
 .release-slot span, .release-reason { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.45; }
 .release-slot a { min-height: 44px; display: inline-flex; align-items: center; color: inherit; }
+.release-slot button { min-height: 44px; padding: 0; border: 0; background: transparent; color: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 5px; }
 .secondary-release { opacity: .72; }
+
+.download-gate { width: min(720px, calc(100% - 32px)); max-height: min(880px, calc(100dvh - 32px)); padding: 0; overflow: auto; border: 1px solid rgba(255,255,255,.2); border-radius: 28px; background: var(--paper-soft); color: var(--ink); box-shadow: 0 30px 100px rgba(0,0,0,.34); }
+.download-gate::backdrop { background: rgba(16,17,20,.72); backdrop-filter: blur(10px); }
+.download-gate-shell { position: relative; padding: 38px; }
+.download-gate-close { position: absolute; top: 17px; right: 18px; display: grid; place-items: center; width: 42px; height: 42px; border: 1px solid var(--line); border-radius: 50%; background: transparent; color: var(--ink); cursor: pointer; font: 30px/1 var(--serif); }
+.download-gate-heading { padding-right: 45px; }
+.download-gate-heading h2 { margin: 14px 0 10px; font: 500 clamp(34px, 5vw, 51px)/1 var(--serif); letter-spacing: -2px; }
+.download-gate-heading > p:last-child, .download-gate-privacy { color: var(--muted); font-size: 12px; line-height: 1.65; }
+.download-gate iframe { width: 100%; height: 480px; display: block; margin-top: 24px; border: 0; border-radius: 18px; background: white; }
+.download-gate-privacy { margin-top: 14px; font-size: 10px; }
+
+.consent-banner { position: fixed; z-index: 80; right: 20px; bottom: 20px; width: min(560px, calc(100% - 40px)); display: grid; grid-template-columns: 1fr auto; gap: 22px; align-items: center; padding: 20px; border: 1px solid rgba(255,255,255,.18); border-radius: 20px; background: rgba(23,27,26,.97); color: var(--paper-soft); box-shadow: 0 20px 70px rgba(0,0,0,.28); }
+.consent-banner[hidden] { display: none; }
+.consent-banner strong { font-size: 13px; }
+.consent-banner p { margin-top: 4px; color: #c6ccca; font-size: 10px; line-height: 1.55; }
+.consent-actions { display: flex; gap: 8px; }
+.consent-actions button, .consent-preferences { min-height: 42px; padding: 0 14px; border: 1px solid rgba(255,255,255,.3); border-radius: 999px; background: transparent; color: inherit; cursor: pointer; font: 650 10px var(--sans); }
+.consent-actions [data-consent="analytics"] { border-color: var(--lavender); background: var(--lavender); color: var(--ink); }
+.consent-preferences { position: fixed; z-index: 70; right: 18px; bottom: 18px; min-height: 36px; border-color: var(--line); background: rgba(248,246,239,.92); color: var(--ink); backdrop-filter: blur(12px); }
 
 .faq { display: grid; grid-template-columns: .76fr 1.24fr; gap: 90px; padding-block: 90px 105px; }
 .faq-list details { border-bottom: 1px solid var(--line); }
@@ -384,6 +404,10 @@ kbd { padding: 10px 15px; border: 1px solid var(--line); border-bottom-width: 3p
   .download-icon img { width: 92px; }
   .download-copy h2 { font-size: 38px; }
   .download-actions { grid-column: 1; }
+  .download-gate-shell { padding: 28px 20px; }
+  .download-gate-heading { padding-right: 35px; }
+  .consent-banner { grid-template-columns: 1fr; gap: 14px; }
+  .consent-actions { flex-wrap: wrap; }
   .faq { grid-template-columns: 1fr; gap: 42px; padding-block: 70px; }
   .comparison-hero { min-height: 660px; padding-block: 85px; }
   .comparison-hero h1 { font-size: clamp(61px, 18vw, 88px); }
