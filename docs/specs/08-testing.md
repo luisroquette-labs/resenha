@@ -15,7 +15,7 @@ Brand resonance uses the existing microphone samples. Unit checks verify bounded
 - Pipeline state rejects overlapping presses and invalid releases.
 - Model path resolution, download size/hash validation and embedded context reuse are deterministic.
 - Transcript normalization trims whitespace and rejects non-speech-only output.
-- Every completed transcript is staged on the clipboard and returned through the Service pasteboard.
+- Every completed transcript is staged on the clipboard; target identity and exact shortcut matching are deterministic.
 
 All local test/build commands run through `~/.local/bin/mac-gate`. Debug/test uses bundle `br.com.luisroquette.Resenha.Debug`, product `Resenha Dev` and its own sandbox container. Release alone uses `br.com.luisroquette.Resenha`. The test host must run while `/Applications/Resenha.app` remains open; changing the bundle identifier on the command line is forbidden because isolation belongs to versioned build configuration.
 
@@ -33,8 +33,8 @@ The NSHostingView fixture test renders six states across four configurations (24
 
 1. Build the `.app` bundle and launch it via LaunchServices.
 2. Confirm the process remains alive and the menu bar item appears.
-3. Grant Microphone and Input Monitoring through explicit setup when needed; confirm no Accessibility permission is requested.
-4. Run a real Portuguese dictation into TextEdit.
+3. Grant Microphone, Input Monitoring and Accessibility through explicit setup when needed.
+4. Record the desired shortcut inside Resenha and run a real Portuguese dictation into TextEdit.
 5. Repeat in a Chromium text field and verify the transcript remains on the clipboard.
 
 ## CORE-001 evidence

@@ -13,7 +13,8 @@ import { createPreviewServer } from './site.mjs';
 const macos = { state: 'published', platform: 'macos', version: 'v0.0.0-test', architecture: 'arm64', minimumOS: 'macOS 14+',
   url: 'https://github.com/example/resenha-test/releases/download/v0.0.0-test/Resenha-test.dmg',
   evidence: { channel: 'macos', url: 'https://github.com/example/resenha-test/releases/download/v0.0.0-test/Resenha-test.dmg',
-    verifiedAt: '2026-10-02T00:00:00Z', artifact: { platform: 'macos', version: 'v0.0.0-test' } } };
+    verifiedAt: '2026-10-02T00:00:00Z', artifact: { platform: 'macos', version: 'v0.0.0-test',
+      sha256: 'a'.repeat(64), notarizationId: '12345678-1234-1234-1234-123456789abc', notarizationStatus: 'Accepted' } } };
 const negative = (name, change, channel = 'macos') => {
   const record = structuredClone(macos);
   change(record);
@@ -50,6 +51,8 @@ export const destinationFixtures = [
   negative('missing-artifact', r => { delete r.evidence.artifact; }),
   negative('missing-artifact-platform', r => { delete r.evidence.artifact.platform; }),
   negative('missing-artifact-version', r => { delete r.evidence.artifact.version; }),
+  negative('missing-artifact-sha256', r => { delete r.evidence.artifact.sha256; }),
+  negative('invalid-notarization', r => { r.evidence.artifact.notarizationStatus = 'Rejected'; }),
   { name: 'valid-macos-release', channel: 'macos', record: structuredClone(macos), active: true },
   { name: 'valid-public-source', channel: 'source', active: true, record: { state: 'published',
     url: 'https://github.com/example/resenha-test', evidence: { channel: 'source',
@@ -72,11 +75,11 @@ function get(origin, path, method = 'GET') {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
-  test('CK-7: exact finite catalogue has 28 inactive and three active fixtures', () => {
-    assert.equal(destinationFixtures.length, 31);
-    assert.equal(new Set(destinationFixtures.map(f => f.name)).size, 31);
-    assert.ok(destinationFixtures.slice(0, 28).every(f => !f.active));
-    assert.ok(destinationFixtures.slice(28).every(f => f.active));
+  test('CK-7: exact finite catalogue has 30 inactive and three active fixtures', () => {
+    assert.equal(destinationFixtures.length, 33);
+    assert.equal(new Set(destinationFixtures.map(f => f.name)).size, 33);
+    assert.ok(destinationFixtures.slice(0, 30).every(f => !f.active));
+    assert.ok(destinationFixtures.slice(30).every(f => f.active));
   });
   for (const fixture of destinationFixtures) test(`CK-7: ${fixture.name}`, () => {
     const before = structuredClone(fixture.record);
@@ -87,20 +90,20 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
     assert.ok(Object.isFrozen(output));
     assert.deepEqual(fixture.record, before);
   });
-  test('CK-7/15: published source resolves while unreleased channels fail closed', () => {
+  test('CK-7/15: published DMG and source resolve while retired Store fails closed', () => {
     assert.equal(resolveDestination('source', releaseState.source).active, true);
     assert.equal(resolveDestination('source', releaseState.source).href, 'https://github.com/luisroquette/resenha');
-    for (const channel of ['macos', 'store']) {
-      assert.equal(releaseState[channel].url, null);
-      assert.equal(releaseState[channel].evidence, null);
-      assert.equal(resolveDestination(channel, releaseState[channel]).active, false);
-    }
+    assert.equal(resolveDestination('macos', releaseState.macos).active, true);
+    assert.match(resolveDestination('macos', releaseState.macos).href, /Resenha-1\.0\.0-arm64\.dmg$/u);
+    assert.equal(releaseState.store.url, null);
+    assert.equal(releaseState.store.evidence, null);
+    assert.equal(resolveDestination('store', releaseState.store).active, false);
     for (const channel of ['macos', 'source', 'store'])
       for (const record of [null, undefined, {}, '', [], { state: 'published' }]) assert.equal(resolveDestination(channel, record).active, false);
     assert.equal(resolveDestination('__proto__', macos).active, false);
   });
   test('CK-7: malformed evidence and concrete-destination partitions', () => {
-    for (const fixture of destinationFixtures.slice(28)) {
+    for (const fixture of destinationFixtures.slice(30)) {
       for (const change of [r => { r.evidence.channel = 'other'; }, r => { r.evidence.verifiedAt = 'invalid'; },
         r => { r.url += '?fake=1'; r.evidence.url = r.url; }, r => { r.url += '#fake'; r.evidence.url = r.url; },
         r => { r.url = r.url.replace('https://', 'https://').replace(/(\.com)/u, '$1:444'); r.evidence.url = r.url; }]) {
@@ -116,16 +119,16 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
       const record = structuredClone(macos); record.url = url; record.evidence.url = url;
       assert.equal(resolveDestination('macos', record).active, false);
     }
-    const source = structuredClone(destinationFixtures[29].record);
+    const source = structuredClone(destinationFixtures[31].record);
     source.url = 'https://github.com/example'; source.evidence.url = source.url;
     assert.equal(resolveDestination('source', source).active, false);
-    const store = structuredClone(destinationFixtures[30].record);
+    const store = structuredClone(destinationFixtures[32].record);
     store.url = 'https://apps.apple.com/br/app/resenha'; store.evidence.url = store.url;
     assert.equal(resolveDestination('store', store).active, false);
   });
   test('CK-16: importing fixtures registers no tests and opens no server', () => {
     const stdout = execFileSync(process.execPath, ['--input-type=module', '-e',
-      `const {destinationFixtures}=await import(${JSON.stringify(import.meta.url)}); if(destinationFixtures.length!==31) process.exit(2);`],
+      `const {destinationFixtures}=await import(${JSON.stringify(import.meta.url)}); if(destinationFixtures.length!==33) process.exit(2);`],
     { encoding: 'utf8', timeout: 5000 });
     assert.equal(stdout, '');
   });
@@ -209,18 +212,22 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
         if (rootBody) assert.equal(html, rootBody); else rootBody = html;
         assert.match(html, /<html\b[^>]*lang="pt-BR"/u);
         assert.match(html, /<title>[^<]*Resenha[^<]*<\/title>/u);
-        assert.match(html, /name="description"[^>]*content="[^"]*(?:desenvolvimento|prepara)[^"]*"/iu);
+        assert.match(html, /name="description"[^>]*content="[^"]*alternativa gratuita[^"]*Wispr Flow[^"]*"/iu);
         assert.match(html, /property="og:title"/u);
         assert.match(html, /property="og:description"/u);
         assert.match(html, /licença MIT/u);
-        assert.match(html, /SwiftUI/u); assert.match(html, /whisper\.cpp/u); assert.match(html, /App Sandbox/iu);
+        assert.match(html, /SwiftUI/u); assert.match(html, /whisper\.cpp/u); assert.match(html, /ATALHO LIVRE/u);
+        assert.match(html, /Acessibilidade/u);
         assert.match(html, /Apple Silicon/u); assert.match(html, /AVFoundation/u);
-        assert.match(html, /prepara|roteiro/iu);
+        assert.match(html, /alternativa open source ao Wispr Flow/iu);
+        assert.match(html, /sem limite semanal/iu);
+        assert.match(html, /2\.000 palavras no desktop/iu);
         assert.equal((html.match(/id="download"/gu) ?? []).length, 1);
         assert.ok((html.match(/href="#download"/gu) ?? []).length >= 2);
         assert.match(html.match(/<section\b[^>]*id="inicio"[\s\S]*?<\/section>/u)?.[0] ?? '', /href="#download"/u);
         assert.match(html.match(/<nav\b[\s\S]*?<\/nav>/u)?.[0] ?? '', /href="#download"/u);
-        for (const channel of ['macos', 'source', 'store']) assert.equal((html.match(new RegExp(`data-release-channel="${channel}"`, 'gu')) ?? []).length, 1);
+        assert.equal((html.match(/data-release-channel="macos"/gu) ?? []).length, 1);
+        assert.ok((html.match(/data-release-channel="source"/gu) ?? []).length >= 1);
         assert.doesNotMatch(html, /href="(?:|#|https?:\/\/(?:github\.com|apps\.apple\.com)[^"]*)"/u);
         assert.match(html, /<link rel="canonical" href="https:\/\/luisroquette\.github\.io\/resenha\/">/u);
         assert.match(html, /property="og:image" content="https:\/\/luisroquette\.github\.io\/resenha\/assets\/social\/resenha-og\.png"/u);
@@ -241,20 +248,48 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
           'assets/product/settings-transcription.webp', 'assets/product/settings-about.webp',
           'assets/product/resenha-flow.mp4', 'assets/product/resenha-settings.mp4',
           'assets/product/resenha-flow-poster.webp', 'assets/social/resenha-og.png']) {
-          assert.ok(html.includes(`"./${name}"`) || html.includes(`"${name}"`) || html.includes(`/${name}"`));
+          assert.ok(html.includes(name));
           assert.equal((await get(preview.origin, prefix + name)).status, 200);
         }
         assert.equal((html.match(/Interface real do app/gu) ?? []).length, 1);
         assert.equal((html.match(/<video\b/gu) ?? []).length, 2);
         const gallery = html.match(/<div class="screen-gallery"[\s\S]*?<\/div>\s*<p class="gallery-note">/u)?.[0] ?? '';
         assert.equal((gallery.match(/loading="lazy"/gu) ?? []).length, 6);
-        assert.match(html, /<kbd>⇧ ⌘ E<\/kbd>/u);
-        assert.doesNotMatch(html, /OpenAI|chave API|Acessibilidade para inserir/u);
+        assert.doesNotMatch(html, /OpenAI|chave API/u);
+        assert.match(html, /atalho é gravado dentro do Resenha/u);
+        assert.match(html, /Option direita isolada/u);
+        assert.match(html, /class="voice-ribbon"/u);
+        assert.match(html, /class="hero-stamp"/u);
+        assert.ok((html.match(/data-reveal/gu) ?? []).length >= 8);
         assert.match(html, /type="module"/u);
+        assert.match(html, /styles\.css\?v=20261003-2/u);
+        assert.match(html, /release\.mjs\?v=20261004-1/u);
+        assert.match(html, /media\.mjs\?v=20261003-2/u);
+        const media = await get(preview.origin, prefix + 'media.mjs');
+        assert.equal(media.status, 200);
+        assert.match(media.body, /IntersectionObserver/u);
+        assert.match(media.body, /prefers-reduced-motion/u);
         const privacy = await get(preview.origin, prefix + 'privacy/');
         assert.equal(privacy.status, 200);
         assert.match(privacy.body, /Sua voz fica no seu Mac/u);
-        assert.match(privacy.body, /não solicita Acessibilidade/u);
+        assert.match(privacy.body, /Acessibilidade devolve o foco/u);
+        assert.match(privacy.body, /não lê o conteúdo de outros apps/u);
+        const comparison = await get(preview.origin, prefix + 'alternativa-wispr-flow/');
+        assert.equal(comparison.status, 200);
+        assert.match(comparison.body, /<title>Alternativa gratuita e sem limite ao Wispr Flow \| Resenha<\/title>/u);
+        assert.match(comparison.body, /Sem limite semanal imposto pelo plano/u);
+        assert.match(comparison.body, /Resenha é um projeto independente/u);
+        assert.match(comparison.body, /wisprflow\.ai\/pricing/u);
+        assert.match(comparison.body, /application\/ld\+json/u);
+        assert.match(comparison.body, /src="\.\.\/media\.mjs\?v=20261003-2"/u);
+        assert.match(comparison.body, /src="\.\.\/release\.mjs\?v=20261004-1"/u);
+        assert.ok((comparison.body.match(/data-reveal/gu) ?? []).length >= 5);
+        const robots = await get(preview.origin, prefix + 'robots.txt');
+        assert.equal(robots.status, 200);
+        assert.match(robots.body, /Sitemap: https:\/\/luisroquette\.github\.io\/resenha\/sitemap\.xml/u);
+        const sitemap = await get(preview.origin, prefix + 'sitemap.xml');
+        assert.equal(sitemap.status, 200);
+        assert.match(sitemap.body, /alternativa-wispr-flow/u);
       } finally { await preview.close(); }
     }
   });

@@ -1,6 +1,8 @@
 # SPEC-016 — Mac App Store release
 
-Status: accepted for implementation
+Status: active for the `ResenhaAppStore`/`AppStore` channel under Amendment 004.
+
+Previous status: accepted for implementation
 
 ## Goal
 

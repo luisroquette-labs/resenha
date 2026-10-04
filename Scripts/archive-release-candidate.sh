@@ -13,8 +13,8 @@ validate_release_source_commit "$project_root" "$source_commit"
 mkdir -p "${archive:h}"
 "$HOME/.local/bin/mac-gate" xcodebuild \
   -project "$project_root/WhisperKey.xcodeproj" \
-  -scheme WhisperKey \
-  -configuration Release \
+  -scheme ResenhaAppStore \
+  -configuration AppStore \
   -destination 'generic/platform=macOS' \
   -archivePath "$archive" \
   RESENHA_SOURCE_COMMIT="$source_commit" \

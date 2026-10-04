@@ -44,7 +44,7 @@ Entregar uma experiência nativa, pequena e demonstrável:
 
 ### 1. Onboarding
 
-Janela única de 680 × 500 pt, exibida uma vez quando a configuração está incompleta. Ela apresenta a promessa local, Microfone, Monitoramento de Entrada e instalação do modelo local, cada um com motivo, estado real e destino nomeado. O Resenha não pede permissão de Acessibilidade. A recuperação durável permanece no menu.
+Janela redimensionável, exibida quando a configuração está incompleta. Ela apresenta a promessa local, permissões exigidas pelo canal e instalação do modelo local, cada item com motivo, estado real e destino nomeado. O build da loja não pede Acessibilidade; o DMG explica e solicita essa permissão para inserção direta. A recuperação durável permanece no menu.
 
 O onboarding não pede conta, API paga, avaliação ou configuração avançada.
 
@@ -81,7 +81,7 @@ Janela nativa redimensionável, com barra lateral semântica e seção preservad
 | Painel | Conteúdo | Marco |
 |---|---|---|
 | Geral | iniciar ao login, HUD, sons e histórico local opt-in | entregue |
-| Atalho | escolher uma combinação segura e restaurar o padrão | entregue |
+| Atalho | DMG: gravar combinação; Store: mostrar e abrir o atalho de Serviço | entregue |
 | Sons | buscar, favoritar, escolher e ouvir 70 confirmações locais curtas | entregue |
 | Áudio | estado do microfone e explicação da captura local | entregue |
 | Transcrição | idioma, modelo local e vocabulário pessoal | entregue |

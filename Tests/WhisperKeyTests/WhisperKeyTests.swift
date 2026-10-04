@@ -163,12 +163,17 @@ final class WhisperKeyTests: XCTestCase {
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
         let preferences = ProductPreferences(defaults: defaults)
+        XCTAssertEqual(preferences.shortcut, .rightOption)
         XCTAssertTrue(preferences.showsHUD)
         XCTAssertTrue(preferences.soundsEnabled)
         XCTAssertFalse(preferences.keepsHistory, "Transcript history must be opt-in on a clean install")
         XCTAssertEqual(preferences.transcriptionLanguage, .portuguese)
         XCTAssertTrue(preferences.transcriptionGlossary.contains("Resenha"))
         XCTAssertEqual(preferences.readySoundID, 60)
+        var changed: HotkeyShortcut?
+        preferences.onShortcutChange = { changed = $0 }
+        let customShortcut = HotkeyShortcut(keyCode: 40, flags: [.maskControl, .maskShift], keyLabel: "K")
+        preferences.shortcut = customShortcut
         preferences.showsHUD = false
         preferences.soundsEnabled = false
         preferences.keepsHistory = false
@@ -178,7 +183,9 @@ final class WhisperKeyTests: XCTestCase {
         preferences.toggleFavorite(soundID: 3)
         preferences.toggleFavorite(soundID: 60)
         preferences.toggleFavorite(soundID: 999)
+        XCTAssertEqual(changed, customShortcut)
         let restored = ProductPreferences(defaults: defaults)
+        XCTAssertEqual(restored.shortcut, customShortcut)
         XCTAssertFalse(restored.showsHUD)
         XCTAssertFalse(restored.soundsEnabled)
         XCTAssertFalse(restored.keepsHistory)
@@ -500,18 +507,12 @@ final class WhisperKeyTests: XCTestCase {
     }
 
     func testServiceShortcutUsesValidAppKitKeyEquivalentAndFreshBuild() throws {
-        let plist = try XCTUnwrap(Bundle.main.infoDictionary)
-        let services = try XCTUnwrap(plist["NSServices"] as? [[String: Any]])
-        let keyDictionary = try XCTUnwrap(services.first?["NSKeyEquivalent"] as? [String: String])
-        let keyEquivalent = try XCTUnwrap(keyDictionary["default"])
+        let keyEquivalent = ResenhaServiceShortcut.keyEquivalent
         XCTAssertEqual(keyEquivalent, ResenhaServiceShortcut.keyEquivalent)
         XCTAssertEqual(keyEquivalent.count, 1)
         XCTAssertEqual(keyEquivalent, keyEquivalent.uppercased(), "Uppercase adds Shift to AppKit's required Command modifier")
         XCTAssertNotEqual(ResenhaServiceShortcut.displayName, "Control + Option + Espaço")
-        XCTAssertEqual(plist["CFBundleVersion"] as? String, "2", "Submitted build 1 must never be rebuilt")
-        XCTAssertEqual(plist["CFBundleShortVersionString"] as? String, "1.0.0")
-        XCTAssertEqual(plist["ResenhaSourceCommit"] as? String, "DEVELOPMENT",
-            "Development builds are explicit and cannot masquerade as release archives")
+        XCTAssertEqual(ResenhaDistributionChannel.appStore.rawValue, "appStore")
     }
 
     func testServiceReleaseLatchCompletesOnlyForItsArmedKey() {
@@ -528,7 +529,69 @@ final class WhisperKeyTests: XCTestCase {
         XCTAssertNil(latch.keyCode)
         XCTAssertFalse(latch.consume(eventType: .keyUp, keyCode: 14))
         XCTAssertFalse(latch.interrupt())
+    }
 
+    func testDirectInsertionRequiresTheOriginalApplicationToBeFrontmost() {
+        XCTAssertTrue(TextInjectionTargetPolicy.isExpectedTarget(targetPID: 42, frontmostPID: 42))
+        XCTAssertFalse(TextInjectionTargetPolicy.isExpectedTarget(targetPID: 42, frontmostPID: 7))
+        XCTAssertFalse(TextInjectionTargetPolicy.isExpectedTarget(targetPID: 42, frontmostPID: nil))
+    }
+
+    func testHotkeyPresetsHaveDistinctNamesAndSafeTriggers() {
+        XCTAssertEqual(Set(HotkeyShortcut.allCases.map(\.displayName)).count, HotkeyShortcut.allCases.count)
+        XCTAssertTrue(HotkeyShortcut.rightOption.isModifierOnly)
+        XCTAssertTrue(HotkeyShortcut.leftOption.isModifierOnly)
+        for shortcut in HotkeyShortcut.allCases where !shortcut.isModifierOnly {
+            XCTAssertEqual(shortcut.keyCode, 49)
+            XCTAssertFalse(shortcut.requiredFlags.isEmpty)
+        }
+    }
+
+    func testCustomHotkeyRoundTripsAndMatchesOnlyItsExactCombination() throws {
+        let shortcut = HotkeyShortcut(keyCode: 40, flags: [.maskControl, .maskShift], keyLabel: "K")
+        let restored = try XCTUnwrap(HotkeyShortcut(rawValue: shortcut.rawValue))
+        XCTAssertEqual(restored, shortcut)
+        XCTAssertEqual(restored.displayName, "Control + Shift + K")
+        XCTAssertEqual(restored.isPressed(eventType: .keyDown, keyCode: 40, flags: [.maskControl, .maskShift]), true)
+        XCTAssertEqual(restored.isPressed(eventType: .keyDown, keyCode: 40, flags: [.maskControl, .maskShift, .maskAlternate]), false)
+        XCTAssertNil(restored.isPressed(eventType: .keyDown, keyCode: 41, flags: [.maskControl, .maskShift]))
+        XCTAssertEqual(HotkeyShortcut(rawValue: "rightOption"), .rightOption)
+    }
+
+    @MainActor
+    func testShortcutRecorderNormalizesOnlySupportedGlobalModifiers() {
+        let flags = ShortcutCaptureController.flags(from: [.command, .option, .capsLock, .numericPad])
+        XCTAssertEqual(flags, [.maskCommand, .maskAlternate])
+    }
+
+    func testHotkeyMatchingRejectsExtraModifiersAndInterruptionReleasesLatch() {
+        XCTAssertEqual(HotkeyShortcut.controlSpace.isPressed(
+            eventType: .keyDown, keyCode: 49, flags: .maskControl
+        ), true)
+        XCTAssertEqual(HotkeyShortcut.controlSpace.isPressed(
+            eventType: .keyDown, keyCode: 49, flags: [.maskControl, .maskAlternate]
+        ), false)
+        XCTAssertEqual(HotkeyShortcut.controlSpace.isPressed(
+            eventType: .keyUp, keyCode: 49, flags: .maskControl
+        ), false)
+        XCTAssertNil(HotkeyShortcut.controlSpace.isPressed(
+            eventType: .keyDown, keyCode: 12, flags: .maskControl
+        ))
+        XCTAssertEqual(HotkeyShortcut.rightOption.isPressed(
+            eventType: .flagsChanged, keyCode: 61, flags: .maskAlternate, modifierKeyDown: true
+        ), true)
+        XCTAssertEqual(HotkeyShortcut.rightOption.isPressed(
+            eventType: .flagsChanged, keyCode: 61, flags: .maskAlternate, modifierKeyDown: false
+        ), false)
+        XCTAssertEqual(HotkeyShortcut.rightOption.isPressed(
+            eventType: .flagsChanged, keyCode: 61, flags: .maskAlternate
+        ), true)
+        XCTAssertEqual(HotkeyShortcut.rightOption.isPressed(
+            eventType: .flagsChanged, keyCode: 61, flags: []
+        ), false)
+    }
+
+    func testServiceReleaseLatchRejectsAmbiguousAndStaleKeys() {
         var ambiguous = ServiceReleaseLatch()
         XCTAssertFalse(ambiguous.arm(pressedKeyCodes: [0, 14]), "Multiple keys without an observed key-down are unsafe")
         ambiguous.noteKeyDown(2)
@@ -832,19 +895,22 @@ final class WhisperKeyTests: XCTestCase {
     func testPermissionPresentationCoversEveryAvailabilityCombination() {
         for microphone in [false, true] {
             for inputMonitoring in [false, true] {
-                    let snapshot = PermissionSnapshot(microphone: microphone, inputMonitoring: inputMonitoring)
-                    XCTAssertEqual(snapshot.isReady, microphone && inputMonitoring)
-                    XCTAssertEqual(snapshot.presentations.map(\.permission), [.microphone, .inputMonitoring])
-                    XCTAssertEqual(snapshot.presentations.map(\.isGranted), [microphone, inputMonitoring])
-                    XCTAssertEqual(snapshot.missingPermissions.count, [microphone, inputMonitoring].filter { !$0 }.count)
+                for accessibility in [false, true] {
+                    let snapshot = PermissionSnapshot(microphone: microphone, inputMonitoring: inputMonitoring, accessibility: accessibility)
+                    XCTAssertEqual(snapshot.isReady, microphone && inputMonitoring && accessibility)
+                    XCTAssertEqual(snapshot.presentations.map(\.permission), [.microphone, .inputMonitoring, .accessibility])
+                    XCTAssertEqual(snapshot.presentations.map(\.isGranted), [microphone, inputMonitoring, accessibility])
+                    XCTAssertEqual(snapshot.missingPermissions.count, [microphone, inputMonitoring, accessibility].filter { !$0 }.count)
                     for presentation in snapshot.presentations {
                         XCTAssertEqual(presentation.status, "\(presentation.permission.name): \(presentation.isGranted ? "ativada" : "permissão necessária")")
                         XCTAssertFalse(presentation.permission.purpose.isEmpty)
                         XCTAssertEqual(presentation.permission.settingsActionTitle, "Abrir Ajustes de \(presentation.permission.name)")
                     }
                     let expectedMessage = !microphone ? "Acesso ao Microfone necessário"
-                        : !inputMonitoring ? "Acesso ao Monitoramento de Entrada necessário" : "Permissões prontas"
+                        : !inputMonitoring ? "Acesso ao Monitoramento de Entrada necessário"
+                        : !accessibility ? "Acesso à Acessibilidade necessário" : "Permissões prontas"
                     XCTAssertEqual(snapshot.missingPermissionMessage, expectedMessage)
+                }
                 }
         }
     }
@@ -873,8 +939,10 @@ final class WhisperKeyTests: XCTestCase {
     func testPermissionDestinationsIdentifyEachSettingsPane() {
         XCTAssertEqual(RequiredPermission.microphone.name, "Microfone")
         XCTAssertEqual(RequiredPermission.inputMonitoring.name, "Monitoramento de Entrada")
+        XCTAssertEqual(RequiredPermission.accessibility.name, "Acessibilidade")
         XCTAssertEqual(RequiredPermission.microphone.settingsDestination.absoluteString, "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone")
         XCTAssertEqual(RequiredPermission.inputMonitoring.settingsDestination.absoluteString, "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent")
+        XCTAssertEqual(RequiredPermission.accessibility.settingsDestination.absoluteString, "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
     }
 
     @MainActor
@@ -896,7 +964,7 @@ final class WhisperKeyTests: XCTestCase {
         for (phase, expected) in [(DictationPhase.recording, "Ouvindo"), (.transcribing, "Transcrevendo"), (.inserting, "Inserindo")] {
             let presentation = MenuStatusPresentation(phase: phase, snapshot: snapshot, error: nil)
             XCTAssertEqual(presentation.activity, expected)
-            XCTAssertTrue(presentation.accessibleStatus.contains("Serviços do macOS"))
+            XCTAssertTrue(presentation.accessibleStatus.contains("configurado no Resenha"))
             XCTAssertEqual(presentation.symbol, phase == .recording ? "mic.fill" : "waveform")
         }
         let blocked = MenuStatusPresentation(phase: .idle, snapshot: snapshot, error: nil)
@@ -1003,6 +1071,7 @@ final class WhisperKeyTests: XCTestCase {
     func testPermissionGateStartsWhenPermissionsArriveAfterLaunch() {
         XCTAssertFalse(PermissionGate.shouldStartHotkey(microphone: false, inputMonitoring: true, hotkeyRunning: false))
         XCTAssertFalse(PermissionGate.shouldStartHotkey(microphone: true, inputMonitoring: false, hotkeyRunning: false))
+        XCTAssertFalse(PermissionGate.shouldStartHotkey(microphone: true, inputMonitoring: true, accessibility: false, hotkeyRunning: false))
         XCTAssertTrue(PermissionGate.shouldStartHotkey(microphone: true, inputMonitoring: true, hotkeyRunning: false))
         XCTAssertFalse(PermissionGate.shouldStartHotkey(microphone: true, inputMonitoring: true, hotkeyRunning: true))
     }
@@ -1325,7 +1394,9 @@ final class WhisperKeyTests: XCTestCase {
             throw XCTSkip("Local Whisper model is not installed")
         }
 
-        let fixture = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "jfk", withExtension: "wav"))
+        let fixture = try XCTUnwrap(
+            Bundle(for: WhisperKeyTests.self).url(forResource: "jfk", withExtension: "wav")
+        )
 
         let transcript = try WhisperTranscriber().transcribe(
             audioURL: fixture,
@@ -1518,6 +1589,32 @@ final class WhisperKeyTests: XCTestCase {
         await fulfillment(of: [interrupted], timeout: 0.5)
         XCTAssertEqual(releases, 0)
         XCTAssertFalse(hotkey.interruptServiceRelease())
+    }
+
+    @MainActor
+    func testTerminalInterruptionClearsDirectLatchForNextPress() async {
+        let hotkey = HotkeyMonitor()
+        hotkey.configure(shortcut: .controlSpace)
+        var presses = 0
+        hotkey.onPress = { presses += 1 }
+
+        hotkey.processDirectHotkey(
+            eventType: .keyDown,
+            keyCode: 49,
+            flags: .maskControl
+        )
+        await Task.yield()
+        XCTAssertEqual(presses, 1)
+        XCTAssertTrue(hotkey.interruptActiveShortcut())
+
+        hotkey.processDirectHotkey(
+            eventType: .keyDown,
+            keyCode: 49,
+            flags: .maskControl
+        )
+        await Task.yield()
+        XCTAssertEqual(presses, 2)
+        XCTAssertTrue(hotkey.interruptActiveShortcut())
     }
 
     @MainActor

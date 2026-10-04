@@ -23,7 +23,7 @@ struct MenuStatusPresentation {
     }
 
     var accessibleStatus: String {
-        "Resenha — \(activity). Use o atalho de ditado configurado nos Serviços do macOS."
+        "Resenha — \(activity). Use o atalho de ditado configurado no Resenha."
     }
 }
 

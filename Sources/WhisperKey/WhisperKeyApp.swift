@@ -22,6 +22,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let modelManager: WhisperModelManager
     private let verifiedModelURLProvider: @MainActor () -> URL?
     private let cuePlayer = DictationCuePlayer()
+    private let serviceProvider = ResenhaServiceProvider()
     private var coordinator: DictationCoordinator!
     private var permissionTimer: Timer?
     private var modelStateObservation: AnyCancellable?
@@ -38,7 +39,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         openSettings: { [weak self] permission in self?.openSettings(for: permission) }
     )
     private lazy var settingsController = ProductSettingsWindowController(preferences: preferences)
-    private lazy var serviceProvider = ResenhaServiceProvider()
 
     override init() {
         let modelManager = WhisperModelManager.shared
@@ -71,6 +71,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         preferences.onHistoryChange = { [weak self] enabled in self?.historyPreferenceChanged(enabled) }
         preferences.onLanguageChange = { [weak self] language in self?.menuController.updateLanguage(language) }
+        if !ResenhaDistributionChannel.current.usesSandboxedTextService {
+            hotkey.configure(shortcut: preferences.shortcut)
+            preferences.onShortcutChange = { [weak self] shortcut in
+                guard let self else { return }
+                self.hotkey.stop()
+                self.hotkey.configure(shortcut: shortcut)
+                self.startHotkeyIfReady(showResult: true)
+            }
+        }
         preferences.onHUDChange = { [weak self] visible in if !visible { self?.panel.hide() } }
         observeCoordinator(DictationCoordinator(
             permissions: permissions,
@@ -80,23 +89,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             language: { [weak preferences] in preferences?.transcriptionLanguage ?? .portuguese },
             glossaryText: { [weak preferences] in preferences?.transcriptionGlossary ?? TranscriptionGlossary.defaultText },
             verifiedModelURL: { [weak self] in self?.verifiedModelURLProvider() },
+            deliveryMode: ResenhaDistributionChannel.current.usesSandboxedTextService
+                ? .appKitService : .accessibility,
             onRecordingLevel: { [weak self] level in self?.menuController.updateRecordingLevel(level) },
             onTranscript: { [weak self] text in
+                if ResenhaDistributionChannel.current.usesSandboxedTextService {
+                    self?.serviceProvider.complete(with: text)
+                }
                 self?.recordTranscript(text)
-                self?.serviceProvider.complete(with: text)
             },
             onFailure: { [weak self] error in
-                self?.serviceProvider.fail(with: error.title)
+                if ResenhaDistributionChannel.current.usesSandboxedTextService {
+                    self?.serviceProvider.fail(with: error.title)
+                }
             }
         ))
-        serviceProvider.beginDictation = { [weak self] in
-            self?.beginServiceDictation() ?? false
+        if ResenhaDistributionChannel.current.usesSandboxedTextService {
+            serviceProvider.beginDictation = { [weak self] in
+                self?.beginServiceDictation() ?? false
+            }
+            serviceProvider.cancelDictation = { [weak self] in
+                self?.handleServiceTimeout()
+            }
+            NSApp.servicesProvider = serviceProvider
+            NSUpdateDynamicServices()
         }
-        serviceProvider.cancelDictation = { [weak self] in
-            self?.handleServiceTimeout()
-        }
-        NSApp.servicesProvider = serviceProvider
-        NSUpdateDynamicServices()
         configureHotkeyRouting()
         configureRuntimeInterruptionObservers()
         configureMenuBar()
@@ -122,12 +139,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func configureHotkeyRouting() {
+        hotkey.onPress = ResenhaDistributionChannel.current.usesSandboxedTextService
+            ? nil : { [weak self] in _ = self?.handleHotkeyPress(targetIsSelf: false) }
         hotkey.onRelease = { [weak self] in self?.handleHotkeyRelease() }
         hotkey.onInterruption = { [weak self] in self?.handleRuntimeInterruption() }
     }
 
     var isHotkeyRoutingConfigured: Bool {
-        hotkey.onRelease != nil
+        hotkey.onRelease != nil && (ResenhaDistributionChannel.current.usesSandboxedTextService || hotkey.onPress != nil)
     }
 
     @discardableResult
@@ -171,7 +190,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func finishRecordingSession() {
-        _ = hotkey.interruptServiceRelease()
+        _ = hotkey.interruptActiveShortcut()
         interaction.release()
         coordinator?.hotkeyReleased()
     }
@@ -190,13 +209,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func handleRuntimeInterruption() {
+        _ = hotkey.interruptActiveShortcut()
         interaction.release()
-        serviceProvider.fail(with: "Ditado interrompido pelo sistema.")
+        if ResenhaDistributionChannel.current.usesSandboxedTextService {
+            serviceProvider.fail(with: "Ditado interrompido pelo sistema.")
+        }
         coordinator?.interruptRuntime()
     }
 
     private func handleServiceTimeout() {
-        _ = hotkey.interruptServiceRelease()
+        _ = hotkey.interruptActiveShortcut()
         interaction.release()
         coordinator?.interruptRuntime(message: "Ditado excedeu o tempo máximo")
     }
@@ -211,7 +233,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             ) { [weak self] _ in
                 MainActor.assumeIsolated {
                     guard let self else { return }
-                    _ = self.hotkey.interruptServiceRelease()
+                    _ = self.hotkey.interruptActiveShortcut()
                     self.handleRuntimeInterruption()
                 }
             })
@@ -230,6 +252,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         interaction.isRequestingPermission = true
         updateStatusItem()
         permissions.requestInputMonitoring()
+        if ResenhaDistributionChannel.current.requiresAccessibility {
+            permissions.requestAccessibility()
+        }
         Task {
             defer {
                 interaction.isRequestingPermission = false

@@ -9,6 +9,24 @@ enum HotkeyError: LocalizedError {
     }
 }
 
+enum HotkeyEdge: Equatable { case pressed, released }
+
+struct HotkeyLatch {
+    private(set) var isPressed = false
+
+    mutating func update(_ pressed: Bool) -> HotkeyEdge? {
+        guard pressed != isPressed else { return nil }
+        isPressed = pressed
+        return pressed ? .pressed : .released
+    }
+
+    mutating func interrupt() -> HotkeyEdge? {
+        guard isPressed else { return nil }
+        isPressed = false
+        return .released
+    }
+}
+
 enum ResenhaServiceShortcut {
     /// AppKit adds Command automatically; uppercase also adds Shift.
     static let keyEquivalent = "E"
@@ -20,6 +38,7 @@ struct ServiceReleaseLatch {
 
     private(set) var keyCode: Int64?
     private(set) var mostRecentKeyDown: (keyCode: Int64, uptime: TimeInterval)?
+    var isArmed: Bool { keyCode != nil }
 
     mutating func noteKeyDown(
         _ keyCode: Int64,
@@ -81,6 +100,7 @@ struct ServiceReleaseLatch {
 
 final class HotkeyMonitor {
     private let logger = Logger(subsystem: "br.com.luisroquette.Resenha", category: "hotkey")
+    var onPress: (() -> Void)?
     var onRelease: (() -> Void)?
     var onInterruption: (() -> Void)?
 
@@ -88,7 +108,11 @@ final class HotkeyMonitor {
     private var runLoopSource: CFRunLoopSource?
     private var releaseLatch = ServiceReleaseLatch()
     private var recentKeyExpiry: DispatchWorkItem?
+    private var latch = HotkeyLatch()
+    private(set) var shortcut: HotkeyShortcut = .rightOption
     var isRunning: Bool { eventTap != nil }
+
+    func configure(shortcut: HotkeyShortcut) { self.shortcut = shortcut }
 
     /// Snapshots only non-modifier keys that are physically down after AppKit
     /// has opened a real Service request. This supports a user-assigned Service
@@ -111,9 +135,18 @@ final class HotkeyMonitor {
         return wasArmed
     }
 
+    /// Clears every in-flight shortcut edge. Terminal runtime paths call this
+    /// so a missing key-up cannot poison the next dictation in either channel.
+    @discardableResult
+    func interruptActiveShortcut() -> Bool {
+        let serviceWasArmed = interruptServiceRelease()
+        let directWasPressed = latch.interrupt() != nil
+        return serviceWasArmed || directWasPressed
+    }
     func start() throws {
         guard eventTap == nil else { return }
-        let mask = CGEventMask(1 << CGEventType.keyDown.rawValue)
+        let mask = CGEventMask(1 << CGEventType.flagsChanged.rawValue)
+            | CGEventMask(1 << CGEventType.keyDown.rawValue)
             | CGEventMask(1 << CGEventType.keyUp.rawValue)
         guard let tap = CGEvent.tapCreate(
             tap: .cgSessionEventTap,
@@ -139,19 +172,30 @@ final class HotkeyMonitor {
         eventTap = nil
         runLoopSource = nil
         clearTransientKeyState()
+        _ = latch.interrupt()
     }
 
     private func receive(type: CGEventType, event: CGEvent) {
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
             if let eventTap { CGEvent.tapEnable(tap: eventTap, enable: true) }
-            process(eventType: type, keyCode: 0)
+            if interruptActiveShortcut() { deliverInterruption() }
             return
         }
         let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
-        process(eventType: type, keyCode: keyCode)
+        if ResenhaDistributionChannel.current.usesSandboxedTextService {
+            processServiceRelease(eventType: type, keyCode: keyCode)
+            return
+        }
+        guard let pressed = shortcut.isPressed(
+            eventType: type,
+            keyCode: keyCode,
+            flags: event.flags,
+            modifierKeyDown: nil
+        ), let edge = latch.update(pressed) else { return }
+        deliver(edge)
     }
 
-    func process(eventType: CGEventType, keyCode: Int64) {
+    func processServiceRelease(eventType: CGEventType, keyCode: Int64) {
         if eventType == .tapDisabledByTimeout || eventType == .tapDisabledByUserInput {
             if interruptServiceRelease() { deliverInterruption() }
             return
@@ -178,6 +222,26 @@ final class HotkeyMonitor {
         if shouldRelease { deliverRelease() }
     }
 
+    /// Test seam for the AppKit Service release path.
+    func process(eventType: CGEventType, keyCode: Int64) {
+        processServiceRelease(eventType: eventType, keyCode: keyCode)
+    }
+
+    func processDirectHotkey(
+        eventType: CGEventType,
+        keyCode: Int64,
+        flags: CGEventFlags,
+        modifierKeyDown: Bool? = nil
+    ) {
+        guard let pressed = shortcut.isPressed(
+            eventType: eventType,
+            keyCode: keyCode,
+            flags: flags,
+            modifierKeyDown: modifierKeyDown
+        ), let edge = latch.update(pressed) else { return }
+        deliver(edge)
+    }
+
     private func clearTransientKeyState() {
         recentKeyExpiry?.cancel()
         recentKeyExpiry = nil
@@ -187,6 +251,13 @@ final class HotkeyMonitor {
     private func deliverRelease() {
         logger.notice("Service shortcut released")
         DispatchQueue.main.async { [weak self] in self?.onRelease?() }
+    }
+
+    private func deliver(_ edge: HotkeyEdge) {
+        logger.notice("Dictation hotkey \(edge == .pressed ? "pressed" : "released", privacy: .public)")
+        DispatchQueue.main.async { [weak self] in
+            if edge == .pressed { self?.onPress?() } else { self?.onRelease?() }
+        }
     }
 
     private func deliverInterruption() {

@@ -7,6 +7,10 @@ settings:
   base:
     SWIFT_VERSION: "5.0"
     MACOSX_DEPLOYMENT_TARGET: "14.0"
+configs:
+  Debug: debug
+  Release: release
+  AppStore: release
 targets:
   WhisperKey:
     type: application
@@ -27,12 +31,6 @@ targets:
       - sdk: Accelerate.framework
       - sdk: Metal.framework
       - sdk: libc++.tbd
-    entitlements:
-      path: Config/ResenhaStore.entitlements
-      properties:
-        com.apple.security.app-sandbox: true
-        com.apple.security.device.audio-input: true
-        com.apple.security.network.client: true
     settings:
       base:
         PRODUCT_MODULE_NAME: WhisperKey
@@ -40,13 +38,14 @@ targets:
         DEVELOPMENT_TEAM: S3YCFYY8SC
         CODE_SIGN_STYLE: Automatic
         GENERATE_INFOPLIST_FILE: NO
-        INFOPLIST_FILE: Config/ResenhaStore-Info.plist
+        INFOPLIST_FILE: Config/Resenha-Info.plist
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ENABLE_HARDENED_RUNTIME: YES
         ARCHS: arm64
         CURRENT_PROJECT_VERSION: 2
         MARKETING_VERSION: 1.0.0
         RESENHA_SOURCE_COMMIT: DEVELOPMENT
+        CODE_SIGN_ENTITLEMENTS: Config/Resenha.entitlements
       configs:
         Debug:
           PRODUCT_BUNDLE_IDENTIFIER: br.com.luisroquette.Resenha.Debug
@@ -56,6 +55,13 @@ targets:
           PRODUCT_BUNDLE_IDENTIFIER: br.com.luisroquette.Resenha
           PRODUCT_NAME: Resenha
           PRODUCT_DISPLAY_NAME: Resenha
+        AppStore:
+          PRODUCT_BUNDLE_IDENTIFIER: br.com.luisroquette.Resenha
+          PRODUCT_NAME: Resenha
+          PRODUCT_DISPLAY_NAME: Resenha
+          INFOPLIST_FILE: Config/ResenhaStore-Info.plist
+          CODE_SIGN_ENTITLEMENTS: Config/ResenhaStore.entitlements
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) RESENHA_APP_STORE"
   WhisperKeyTests:
     type: bundle.unit-test
     platform: macOS
@@ -81,3 +87,9 @@ schemes:
     test:
       targets:
         - WhisperKeyTests
+  ResenhaAppStore:
+    build:
+      targets:
+        WhisperKey: all
+    archive:
+      config: AppStore

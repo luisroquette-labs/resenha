@@ -1,5 +1,7 @@
 # SPEC-015 — Lapidação contínua do produto
 
+Status: active for the App Store and Developer ID channels defined by Amendment 004.
+
 ## Objetivo
 
 Elevar o Resenha por ciclos completos de inspeção, correção e validação até que duas rodadas consecutivas não encontrem correções ou otimizações relevantes.
@@ -12,7 +14,7 @@ Elevar o Resenha por ciclos completos de inspeção, correção e validação at
 - Toda instrução de interface continua correta depois que o usuário troca a hotkey.
 - Ajustes permanecem utilizáveis por teclado, VoiceOver, janela menor e janela ampliada.
 - README, site e specs descrevem somente recursos e limitações atuais.
-- O build macOS usa Hardened Runtime; App Sandbox e empacotamento do whisper.cpp ficam como gate explícito da distribuição pela App Store.
+- Ambos os builds usam Hardened Runtime e whisper.cpp embarcado. App Sandbox é obrigatório na App Store e ausente no Developer ID.
 
 ## Validação
 

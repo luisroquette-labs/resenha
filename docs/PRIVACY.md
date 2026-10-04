@@ -26,10 +26,12 @@ conexão e não recebe esses registros.
 ## Permissões
 
 - **Microfone:** capturar a fala enquanto o ditado estiver ativo.
-- **Monitoramento de Entrada:** detectar quando o atalho de ditado é solto.
+- **Monitoramento de Entrada:** detectar quando o atalho de ditado é pressionado e solto.
+- **Acessibilidade:** devolver o foco ao aplicativo original e enviar um único comando de colar após a transcrição.
 
-Resenha não solicita Acessibilidade. A inserção usa o mecanismo nativo de
-Serviços do macOS.
+O Resenha não lê o conteúdo, a seleção ou a árvore de interface de outros
+aplicativos. A Acessibilidade é usada somente para a inserção solicitada pelo
+usuário ao concluir um ditado.
 
 ## Contato
 

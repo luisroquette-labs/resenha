@@ -14,6 +14,7 @@ private extension RequiredPermission {
         switch self {
         case .microphone: "Microfone"
         case .inputMonitoring: "Monitoramento de Entrada"
+        case .accessibility: "Acessibilidade"
         }
     }
 
@@ -21,6 +22,7 @@ private extension RequiredPermission {
         switch self {
         case .microphone: "Captura sua voz enquanto a tecla estiver pressionada."
         case .inputMonitoring: "Detecta o atalho escolhido mesmo em outros aplicativos."
+        case .accessibility: "Insere a transcrição no campo em que você estava digitando."
         }
     }
 
@@ -28,6 +30,7 @@ private extension RequiredPermission {
         switch self {
         case .microphone: "mic.fill"
         case .inputMonitoring: "keyboard"
+        case .accessibility: "text.cursor"
         }
     }
 }
@@ -48,7 +51,8 @@ private struct PermissionOnboardingView: View {
     private var setupReady: Bool { snapshot.isReady && modelReady }
 
     private var introText: String {
-        "Duas permissões conectam o atalho e o microfone. O áudio nunca sai deste Mac."
+        let count = snapshot.requiresAccessibility ? "Três permissões" : "Duas permissões"
+        return "\(count) conectam voz, atalho e inserção automática. O áudio nunca sai deste Mac."
     }
     var body: some View {
         ZStack {
@@ -72,7 +76,7 @@ private struct PermissionOnboardingView: View {
                             Divider()
                             ForEach(Array(snapshot.presentations.enumerated()), id: \.element.permission) { index, presentation in
                                 permissionRow(presentation, index: index)
-                                if presentation.permission != .inputMonitoring {
+                                if index < snapshot.presentations.count - 1 {
                                     Divider().padding(.leading, 52)
                                 }
                             }
@@ -236,7 +240,7 @@ private struct PermissionOnboardingView: View {
 @MainActor
 final class PermissionOnboardingController: NSObject, NSWindowDelegate {
     private(set) var window: NSWindow?
-    private var snapshot = PermissionSnapshot(microphone: false, inputMonitoring: false)
+    private var snapshot = PermissionSnapshot(microphone: false, inputMonitoring: false, accessibility: false)
     private var isRequesting = false
     private let requestPermissions: () -> Void
     private let openSettings: (RequiredPermission) -> Void

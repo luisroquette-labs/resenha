@@ -1,40 +1,28 @@
-# SPEC-002 — Global Hotkey
+# SPEC-002 — Global hotkey
 
-Status: implemented for Store 1.0
+Status: implemented by distribution channel
 
-## Decision
+## App Store contract
 
-Store 1.0 uses the macOS Service **Ditar com Resenha** as the only start and insertion boundary. Its valid `NSKeyEquivalent` is uppercase `E`, which AppKit maps to **Command + Shift + E**. This avoids the VoiceOver `VO-Space` conflict and the invalid modifier string previously advertised.
+The App Store build uses the macOS Service **Ditar com Resenha**. Uppercase `E` is a valid `NSKeyEquivalent` and maps to **Command + Shift + E**. A listen-only event tap correlates the real Service request with the most recent still-held non-modifier key and stops only on that matching key-up. Text returns through AppKit; Accessibility is not requested.
 
-The user may replace the Service shortcut in macOS Keyboard Shortcuts with another combination containing a non-modifier key. While enabled, the global listen-only event tap observes non-modifier key-down/key-up transitions and retains only one numeric keycode for at most one second. When AppKit opens a real Service request, the monitor verifies that the recent key is still physically down and observes only its matching release. The transient keycode is cleared on key-up, rejection, disarm, tap interruption or shutdown; event contents and typed text are never retained or logged. An ambiguous snapshot without a recent key-down is rejected. The app does not expose presets that it cannot synchronize with macOS.
+Users may change the Service shortcut in macOS Keyboard Shortcuts. The app retains one numeric keycode for at most one second, never stores text events and rejects ambiguous admission.
 
-## Requirements
+## Developer ID contract
 
-- Start only from an active macOS Service request.
-- Reject a request originating from the Resenha process and reset its transient release state.
-- Attach the release handler before starting the event tap.
-- Arm release monitoring from the most recent physical non-modifier key-down that remains held when the Service request arrives.
-- Stop only on the matching key-up transition.
-- Suppress no shortcut or unrelated keyboard input.
-- Disable monitoring cleanly when the app terminates.
-- Re-enable an event tap if macOS disables it because of timeout.
+The direct build defaults to **right Option** and lets the user record a key, modified chord or side-specific modifier inside Resenha. It persists keycode, normalized flags, label and modifier-only behavior, then applies changes immediately. Accessibility is required only for guarded insertion into the captured target application.
 
-## Permissions
+## Shared requirements
 
-The listen-only event tap requires Input Monitoring because it observes global key transitions, even while no Service request is active, to correlate a customizable Service shortcut with its later release. It stores at most one short-lived numeric keycode and no text. Text return through `NSServices` requires no Accessibility permission. Without Input Monitoring, show the exact missing permission and open System Settings only after explicit user action.
-
-## Edge cases
-
-- Auto-repeat or duplicate flag events: ignore.
-- Service invoked while another request is active: return a bounded error.
-- Service invoked without a held non-modifier key: return an actionable error without recording.
-- Rejected admission: roll back both the press state and release latch before another request.
-- Permission revoked while running: stop monitoring and expose the error.
-- Hotkey pressed during transcription: ignore.
+- One physical press starts at most one recording and one matching release stops it once.
+- Reject starts from Resenha itself, during an active attempt or without a verified model.
+- Ignore auto-repeat, duplicate edges, unrelated releases and extra modifiers.
+- Suppress no keyboard input and log no typed content.
+- Stop on permission loss or termination; recover a tap disabled by macOS.
+- A recording deadline, sleep or session lock clears every latch.
 
 ## Acceptance
 
-- Invoking another shortcut alone does nothing.
-- One physical press starts one recording; its matching release stops it once.
-- One Service request produces exactly one recording and one response.
-- The configured Service works in the supported TextEdit, browser and terminal matrix.
+- App Store: a real Service request inserts through TextEdit, Chromium and Terminal without Accessibility.
+- Direct: a custom shortcut survives restart and inserts into the captured target with Accessibility.
+- Both: another key release cannot end an armed recording; test execution remains isolated from `/Applications/Resenha.app`.

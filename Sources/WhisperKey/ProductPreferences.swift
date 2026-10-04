@@ -18,10 +18,84 @@ enum TranscriptionLanguage: String, CaseIterable, Identifiable {
     }
 }
 
+struct HotkeyShortcut: RawRepresentable, CaseIterable, Identifiable, Hashable {
+    static let relevantFlags: CGEventFlags = [.maskCommand, .maskShift, .maskControl, .maskAlternate, .maskSecondaryFn]
+
+    let keyCode: Int64
+    let requiredFlags: CGEventFlags
+    let keyLabel: String
+    let isModifierOnly: Bool
+
+    static let rightOption = Self(keyCode: 61, flags: .maskAlternate, keyLabel: "Option direita", isModifierOnly: true)
+    static let leftOption = Self(keyCode: 58, flags: .maskAlternate, keyLabel: "Option esquerda", isModifierOnly: true)
+    static let controlSpace = Self(keyCode: 49, flags: .maskControl, keyLabel: "Espaço")
+    static let optionSpace = Self(keyCode: 49, flags: .maskAlternate, keyLabel: "Espaço")
+    static let controlOptionSpace = Self(keyCode: 49, flags: [.maskControl, .maskAlternate], keyLabel: "Espaço")
+    static let commandShiftSpace = Self(keyCode: 49, flags: [.maskCommand, .maskShift], keyLabel: "Espaço")
+    static let allCases = [rightOption, leftOption, controlSpace, optionSpace, controlOptionSpace, commandShiftSpace]
+
+    var id: String { rawValue }
+
+    init(keyCode: Int64, flags: CGEventFlags, keyLabel: String, isModifierOnly: Bool = false) {
+        self.keyCode = keyCode
+        requiredFlags = flags.intersection(Self.relevantFlags)
+        self.keyLabel = keyLabel
+        self.isModifierOnly = isModifierOnly
+    }
+
+    var rawValue: String {
+        let label = Data(keyLabel.utf8).base64EncodedString()
+        return "v1|\(keyCode)|\(requiredFlags.rawValue)|\(isModifierOnly ? 1 : 0)|\(label)"
+    }
+
+    init?(rawValue: String) {
+        let legacy: [String: Self] = [
+            "rightOption": .rightOption, "leftOption": .leftOption,
+            "controlSpace": .controlSpace, "optionSpace": .optionSpace,
+            "controlOptionSpace": .controlOptionSpace, "commandShiftSpace": .commandShiftSpace
+        ]
+        if let shortcut = legacy[rawValue] { self = shortcut; return }
+        let parts = rawValue.split(separator: "|", omittingEmptySubsequences: false)
+        guard parts.count == 5, parts[0] == "v1",
+              let keyCode = Int64(parts[1]), let flags = UInt64(parts[2]),
+              let modifierOnly = Int(parts[3]),
+              let labelData = Data(base64Encoded: String(parts[4])),
+              let label = String(data: labelData, encoding: .utf8), !label.isEmpty else { return nil }
+        self.init(keyCode: keyCode, flags: CGEventFlags(rawValue: flags), keyLabel: label, isModifierOnly: modifierOnly == 1)
+    }
+
+    func isPressed(
+        eventType: CGEventType,
+        keyCode: Int64,
+        flags: CGEventFlags,
+        modifierKeyDown: Bool? = nil
+    ) -> Bool? {
+        guard keyCode == self.keyCode else { return nil }
+        if isModifierOnly {
+            guard eventType == .flagsChanged else { return nil }
+            return modifierKeyDown ?? flags.contains(requiredFlags)
+        }
+        guard eventType == .keyDown || eventType == .keyUp else { return nil }
+        guard eventType == .keyDown else { return false }
+        return flags.intersection(Self.relevantFlags) == requiredFlags
+    }
+    var displayName: String {
+        if isModifierOnly { return keyLabel }
+        var parts: [String] = []
+        if requiredFlags.contains(.maskControl) { parts.append("Control") }
+        if requiredFlags.contains(.maskAlternate) { parts.append("Option") }
+        if requiredFlags.contains(.maskShift) { parts.append("Shift") }
+        if requiredFlags.contains(.maskCommand) { parts.append("Command") }
+        if requiredFlags.contains(.maskSecondaryFn) { parts.append("Fn") }
+        parts.append(keyLabel)
+        return parts.joined(separator: " + ")
+    }
+}
 @MainActor
 final class ProductPreferences: ObservableObject {
     static let maximumGlossaryCharacters = 20_000
     private enum Key {
+        static let shortcut = "resenha.shortcut"
         static let showsHUD = "resenha.showsHUD"
         static let soundsEnabled = "resenha.soundsEnabled"
         static let keepsHistory = "resenha.keepsHistory"
@@ -33,9 +107,17 @@ final class ProductPreferences: ObservableObject {
     }
     private let defaults: UserDefaults
     private(set) var needsLegacyHistoryPrivacyMigration: Bool
+    var onShortcutChange: ((HotkeyShortcut) -> Void)?
     var onHUDChange: ((Bool) -> Void)?
     var onHistoryChange: ((Bool) -> Void)?
     var onLanguageChange: ((TranscriptionLanguage) -> Void)?
+
+    @Published var shortcut: HotkeyShortcut {
+        didSet {
+            defaults.set(shortcut.rawValue, forKey: Key.shortcut)
+            if oldValue != shortcut { onShortcutChange?(shortcut) }
+        }
+    }
 
     @Published var showsHUD: Bool {
         didSet {
@@ -80,6 +162,8 @@ final class ProductPreferences: ObservableObject {
         self.defaults = defaults
         needsLegacyHistoryPrivacyMigration = defaults.object(forKey: Key.keepsHistory) == nil
             && !defaults.bool(forKey: Key.legacyHistoryPrivacyMigrationCompleted)
+        let defaultShortcut = HotkeyShortcut.rightOption
+        shortcut = HotkeyShortcut(rawValue: defaults.string(forKey: Key.shortcut) ?? "") ?? defaultShortcut
         showsHUD = defaults.object(forKey: Key.showsHUD) as? Bool ?? true
         soundsEnabled = defaults.object(forKey: Key.soundsEnabled) as? Bool ?? true
         keepsHistory = defaults.object(forKey: Key.keepsHistory) as? Bool ?? false
@@ -199,7 +283,7 @@ struct ProductSettingsView: View {
                 Group {
                     switch selection {
                     case .general: GeneralSettingsPane(preferences: preferences)
-                    case .shortcut: ShortcutSettingsPane()
+                    case .shortcut: ShortcutSettingsPane(preferences: preferences)
                     case .sounds: SoundLibrarySettingsPane(
                         preferences: preferences,
                         initialPresentation: soundPresentation
@@ -559,28 +643,51 @@ private struct GeneralSettingsPane: View {
 }
 
 private struct ShortcutSettingsPane: View {
+    @ObservedObject var preferences: ProductPreferences
+    @StateObject private var recorder = ShortcutCaptureController()
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
             ResenhaPageHeader(eyebrow: "Push to talk", title: "Atalho", subtitle: "Uma combinação global, disponível em qualquer aplicativo.")
                 ResenhaRuleSection("Pressione e segure para falar") {
-                    LabeledContent("Atalho padrão", value: ResenhaServiceShortcut.displayName)
-                    Text("O macOS controla o atalho do Serviço. Você pode trocá-lo em Ajustes do Sistema por outra combinação com uma tecla principal.")
-                        .font(.callout).foregroundStyle(.secondary)
-                    Button("Personalizar nos Ajustes do Sistema") {
-                        if let url = URL(string: "x-apple.systempreferences:com.apple.Keyboard-Settings.extension") {
-                            NSWorkspace.shared.open(url)
+                    if ResenhaDistributionChannel.current.usesSandboxedTextService {
+                        LabeledContent("Atalho do Serviço", value: ResenhaServiceShortcut.displayName)
+                        Text("Na versão da App Store, o macOS controla o atalho do Serviço Resenha.")
+                            .font(.callout).foregroundStyle(.secondary)
+                        Button("Personalizar nos Ajustes do Sistema") {
+                            if let url = URL(string: "x-apple.systempreferences:com.apple.Keyboard-Settings.extension") {
+                                NSWorkspace.shared.open(url)
+                            }
+                        }
+                    } else {
+                        LabeledContent("Atalho atual", value: preferences.shortcut.displayName)
+                        Text("Escolha uma tecla ou combinação. A mudança vale imediatamente em qualquer aplicativo.")
+                            .font(.callout).foregroundStyle(.secondary)
+                        HStack(spacing: 10) {
+                            Button(recorder.isRecording ? "Pressione o novo atalho…" : "Gravar novo atalho") {
+                                recorder.begin { preferences.shortcut = $0 }
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(recorder.isRecording)
+                            Button("Usar Option direita") { preferences.shortcut = .rightOption }
+                                .disabled(recorder.isRecording || preferences.shortcut == .rightOption)
+                        }
+                        if recorder.isRecording {
+                            Text("Pressione a combinação completa e solte. Esc cancela.")
+                                .font(.callout.weight(.medium)).foregroundStyle(ResenhaTheme.accent)
                         }
                     }
                 }
                 Spacer(minLength: 24)
                 HStack(spacing: 14) {
                     Image(systemName: "keyboard.fill").font(.system(size: 28)).foregroundStyle(ResenhaTheme.accent)
-                    Text(ResenhaServiceShortcut.displayName)
+                    Text(ResenhaDistributionChannel.current.usesSandboxedTextService
+                        ? ResenhaServiceShortcut.displayName : preferences.shortcut.displayName)
                         .font(.system(.title2, design: .serif).weight(.medium))
                 }
             }
         }
+        .onDisappear { recorder.cancel() }
     }
 }
 

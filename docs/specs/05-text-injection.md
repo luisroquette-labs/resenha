@@ -1,37 +1,44 @@
-# SPEC-005 — Text return and recovery
+# SPEC-005 — Text delivery and recovery
 
-Status: sandboxed Service implemented; physical compatibility matrix pending
+Status: automated boundary implemented; physical matrix pending
 
 ## Goal
 
-Return the completed transcription to the editable field that invoked Resenha, while always leaving a recovery copy available through Command-V.
+Insert the completed transcription at the cursor of the application that was active when dictation began, while keeping a recovery copy on the clipboard.
 
-## Store method
+## Shared method
 
-1. The focused application invokes the `Ditar com Resenha` macOS Service.
-2. `ResenhaServiceProvider` keeps that Services request open while recording and inference run.
-3. On success, `TextInjector.stage` writes the transcript to the general pasteboard.
-4. The provider declares UTF-8 plain text plus the legacy string pasteboard type on the Service pasteboard.
-5. The requesting application receives and inserts that returned string through its responder chain.
+Every successful non-empty transcript is staged on the general pasteboard and
+kept there for manual recovery. Delivery then follows the build channel.
 
-No application activation, `AXUIElement`, synthetic Command-V or `CGEvent.post` is permitted.
+## Developer ID method
+
+1. Capture the frontmost application when the hotkey is pressed.
+2. Stage the final non-empty transcript on the general pasteboard.
+3. Reactivate the captured application and wait up to 400 ms for it to become frontmost.
+4. Abort if the target disappeared or the clipboard changed.
+5. Post one synthetic `Command-V` through `CGEvent`.
 
 ## Requirements
 
-- Reject blank text.
-- Allow only one active Service request.
-- Return no placeholder after cancellation, failure or the ten-minute timeout.
-- Keep every successful transcript on the general pasteboard for manual recovery.
-- Optionally add it to the bounded ten-item local history before finishing the request.
-- Preserve the active application and selection; Resenha's HUD is passive.
+- Accessibility must be trusted before insertion.
+- Never paste into an application other than the captured target.
+- Never overwrite a clipboard change made after staging.
+- Keep the successful transcript on the clipboard and optional ten-item history.
+- Treat secure fields or hosts that reject synthetic paste as a bounded failure with manual `Command-V` recovery.
+- The passive HUD must not become the insertion target.
 
-## Compatibility ceiling
+## Mac App Store method
 
-Insertion depends on the host application's public Services responder support. Unsupported or secure fields may not accept the returned text. In those cases, the completed transcript remains available through Command-V and the UI reports a specific failure when detectable.
+1. AppKit opens `Ditar com Resenha` with a real Service pasteboard request.
+2. Resenha records until the exact initiating key is released.
+3. The completed transcript is returned through `NSPerformService` completion.
+4. The calling editor performs the insertion; Resenha does not post input events.
+
+The Store build must remain sandboxed and must not request Accessibility.
 
 ## Acceptance
 
-- TextEdit inserts the returned text at the selection.
-- Supported browser and terminal fields pass the documented physical matrix.
-- An unsupported host never loses a completed transcript.
-- Binary scanning finds no Accessibility or post-event insertion symbol.
+- Channel selection, target identity and clipboard guards are deterministic unit tests.
+- A real TextEdit dictation inserts once at the cursor.
+- Browser and terminal fields are recorded separately in the physical matrix.
