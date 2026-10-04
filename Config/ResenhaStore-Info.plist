@@ -5,7 +5,7 @@
     <key>CFBundleDevelopmentRegion</key>
     <string>pt_BR</string>
     <key>CFBundleDisplayName</key>
-    <string>Resenha</string>
+    <string>$(PRODUCT_DISPLAY_NAME)</string>
     <key>CFBundleExecutable</key>
     <string>$(EXECUTABLE_NAME)</string>
     <key>CFBundleIconName</key>
@@ -15,13 +15,15 @@
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
-    <string>Resenha</string>
+    <string>$(PRODUCT_NAME)</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.0.0</string>
+    <string>$(MARKETING_VERSION)</string>
     <key>CFBundleVersion</key>
-    <string>1</string>
+    <string>$(CURRENT_PROJECT_VERSION)</string>
+    <key>ResenhaSourceCommit</key>
+    <string>$(RESENHA_SOURCE_COMMIT)</string>
     <key>LSMinimumSystemVersion</key>
     <string>$(MACOSX_DEPLOYMENT_TARGET)</string>
     <key>LSApplicationCategoryType</key>
@@ -42,7 +44,7 @@
             <key>NSKeyEquivalent</key>
             <dict>
                 <key>default</key>
-                <string>^~ </string>
+                <string>E</string>
             </dict>
             <key>NSMenuItem</key>
             <dict>
@@ -52,7 +54,7 @@
             <key>NSMessage</key>
             <string>dictate</string>
             <key>NSPortName</key>
-            <string>Resenha</string>
+            <string>$(PRODUCT_NAME)</string>
             <key>NSRequiredContext</key>
             <dict/>
             <key>NSRestricted</key>

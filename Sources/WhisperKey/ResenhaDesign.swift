@@ -1,20 +1,110 @@
+import AppKit
 import SwiftUI
 
+struct ResenhaRGB: Equatable {
+    let red: Double
+    let green: Double
+    let blue: Double
+
+    init(hex: UInt32) {
+        red = Double((hex >> 16) & 0xff) / 255
+        green = Double((hex >> 8) & 0xff) / 255
+        blue = Double(hex & 0xff) / 255
+    }
+
+    var relativeLuminance: Double {
+        func linear(_ component: Double) -> Double {
+            component <= 0.04045 ? component / 12.92 : pow((component + 0.055) / 1.055, 2.4)
+        }
+        return 0.2126 * linear(red) + 0.7152 * linear(green) + 0.0722 * linear(blue)
+    }
+
+    func contrastRatio(against other: Self) -> Double {
+        let light = max(relativeLuminance, other.relativeLuminance)
+        let dark = min(relativeLuminance, other.relativeLuminance)
+        return (light + 0.05) / (dark + 0.05)
+    }
+}
+
 enum ResenhaTheme {
-    static let accent = Color(red: 0.43, green: 0.64, blue: 0.59)
-    static let accentSoft = Color(red: 0.72, green: 0.82, blue: 0.79)
+    static let lightAccentRGB = ResenhaRGB(hex: 0x416D64)
+    static let darkAccentRGB = ResenhaRGB(hex: 0x8CB8AE)
+    static let lightPaperRGB = ResenhaRGB(hex: 0xF1EEE4)
+    static let lightCanvasEndRGB = ResenhaRGB(hex: 0xE3E8DE)
+    static let darkInkRGB = ResenhaRGB(hex: 0x181B1A)
+    static let darkCanvasStartRGB = ResenhaRGB(hex: 0x171B1A)
+    static let darkCanvasEndRGB = ResenhaRGB(hex: 0x111312)
+    static let lightSuccessRGB = ResenhaRGB(hex: 0x3B6E5E)
+    static let darkSuccessRGB = ResenhaRGB(hex: 0x8BC4A9)
+    static let lightWarningRGB = ResenhaRGB(hex: 0x86502C)
+    static let darkWarningRGB = ResenhaRGB(hex: 0xF0B37E)
+    static let lightHighContrastAccentRGB = ResenhaRGB(hex: 0x365C54)
+    static let darkHighContrastAccentRGB = ResenhaRGB(hex: 0xB0DCD2)
+    static let lightHighContrastSuccessRGB = ResenhaRGB(hex: 0x315D50)
+    static let darkHighContrastSuccessRGB = ResenhaRGB(hex: 0xA9E0C5)
+    static let lightHighContrastWarningRGB = ResenhaRGB(hex: 0x754221)
+    static let darkHighContrastWarningRGB = ResenhaRGB(hex: 0xFFD0A2)
+
+    static let accent = adaptive(
+        light: lightAccentRGB,
+        dark: darkAccentRGB,
+        lightHighContrast: lightHighContrastAccentRGB,
+        darkHighContrast: darkHighContrastAccentRGB
+    )
+    static let accentSoft = adaptive(light: ResenhaRGB(hex: 0xB7D1CB), dark: ResenhaRGB(hex: 0x35564F))
+    static let controlTintRGB = ResenhaRGB(hex: 0x47786E)
+    static let controlTint = color(controlTintRGB)
     static let signal = accent
-    static let ink = Color(red: 0.09, green: 0.105, blue: 0.10)
-    static let paper = Color(red: 0.94, green: 0.92, blue: 0.86)
+    static let ink = color(darkInkRGB)
+    static let paper = color(lightPaperRGB)
     static let fog = Color(red: 0.80, green: 0.85, blue: 0.82)
-    static let success = Color(red: 0.38, green: 0.61, blue: 0.52)
-    static let warning = Color(red: 0.70, green: 0.50, blue: 0.34)
+    static let success = adaptive(
+        light: lightSuccessRGB,
+        dark: darkSuccessRGB,
+        lightHighContrast: lightHighContrastSuccessRGB,
+        darkHighContrast: darkHighContrastSuccessRGB
+    )
+    static let warning = adaptive(
+        light: lightWarningRGB,
+        dark: darkWarningRGB,
+        lightHighContrast: lightHighContrastWarningRGB,
+        darkHighContrast: darkHighContrastWarningRGB
+    )
+    static let onControl = color(ResenhaRGB(hex: 0xFFFFFF))
+
+    private static func color(_ rgb: ResenhaRGB) -> Color {
+        Color(red: rgb.red, green: rgb.green, blue: rgb.blue)
+    }
+
+    private static func adaptive(
+        light: ResenhaRGB,
+        dark: ResenhaRGB,
+        lightHighContrast: ResenhaRGB? = nil,
+        darkHighContrast: ResenhaRGB? = nil
+    ) -> Color {
+        Color(nsColor: NSColor(name: nil) { appearance in
+            let match = appearance.bestMatch(from: [
+                .accessibilityHighContrastDarkAqua,
+                .accessibilityHighContrastAqua,
+                .darkAqua,
+                .aqua
+            ])
+            let value: ResenhaRGB
+            switch match {
+            case .accessibilityHighContrastDarkAqua: value = darkHighContrast ?? dark
+            case .accessibilityHighContrastAqua: value = lightHighContrast ?? light
+            case .darkAqua: value = dark
+            default: value = light
+            }
+            return NSColor(srgbRed: value.red, green: value.green, blue: value.blue, alpha: 1)
+        })
+    }
 
     static func canvas(_ scheme: ColorScheme) -> LinearGradient {
         LinearGradient(
             colors: scheme == .dark
                 ? [Color(red: 0.09, green: 0.105, blue: 0.10), Color(red: 0.065, green: 0.073, blue: 0.07)]
-                : [paper, Color(red: 0.89, green: 0.91, blue: 0.87)],
+                : [paper, color(lightCanvasEndRGB)],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
@@ -33,11 +123,12 @@ struct ResenhaPageHeader: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
             Text(eyebrow.uppercased())
-                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                .font(.caption.weight(.semibold).monospaced())
                 .tracking(1.8)
                 .foregroundStyle(ResenhaTheme.accent)
             Text(title)
-                .font(.system(size: 29, weight: .semibold, design: .serif))
+                .font(.system(.title, design: .serif).weight(.semibold))
+                .accessibilityAddTraits(.isHeader)
             Text(subtitle)
                 .font(.callout)
                 .foregroundStyle(.secondary)
@@ -54,7 +145,7 @@ struct ResenhaStatusPill: View {
 
     var body: some View {
         Label(title, systemImage: symbol)
-            .font(.system(size: 11, weight: .medium, design: .monospaced))
+            .font(.caption.weight(.medium).monospaced())
             .tracking(0.35)
             .foregroundStyle(active ? ResenhaTheme.success : .secondary)
     }
@@ -99,7 +190,7 @@ struct ResenhaRuleSection<Content: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(title.uppercased())
-                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                .font(.caption.weight(.medium).monospaced())
                 .tracking(1.5)
                 .foregroundStyle(.secondary)
             Divider()

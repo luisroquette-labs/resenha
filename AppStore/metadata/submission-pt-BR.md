@@ -8,10 +8,10 @@
 - SKU: `resenha-macos-1`
 - Plataforma: macOS
 - Versão: `1.0.0`
-- Build: `1`
+- Build candidato mínimo: `2` (`1` está obsoleto e não pode ser liberado)
 - Preço: grátis
 - Disponibilidade: todos os territórios elegíveis
-- Lançamento: manual após aprovação
+- Lançamento: manual após aprovação; confirmar no App Store Connect antes de submeter
 - Categoria primária: Produtividade
 - Categoria secundária: Utilitários
 

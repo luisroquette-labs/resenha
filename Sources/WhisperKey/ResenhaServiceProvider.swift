@@ -1,17 +1,39 @@
 import AppKit
 import OSLog
 
-@MainActor
+/// Synchronous boundary required by AppKit's Services contract.
+///
+/// AppKit asks the requestor to read the returned pasteboard only after this
+/// method returns. When invoked on the main thread, the bounded nested run loop
+/// keeps UI, key-release and coordinator callbacks moving without extending
+/// the declared service timeout.
 final class ResenhaServiceProvider: NSObject {
+    struct Timing {
+        var timeout: TimeInterval = ResenhaRuntimeLimits.serviceTimeout
+        var pollInterval: TimeInterval = 0.02
+        var uptime: @Sendable () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }
+    }
+
     private enum Outcome {
         case transcript(String)
         case failure(String)
     }
 
     private let logger = Logger(subsystem: "br.com.luisroquette.Resenha", category: "service")
+    private let timing: Timing
+    private let stateLock = NSLock()
+    private var activeRequestID: UUID?
     private var outcome: Outcome?
-    private var isServing = false
-    var beginDictation: (() -> Void)?
+
+    /// Returns `true` only when capture was armed and started for this request.
+    var beginDictation: (() -> Bool)?
+    /// Cancels the active pipeline if AppKit reaches its outer deadline first.
+    var cancelDictation: (() -> Void)?
+
+    init(timing: Timing = Timing()) {
+        self.timing = timing
+        super.init()
+    }
 
     @objc(dictate:userData:error:)
     func dictate(
@@ -19,25 +41,31 @@ final class ResenhaServiceProvider: NSObject {
         userData: String?,
         error: AutoreleasingUnsafeMutablePointer<NSString?>
     ) {
-        guard !isServing else {
+        guard let requestID = beginRequest() else {
             error.pointee = "O Resenha já está ouvindo outro ditado."
             return
         }
-        isServing = true
-        outcome = nil
-        defer {
-            outcome = nil
-            isServing = false
-        }
+        defer { reset(requestID: requestID) }
 
         logger.notice("Sandboxed text service request started")
-        beginDictation?()
-        let deadline = Date().addingTimeInterval(10 * 60)
-        while outcome == nil, Date() < deadline {
-            RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.02))
+        guard beginDictation?() == true else {
+            error.pointee = "O Resenha não conseguiu iniciar o ditado. Pressione e segure o atalho do Serviço."
+            return
         }
 
-        switch outcome {
+        var deadline = MonotonicDeadline(duration: timing.timeout, startedAt: timing.uptime())
+        while currentOutcome(requestID: requestID) == nil {
+            let remaining = deadline.remaining(at: timing.uptime())
+            guard remaining > 0 else { break }
+            let pollDuration = min(remaining, max(0.001, timing.pollInterval))
+            if Thread.isMainThread {
+                RunLoop.current.run(mode: .default, before: Date(timeIntervalSinceNow: pollDuration))
+            } else {
+                Thread.sleep(forTimeInterval: pollDuration)
+            }
+        }
+
+        switch currentOutcome(requestID: requestID) {
         case .transcript(let text):
             let legacyString = NSPasteboard.PasteboardType("NSStringPboardType")
             pasteboard.declareTypes([.string, legacyString], owner: nil)
@@ -50,17 +78,57 @@ final class ResenhaServiceProvider: NSObject {
         case .failure(let message):
             error.pointee = message as NSString
         case nil:
-            error.pointee = "O ditado excedeu o tempo máximo de 10 minutos."
+            cancelDictation?()
+            error.pointee = "O ditado excedeu o tempo máximo do Serviço."
         }
     }
 
     func complete(with transcript: String) {
-        guard isServing else { return }
-        outcome = .transcript(transcript)
+        let normalized = transcript.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else {
+            fail(with: "Nenhuma fala foi detectada.")
+            return
+        }
+        finish(.transcript(normalized))
     }
 
     func fail(with message: String) {
-        guard isServing else { return }
-        outcome = .failure(message)
+        finish(.failure(message))
+    }
+
+    var isServing: Bool {
+        stateLock.withLock { activeRequestID != nil }
+    }
+
+    private func beginRequest() -> UUID? {
+        stateLock.withLock {
+            guard activeRequestID == nil else { return nil }
+            let requestID = UUID()
+            activeRequestID = requestID
+            outcome = nil
+            return requestID
+        }
+    }
+
+    private func currentOutcome(requestID: UUID) -> Outcome? {
+        stateLock.withLock {
+            guard activeRequestID == requestID else { return nil }
+            return outcome
+        }
+    }
+
+    private func finish(_ outcome: Outcome) {
+        stateLock.withLock {
+            guard activeRequestID != nil, self.outcome == nil else { return }
+            self.outcome = outcome
+        }
+    }
+
+    private func reset(requestID: UUID) {
+        stateLock.withLock {
+            guard activeRequestID == requestID else { return }
+            activeRequestID = nil
+            outcome = nil
+        }
     }
 }

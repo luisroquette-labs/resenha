@@ -1,0 +1,21 @@
+{
+  "submitted": {
+    "version": "1.0.0",
+    "build": 1,
+    "statusObserved": "WAITING_FOR_REVIEW",
+    "releaseModeObserved": "AFTER_APPROVAL",
+    "eligibleForRelease": false,
+    "reason": "Archived before the corrected macOS Service contract"
+  },
+  "candidate": {
+    "version": "1.0.0",
+    "minimumBuild": 2,
+    "sourceCommit": null
+  },
+  "requiredBeforeSubmission": [
+    "Owner approves withdrawing or replacing build 1",
+    "App Store Connect release mode is set to manual",
+    "Exact build 2 or newer passes automated and physical release gates"
+  ],
+  "remoteMutationRequiresOwnerApproval": true
+}

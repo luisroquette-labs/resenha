@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import OSLog
 import SwiftUI
 
@@ -16,10 +17,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let logger = Logger(subsystem: "br.com.luisroquette.Resenha", category: "lifecycle")
     private let permissions = PermissionService()
     private let panel = FloatingPanelController()
-    private let hotkey = HotkeyMonitor()
+    private let hotkey: HotkeyMonitor
+    private let serviceStartOverride: (() -> Bool)?
+    private let modelManager: WhisperModelManager
+    private let verifiedModelURLProvider: @MainActor () -> URL?
     private let cuePlayer = DictationCuePlayer()
     private var coordinator: DictationCoordinator!
     private var permissionTimer: Timer?
+    private var modelStateObservation: AnyCancellable?
+    private var workspaceObservers: [NSObjectProtocol] = []
     private var lastPermissionSnapshot: PermissionSnapshot?
     private(set) var interaction = DictationInteraction()
     private var hotkeyFailureFeedback = HotkeyFailureFeedback()
@@ -34,20 +40,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private lazy var settingsController = ProductSettingsWindowController(preferences: preferences)
     private lazy var serviceProvider = ResenhaServiceProvider()
 
+    override init() {
+        let modelManager = WhisperModelManager.shared
+        self.modelManager = modelManager
+        verifiedModelURLProvider = { modelManager.verifiedModelURL }
+        hotkey = HotkeyMonitor()
+        serviceStartOverride = nil
+        super.init()
+    }
+
+    init(
+        hotkey: HotkeyMonitor,
+        verifiedModelURL: @escaping @MainActor () -> URL?,
+        serviceStartOverride: (() -> Bool)?
+    ) {
+        modelManager = WhisperModelManager.shared
+        verifiedModelURLProvider = verifiedModelURL
+        self.hotkey = hotkey
+        self.serviceStartOverride = serviceStartOverride
+        super.init()
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         AudioRecorder.cleanupStaleRecordings()
+        preferences.migrateLegacyHistoryIfNeeded { [history = transcriptHistory] in
+            history.clear()
+        }
         transcriptHistory.onChange = { [weak self] items, storageAvailable in
             self?.menuController.updateRecentTranscripts(items, storageAvailable: storageAvailable)
         }
         preferences.onHistoryChange = { [weak self] enabled in self?.historyPreferenceChanged(enabled) }
         preferences.onLanguageChange = { [weak self] language in self?.menuController.updateLanguage(language) }
-        hotkey.configure(shortcut: preferences.shortcut)
-        preferences.onShortcutChange = { [weak self] shortcut in
-            guard let self else { return }
-            self.hotkey.stop()
-            self.hotkey.configure(shortcut: shortcut)
-            self.startHotkeyIfReady(showResult: true)
-        }
         preferences.onHUDChange = { [weak self] visible in if !visible { self?.panel.hide() } }
         observeCoordinator(DictationCoordinator(
             permissions: permissions,
@@ -56,6 +79,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             soundsEnabled: { [weak preferences] in preferences?.soundsEnabled ?? true },
             language: { [weak preferences] in preferences?.transcriptionLanguage ?? .portuguese },
             glossaryText: { [weak preferences] in preferences?.transcriptionGlossary ?? TranscriptionGlossary.defaultText },
+            verifiedModelURL: { [weak self] in self?.verifiedModelURLProvider() },
             onRecordingLevel: { [weak self] level in self?.menuController.updateRecordingLevel(level) },
             onTranscript: { [weak self] text in
                 self?.recordTranscript(text)
@@ -66,19 +90,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
         ))
         serviceProvider.beginDictation = { [weak self] in
-            guard let self else { return }
-            self.hotkey.armServiceRelease()
-            self.handleHotkeyPress(targetIsSelf: false)
+            self?.beginServiceDictation() ?? false
+        }
+        serviceProvider.cancelDictation = { [weak self] in
+            self?.handleServiceTimeout()
         }
         NSApp.servicesProvider = serviceProvider
         NSUpdateDynamicServices()
         configureHotkeyRouting()
+        configureRuntimeInterruptionObservers()
         configureMenuBar()
         menuController.updateLanguage(preferences.transcriptionLanguage)
         menuController.updateRecentTranscripts(
             preferences.keepsHistory ? transcriptHistory.items : [],
             storageAvailable: transcriptHistory.storageAvailable
         )
+        modelStateObservation = modelManager.$state.removeDuplicates().sink { [weak self] _ in
+            self?.startHotkeyIfReady()
+        }
         startHotkeyIfReady()
         presentOnboardingIfNeeded()
         permissionTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
@@ -89,25 +118,60 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func observeCoordinator(_ coordinator: DictationCoordinator) {
         self.coordinator = coordinator
         coordinator.onPhaseChange = { [weak self] _ in self?.updateStatusItem() }
+        coordinator.onRecordingDeadline = { [weak self] in self?.handleRecordingDeadline() }
     }
 
     func configureHotkeyRouting() {
-        hotkey.onPress = { [weak self] in self?.handleHotkeyPress(targetIsSelf: false) }
         hotkey.onRelease = { [weak self] in self?.handleHotkeyRelease() }
+        hotkey.onInterruption = { [weak self] in self?.handleRuntimeInterruption() }
     }
 
     var isHotkeyRoutingConfigured: Bool {
-        hotkey.onPress != nil && hotkey.onRelease != nil
+        hotkey.onRelease != nil
     }
 
-    func handleHotkeyPress(targetIsSelf: Bool? = nil) {
-        guard let coordinator, interaction.press(phase: coordinator.phase,
+    @discardableResult
+    func handleHotkeyPress(targetIsSelf: Bool? = nil) -> Bool {
+        guard verifiedModelURLProvider() != nil else { return false }
+        let phase = coordinator?.phase ?? (serviceStartOverride == nil ? nil : .idle)
+        guard let phase, interaction.press(phase: phase,
             targetIsSelf: targetIsSelf ?? (NSWorkspace.shared.frontmostApplication?.processIdentifier
-                == ProcessInfo.processInfo.processIdentifier)) else { return }
-        coordinator.hotkeyPressed()
+                == ProcessInfo.processInfo.processIdentifier)) else { return false }
+
+        let started: Bool
+        if let serviceStartOverride {
+            started = serviceStartOverride()
+        } else {
+            coordinator.hotkeyPressed()
+            started = coordinator.phase == .recording
+        }
+        if !started { interaction.release() }
+        return started
+    }
+
+    func beginServiceDictation(
+        pressedKeyCodes: [Int64]? = nil,
+        targetIsSelf: Bool? = nil
+    ) -> Bool {
+        guard verifiedModelURLProvider() != nil else { return false }
+        guard hotkey.armServiceRelease(pressedKeyCodes: pressedKeyCodes) else { return false }
+        guard handleHotkeyPress(targetIsSelf: targetIsSelf) else {
+            hotkey.disarmServiceRelease()
+            return false
+        }
+        return true
     }
 
     func handleHotkeyRelease() {
+        finishRecordingSession()
+    }
+
+    func handleRecordingDeadline() {
+        finishRecordingSession()
+    }
+
+    private func finishRecordingSession() {
+        _ = hotkey.interruptServiceRelease()
         interaction.release()
         coordinator?.hotkeyReleased()
     }
@@ -118,8 +182,47 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         permissionTimer?.invalidate()
+        modelStateObservation?.cancel()
         hotkey.stop()
         coordinator.cancel()
+        workspaceObservers.forEach(NSWorkspace.shared.notificationCenter.removeObserver)
+        workspaceObservers.removeAll()
+    }
+
+    func handleRuntimeInterruption() {
+        interaction.release()
+        serviceProvider.fail(with: "Ditado interrompido pelo sistema.")
+        coordinator?.interruptRuntime()
+    }
+
+    private func handleServiceTimeout() {
+        _ = hotkey.interruptServiceRelease()
+        interaction.release()
+        coordinator?.interruptRuntime(message: "Ditado excedeu o tempo máximo")
+    }
+
+    private func configureRuntimeInterruptionObservers() {
+        let center = NSWorkspace.shared.notificationCenter
+        for name in [NSWorkspace.willSleepNotification, NSWorkspace.sessionDidResignActiveNotification] {
+            workspaceObservers.append(center.addObserver(
+                forName: name,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    _ = self.hotkey.interruptServiceRelease()
+                    self.handleRuntimeInterruption()
+                }
+            })
+        }
+        workspaceObservers.append(center.addObserver(
+            forName: NSWorkspace.didWakeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.startHotkeyIfReady() }
+        })
     }
 
     @objc func enablePermissions() {
@@ -213,6 +316,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return
         }
 
+        guard verifiedModelURLProvider() != nil else {
+            hotkeyFailureFeedback.lastAttemptFailed = false
+            hotkey.stop()
+            interaction.release()
+            if showResult && coordinator.phase.acceptsStatusFeedback {
+                panel.showTemporarily(.failure("Modelo de voz ainda não está pronto"))
+            }
+            return
+        }
+
         coordinator.permissionsRestored()
         updateStatusItem(snapshot)
         do {
@@ -247,8 +360,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard let coordinator else { return }
         let currentSnapshot = snapshot ?? permissions.snapshot
         let presentation = MenuStatusPresentation(phase: coordinator.phase, snapshot: currentSnapshot,
-            error: coordinator.currentError, hotkeyUnavailable: hotkeyFailureFeedback.lastAttemptFailed,
-            shortcut: preferences.shortcut)
+            error: coordinator.currentError, hotkeyUnavailable: hotkeyFailureFeedback.lastAttemptFailed)
         menuController.update(presentation, isRequestingPermission: interaction.isRequestingPermission)
         onboardingController.update(snapshot: currentSnapshot, isRequesting: interaction.isRequestingPermission)
     }
@@ -290,8 +402,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func presentOnboardingIfNeeded() {
         let defaults = UserDefaults.standard
         let snapshot = permissions.snapshot
-        let modelReady: Bool
-        if case .ready = WhisperModelManager.shared.state { modelReady = true } else { modelReady = false }
+        let modelReady = verifiedModelURLProvider() != nil
         guard PermissionOnboardingPolicy.shouldPresent(
             snapshot: snapshot,
             hasPresented: defaults.bool(forKey: PermissionOnboardingPolicy.presentedKey),

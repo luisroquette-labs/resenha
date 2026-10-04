@@ -52,7 +52,7 @@ final class NativeMenuController {
             statusItem?.button?.image = ResenhaBrand.menuBarImage()
         }
         statusMenuItem?.title = "Resenha — \(presentation.activity)"
-        instructionMenuItem?.title = "Segure \(presentation.shortcut.displayName) para ditar"
+        instructionMenuItem?.title = "Segure \(ResenhaServiceShortcut.displayName) para ditar"
         statusItem?.button?.toolTip = presentation.accessibleStatus
         statusItem?.button?.setAccessibilityLabel(presentation.accessibleStatus)
         enableMenuItem?.isEnabled = !snapshot.isReady && !isRequestingPermission

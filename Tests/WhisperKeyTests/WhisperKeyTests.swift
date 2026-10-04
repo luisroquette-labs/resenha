@@ -3,7 +3,132 @@ import XCTest
 import SwiftUI
 @testable import WhisperKey
 
+private final class WhisperLifecycleProbe: @unchecked Sendable {
+    private let lock = NSLock()
+    private var loads = 0
+    private var releases = 0
+    private var activeUses = 0
+    private var maximumConcurrentUses = 0
+
+    func load(path: String) -> OpaquePointer? {
+        lock.withLock { loads += 1 }
+        return OpaquePointer(bitPattern: 1)
+    }
+
+    func release(_ context: OpaquePointer) {
+        lock.withLock { releases += 1 }
+    }
+
+    func beginUse() {
+        lock.withLock {
+            activeUses += 1
+            maximumConcurrentUses = max(maximumConcurrentUses, activeUses)
+        }
+    }
+
+    func endUse() {
+        lock.withLock { activeUses -= 1 }
+    }
+
+    var snapshot: (loads: Int, releases: Int, maximumConcurrentUses: Int) {
+        lock.withLock { (loads, releases, maximumConcurrentUses) }
+    }
+}
+
 final class WhisperKeyTests: XCTestCase {
+    private func localWhisperTestModel() throws -> URL {
+        let isolatedModel = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("WhisperKey/Models/ggml-small-q5_1.bin")
+        guard FileManager.default.fileExists(atPath: isolatedModel.path) else {
+            throw XCTSkip("O teste cooperativo exige uma cópia do modelo no container Debug isolado.")
+        }
+        return isolatedModel
+    }
+
+    func testDebugHostHasPermanentNonProductionIdentity() {
+        XCTAssertEqual(Bundle.main.bundleIdentifier, "br.com.luisroquette.Resenha.Debug")
+        XCTAssertEqual(Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String, "Resenha Dev")
+        XCTAssertNotEqual(Bundle.main.bundleIdentifier, "br.com.luisroquette.Resenha")
+    }
+
+    func testBrandTextColorsMeetWCAGAAOnTheirCanvas() {
+        let lightBackgrounds = [ResenhaTheme.lightPaperRGB, ResenhaTheme.lightCanvasEndRGB]
+        let darkBackgrounds = [ResenhaTheme.darkCanvasStartRGB, ResenhaTheme.darkCanvasEndRGB]
+        let lightTextColors = [
+            ResenhaTheme.lightAccentRGB,
+            ResenhaTheme.lightSuccessRGB,
+            ResenhaTheme.lightWarningRGB,
+            ResenhaTheme.lightHighContrastAccentRGB,
+            ResenhaTheme.lightHighContrastSuccessRGB,
+            ResenhaTheme.lightHighContrastWarningRGB
+        ]
+        let darkTextColors = [
+            ResenhaTheme.darkAccentRGB,
+            ResenhaTheme.darkSuccessRGB,
+            ResenhaTheme.darkWarningRGB,
+            ResenhaTheme.darkHighContrastAccentRGB,
+            ResenhaTheme.darkHighContrastSuccessRGB,
+            ResenhaTheme.darkHighContrastWarningRGB
+        ]
+        for foreground in lightTextColors {
+            for background in lightBackgrounds {
+                XCTAssertGreaterThanOrEqual(foreground.contrastRatio(against: background), 4.5)
+            }
+        }
+        for foreground in darkTextColors {
+            for background in darkBackgrounds {
+                XCTAssertGreaterThanOrEqual(foreground.contrastRatio(against: background), 4.5)
+            }
+        }
+        let white = ResenhaRGB(hex: 0xFFFFFF)
+        XCTAssertGreaterThanOrEqual(white.contrastRatio(against: ResenhaTheme.controlTintRGB), 4.5)
+        XCTAssertGreaterThanOrEqual(
+            ResenhaTheme.controlTintRGB.contrastRatio(against: ResenhaTheme.darkInkRGB),
+            3
+        )
+    }
+
+    @MainActor
+    func testHUDEnlargedTextUsesCompactAccessibilityLayoutForEveryState() throws {
+        let available = CGSize(width: 500, height: 320)
+        let states: [FloatingStatus] = [
+            .ready,
+            .listening,
+            .transcribing,
+            .inserting,
+            .failure("Permissão de Monitoramento de Entrada necessária para receber o atalho de ditado")
+        ]
+        for state in states {
+            let native = FloatingStatusView.panelSize(for: state, available: available)
+            let enlarged = FloatingStatusView.panelSize(
+                for: state,
+                available: available,
+                dynamicTypeSize: .accessibility3
+            )
+            XCTAssertGreaterThan(enlarged.height, native.height)
+            XCTAssertGreaterThanOrEqual(enlarged.width, native.width)
+            XCTAssertLessThanOrEqual(enlarged.width, available.width - 24)
+            XCTAssertLessThanOrEqual(enlarged.height, available.height - 24)
+
+            let model = FloatingPanelModel()
+            model.show(state, now: 100)
+            let view = NSHostingView(rootView: FloatingStatusView(
+                model: model,
+                fixtureContrast: .increased,
+                fixtureReduceTransparency: true,
+                fixtureReduceMotion: true,
+                fixtureDynamicTypeSize: .accessibility3
+            ))
+            view.frame = CGRect(origin: .zero, size: enlarged)
+            view.layoutSubtreeIfNeeded()
+            let bitmap = try XCTUnwrap(view.bitmapImageRepForCachingDisplay(in: view.bounds))
+            view.cacheDisplay(in: view.bounds, to: bitmap)
+            let backingSize = view.convertToBacking(view.bounds).size
+            XCTAssertEqual(bitmap.pixelsWide, Int(backingSize.width))
+            XCTAssertEqual(bitmap.pixelsHigh, Int(backingSize.height))
+        }
+    }
+
     func testApprovedBrandAssetsLoadAndMenuBarImageIsTemplateSized() throws {
         XCTAssertNotNil(NSImage(named: "ResenhaMark"))
         XCTAssertNotNil(NSImage(named: "ResenhaLockup"))
@@ -33,30 +158,27 @@ final class WhisperKeyTests: XCTestCase {
     }
 
     @MainActor
-    func testProductPreferencesPersistValidatedShortcutAndHUDChoice() {
+    func testProductPreferencesPersistHUDAndLocalChoices() {
         let suite = "ResenhaTests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suite)!
         defer { defaults.removePersistentDomain(forName: suite) }
         let preferences = ProductPreferences(defaults: defaults)
-        XCTAssertEqual(preferences.shortcut, .controlOptionSpace)
         XCTAssertTrue(preferences.showsHUD)
         XCTAssertTrue(preferences.soundsEnabled)
-        XCTAssertTrue(preferences.keepsHistory)
+        XCTAssertFalse(preferences.keepsHistory, "Transcript history must be opt-in on a clean install")
         XCTAssertEqual(preferences.transcriptionLanguage, .portuguese)
         XCTAssertTrue(preferences.transcriptionGlossary.contains("Resenha"))
         XCTAssertEqual(preferences.readySoundID, 60)
-        var changed: HotkeyShortcut?
-        preferences.onShortcutChange = { changed = $0 }
-        preferences.shortcut = .controlSpace
         preferences.showsHUD = false
         preferences.soundsEnabled = false
         preferences.keepsHistory = false
         preferences.transcriptionLanguage = .spanish
         preferences.transcriptionGlossary = "coisa = COESA"
         preferences.readySoundID = 3
-        XCTAssertEqual(changed, .controlSpace)
+        preferences.toggleFavorite(soundID: 3)
+        preferences.toggleFavorite(soundID: 60)
+        preferences.toggleFavorite(soundID: 999)
         let restored = ProductPreferences(defaults: defaults)
-        XCTAssertEqual(restored.shortcut, .controlSpace)
         XCTAssertFalse(restored.showsHUD)
         XCTAssertFalse(restored.soundsEnabled)
         XCTAssertFalse(restored.keepsHistory)
@@ -64,6 +186,62 @@ final class WhisperKeyTests: XCTestCase {
         XCTAssertEqual(restored.transcriptionGlossary, "coisa = COESA")
         XCTAssertEqual(restored.readySoundID, 3)
         XCTAssertEqual(restored.readySound.name, "Pum seco")
+        XCTAssertEqual(restored.favoriteSoundIDs, Set([3, 60]))
+        restored.toggleFavorite(soundID: 3)
+        XCTAssertEqual(restored.favoriteSoundIDs, Set([60]))
+    }
+
+    @MainActor
+    func testLegacyHistoryPrivacyMigrationIsOptInIdempotentAndRetriesFailure() throws {
+        let suite = "ResenhaHistoryMigration.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let preferences = ProductPreferences(defaults: defaults)
+        var attempts = 0
+
+        XCTAssertTrue(preferences.needsLegacyHistoryPrivacyMigration)
+        XCTAssertFalse(preferences.migrateLegacyHistoryIfNeeded {
+            attempts += 1
+            return false
+        })
+        XCTAssertTrue(preferences.needsLegacyHistoryPrivacyMigration)
+        XCTAssertEqual(attempts, 1)
+
+        XCTAssertTrue(preferences.migrateLegacyHistoryIfNeeded {
+            attempts += 1
+            return true
+        })
+        XCTAssertFalse(preferences.needsLegacyHistoryPrivacyMigration)
+        XCTAssertEqual(attempts, 2)
+        XCTAssertTrue(preferences.migrateLegacyHistoryIfNeeded {
+            attempts += 1
+            return false
+        })
+        XCTAssertEqual(attempts, 2, "Completed migration must never delete a later opt-in history")
+        XCTAssertFalse(ProductPreferences(defaults: defaults).needsLegacyHistoryPrivacyMigration)
+    }
+
+    @MainActor
+    func testExplicitLegacyHistoryPreferenceDoesNotTriggerMigration() throws {
+        let suite = "ResenhaHistoryExplicitPreference.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(true, forKey: "resenha.keepsHistory")
+        let preferences = ProductPreferences(defaults: defaults)
+        var cleared = false
+
+        XCTAssertFalse(preferences.needsLegacyHistoryPrivacyMigration)
+        XCTAssertTrue(preferences.migrateLegacyHistoryIfNeeded { cleared = true; return true })
+        XCTAssertFalse(cleared)
+        XCTAssertTrue(preferences.keepsHistory)
+    }
+
+    func testSoundSearchMatchesNameCategoryNumberAndDiacritics() {
+        XCTAssertEqual(ResenhaSoundCatalog.search("ressonancia").map(\.id), [60])
+        XCTAssertEqual(ResenhaSoundCatalog.search("angelicais").count, 10)
+        XCTAssertEqual(ResenhaSoundCatalog.search("05").map(\.id), [5])
+        XCTAssertEqual(ResenhaSoundCatalog.search("sino", in: .angelic).map(\.id), [62, 70])
+        XCTAssertEqual(ResenhaSoundCatalog.search("  ", in: .abstract).count, 10)
     }
 
     func testGlossaryBuildsPromptAndReplacesOnlyWholeTerms() {
@@ -150,16 +328,16 @@ final class WhisperKeyTests: XCTestCase {
         )
     }
 
-    func testWhisperPathsPreferTurboButRespectExplicitEnvironmentModel() throws {
+    func testWhisperPathsUseFixedStoreModelButRespectDebugEnvironmentModel() throws {
         let home = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         let models = home.appendingPathComponent("Library/Application Support/WhisperKey/Models")
         try FileManager.default.createDirectory(at: models, withIntermediateDirectories: true)
-        let turbo = models.appendingPathComponent("ggml-large-v3-turbo-q5_0.bin")
+        let starter = models.appendingPathComponent("ggml-small-q5_1.bin")
         let explicit = models.appendingPathComponent("custom.bin")
-        FileManager.default.createFile(atPath: turbo.path, contents: Data())
+        FileManager.default.createFile(atPath: starter.path, contents: Data())
         FileManager.default.createFile(atPath: explicit.path, contents: Data())
         defer { try? FileManager.default.removeItem(at: home) }
-        XCTAssertEqual(try WhisperPaths.resolve(environment: [:], home: home).model, turbo)
+        XCTAssertEqual(try WhisperPaths.resolve(environment: [:], home: home).model, starter)
         XCTAssertEqual(try WhisperPaths.resolve(environment: ["WHISPER_MODEL_PATH": explicit.path], home: home).model, explicit)
     }
 
@@ -264,12 +442,16 @@ final class WhisperKeyTests: XCTestCase {
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let preferences = ProductPreferences(defaults: defaults)
+        preferences.toggleFavorite(soundID: 60)
 
         for section in ProductSettingsSection.allCases {
             for (appearance, scheme) in [("light", ColorScheme.light), ("dark", ColorScheme.dark)] {
                 let view = NSHostingView(rootView: ProductSettingsView(
                     preferences: preferences,
-                    initialSection: section
+                    initialSection: section,
+                    soundPresentation: section == .sounds
+                        ? SoundLibraryPresentation(searchText: "ressonância")
+                        : .init()
                 ).environment(\.colorScheme, scheme))
                 view.frame = CGRect(x: 0, y: 0, width: 760, height: 560)
                 view.appearance = NSAppearance(named: scheme == .dark ? .darkAqua : .aqua)
@@ -279,6 +461,29 @@ final class WhisperKeyTests: XCTestCase {
                 let data = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
                 try data.write(to: directory.appendingPathComponent("settings-\(section.rawValue)-\(appearance).png"))
             }
+        }
+
+        let interactionStates: [(String, ProductSettingsSection, SoundLibraryPresentation)] = [
+            ("general", .general, .init()),
+            ("shortcut", .shortcut, .init()),
+            ("sounds-angelic", .sounds, .init(searchText: "angelicais")),
+            ("sounds-query", .sounds, .init(searchText: "ress")),
+            ("sounds-favorite", .sounds, .init(searchText: "ressonância")),
+            ("sounds-favorites-only", .sounds, .init(showsFavoritesOnly: true)),
+        ]
+        for (name, section, presentation) in interactionStates {
+            let view = NSHostingView(rootView: ProductSettingsView(
+                preferences: preferences,
+                initialSection: section,
+                soundPresentation: presentation
+            ).environment(\.colorScheme, .light))
+            view.frame = CGRect(x: 0, y: 0, width: 760, height: 560)
+            view.appearance = NSAppearance(named: .aqua)
+            view.layoutSubtreeIfNeeded()
+            let bitmap = try XCTUnwrap(view.bitmapImageRepForCachingDisplay(in: view.bounds))
+            view.cacheDisplay(in: view.bounds, to: bitmap)
+            let data = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
+            try data.write(to: directory.appendingPathComponent("settings-interaction-\(name).png"))
         }
     }
 
@@ -294,50 +499,251 @@ final class WhisperKeyTests: XCTestCase {
         }
     }
 
-    func testHotkeyPresetsHaveDistinctNamesAndSafeTriggers() {
-        XCTAssertEqual(Set(HotkeyShortcut.allCases.map(\.displayName)).count, HotkeyShortcut.allCases.count)
-        XCTAssertTrue(HotkeyShortcut.rightOption.isModifierOnly)
-        XCTAssertTrue(HotkeyShortcut.leftOption.isModifierOnly)
-        for shortcut in HotkeyShortcut.allCases where !shortcut.isModifierOnly {
-            XCTAssertEqual(shortcut.keyCode, 49)
-            XCTAssertFalse(shortcut.requiredFlags.isEmpty)
-        }
+    func testServiceShortcutUsesValidAppKitKeyEquivalentAndFreshBuild() throws {
+        let plist = try XCTUnwrap(Bundle.main.infoDictionary)
+        let services = try XCTUnwrap(plist["NSServices"] as? [[String: Any]])
+        let keyDictionary = try XCTUnwrap(services.first?["NSKeyEquivalent"] as? [String: String])
+        let keyEquivalent = try XCTUnwrap(keyDictionary["default"])
+        XCTAssertEqual(keyEquivalent, ResenhaServiceShortcut.keyEquivalent)
+        XCTAssertEqual(keyEquivalent.count, 1)
+        XCTAssertEqual(keyEquivalent, keyEquivalent.uppercased(), "Uppercase adds Shift to AppKit's required Command modifier")
+        XCTAssertNotEqual(ResenhaServiceShortcut.displayName, "Control + Option + Espaço")
+        XCTAssertEqual(plist["CFBundleVersion"] as? String, "2", "Submitted build 1 must never be rebuilt")
+        XCTAssertEqual(plist["CFBundleShortVersionString"] as? String, "1.0.0")
+        XCTAssertEqual(plist["ResenhaSourceCommit"] as? String, "DEVELOPMENT",
+            "Development builds are explicit and cannot masquerade as release archives")
     }
 
-    func testHotkeyMatchingRejectsExtraModifiersAndInterruptionReleasesLatch() {
-        XCTAssertEqual(HotkeyShortcut.controlSpace.isPressed(
-            eventType: .keyDown, keyCode: 49, flags: .maskControl
-        ), true)
-        XCTAssertEqual(HotkeyShortcut.controlSpace.isPressed(
-            eventType: .keyDown, keyCode: 49, flags: [.maskControl, .maskAlternate]
-        ), false)
-        XCTAssertEqual(HotkeyShortcut.controlSpace.isPressed(
-            eventType: .keyUp, keyCode: 49, flags: .maskControl
-        ), false)
-        XCTAssertNil(HotkeyShortcut.controlSpace.isPressed(
-            eventType: .keyDown, keyCode: 12, flags: .maskControl
-        ))
-        XCTAssertEqual(HotkeyShortcut.rightOption.isPressed(
-            eventType: .flagsChanged, keyCode: 61, flags: .maskAlternate, modifierKeyDown: true
-        ), true)
-        XCTAssertEqual(HotkeyShortcut.rightOption.isPressed(
-            eventType: .flagsChanged, keyCode: 61, flags: .maskAlternate, modifierKeyDown: false
-        ), false)
+    func testServiceReleaseLatchCompletesOnlyForItsArmedKey() {
+        var latch = ServiceReleaseLatch()
+        latch.noteKeyDown(0)
+        latch.noteKeyDown(14)
+        XCTAssertTrue(latch.arm(pressedKeyCodes: [0, 14]))
+        XCTAssertEqual(latch.keyCode, 14, "The most recent held key invoked the Service")
+        XCTAssertFalse(latch.arm(pressedKeyCodes: [49]))
+        XCTAssertFalse(latch.consume(eventType: .keyUp, keyCode: 49))
+        XCTAssertEqual(latch.keyCode, 14)
+        XCTAssertFalse(latch.consume(eventType: .keyDown, keyCode: 14))
+        XCTAssertTrue(latch.consume(eventType: .keyUp, keyCode: 14))
+        XCTAssertNil(latch.keyCode)
+        XCTAssertFalse(latch.consume(eventType: .keyUp, keyCode: 14))
+        XCTAssertFalse(latch.interrupt())
 
-        var latch = HotkeyLatch()
-        XCTAssertEqual(latch.update(true), .pressed)
-        XCTAssertNil(latch.update(true))
-        XCTAssertEqual(latch.interrupt(), .released)
-        XCTAssertFalse(latch.isPressed)
-        XCTAssertNil(latch.interrupt())
+        var ambiguous = ServiceReleaseLatch()
+        XCTAssertFalse(ambiguous.arm(pressedKeyCodes: [0, 14]), "Multiple keys without an observed key-down are unsafe")
+        ambiguous.noteKeyDown(2)
+        XCTAssertTrue(ambiguous.arm(pressedKeyCodes: [0, 2, 14]))
+        XCTAssertEqual(ambiguous.keyCode, 2, "A customized Service key is selected without a hard-coded E keycode")
+
+        var stale = ServiceReleaseLatch()
+        stale.noteKeyDown(14, at: 10)
+        stale.expireRecentKey(at: 10.5)
+        XCTAssertEqual(stale.mostRecentKeyDown?.keyCode, 14)
+        stale.expireRecentKey(at: 10 + ServiceReleaseLatch.recentKeyWindow)
+        XCTAssertNil(stale.mostRecentKeyDown)
+        stale.noteKeyDown(14, at: 10)
+        XCTAssertFalse(stale.arm(pressedKeyCodes: [0, 14], at: 10 + ServiceReleaseLatch.recentKeyWindow + 0.001))
+        stale.noteKeyDown(14, at: 20)
+        XCTAssertTrue(stale.arm(pressedKeyCodes: [0, 14], at: 20.5))
     }
 
     @MainActor
-    func testAppConfiguresBothGlobalHotkeyEdges() {
+    func testAppConfiguresServiceReleaseWithoutDirectPressRoute() {
         let app = AppDelegate()
         XCTAssertFalse(app.isHotkeyRoutingConfigured)
         app.configureHotkeyRouting()
         XCTAssertTrue(app.isHotkeyRoutingConfigured)
+    }
+
+    @MainActor
+    func testSelfTargetServiceAdmissionRejectsAndNextExternalRequestSucceeds() async {
+        let hotkey = HotkeyMonitor()
+        var startAttempts = 0
+        let app = AppDelegate(hotkey: hotkey, verifiedModelURL: {
+            URL(fileURLWithPath: "/verified/model.bin")
+        }) {
+            startAttempts += 1
+            return true
+        }
+        app.configureHotkeyRouting()
+        let routedRelease = hotkey.onRelease
+        let releaseDelivered = expectation(description: "matching release reaches AppDelegate")
+        hotkey.onRelease = {
+            routedRelease?()
+            releaseDelivered.fulfill()
+        }
+
+        hotkey.process(eventType: .keyDown, keyCode: 14)
+        XCTAssertFalse(app.beginServiceDictation(pressedKeyCodes: [14], targetIsSelf: true))
+        XCTAssertFalse(app.interaction.isPressed)
+        XCTAssertEqual(startAttempts, 0, "A self-originated request must not reach capture")
+
+        hotkey.process(eventType: .keyUp, keyCode: 14)
+        hotkey.process(eventType: .keyDown, keyCode: 14)
+        XCTAssertTrue(app.beginServiceDictation(pressedKeyCodes: [14], targetIsSelf: false))
+        XCTAssertTrue(app.interaction.isPressed)
+        XCTAssertEqual(startAttempts, 1)
+        hotkey.process(eventType: .keyUp, keyCode: 14)
+        await fulfillment(of: [releaseDelivered], timeout: 0.5)
+        XCTAssertFalse(app.interaction.isPressed)
+    }
+
+    @MainActor
+    func testServiceRequestRejectsThenRecoversThroughAppAdmissionAndExactRelease() {
+        let hotkey = HotkeyMonitor()
+        var startAttempts = 0
+        let app = AppDelegate(hotkey: hotkey, verifiedModelURL: {
+            URL(fileURLWithPath: "/verified/model.bin")
+        }) {
+            startAttempts += 1
+            return startAttempts > 1
+        }
+        app.configureHotkeyRouting()
+        let provider = ResenhaServiceProvider(timing: .init(timeout: 0.5, pollInterval: 0.002))
+        var unrelatedReleasePreservedPress = false
+        provider.beginDictation = {
+            let started = app.beginServiceDictation(pressedKeyCodes: [0, 14], targetIsSelf: false)
+            if started {
+                DispatchQueue.main.async {
+                    hotkey.process(eventType: .keyUp, keyCode: 0)
+                    unrelatedReleasePreservedPress = app.interaction.isPressed
+                    hotkey.process(eventType: .keyUp, keyCode: 14)
+                    DispatchQueue.main.async { provider.complete(with: "recuperado") }
+                }
+            }
+            return started
+        }
+
+        hotkey.process(eventType: .keyDown, keyCode: 0)
+        hotkey.process(eventType: .keyDown, keyCode: 14)
+        let rejected = NSPasteboard(name: .init("ResenhaServiceRejected.\(UUID().uuidString)"))
+        defer { rejected.releaseGlobally() }
+        var rejectedError: NSString?
+        provider.dictate(rejected, userData: nil, error: &rejectedError)
+        XCTAssertNotNil(rejectedError)
+        XCTAssertFalse(app.interaction.isPressed, "A rejected admission must roll back before the next request")
+        XCTAssertFalse(provider.isServing)
+
+        hotkey.process(eventType: .keyUp, keyCode: 14)
+        hotkey.process(eventType: .keyDown, keyCode: 14)
+        let recovered = NSPasteboard(name: .init("ResenhaServiceAppRecovery.\(UUID().uuidString)"))
+        defer { recovered.releaseGlobally() }
+        var recoveryError: NSString?
+        provider.dictate(recovered, userData: nil, error: &recoveryError)
+        XCTAssertNil(recoveryError)
+        XCTAssertEqual(recovered.string(forType: .string), "recuperado")
+        XCTAssertTrue(unrelatedReleasePreservedPress)
+        XCTAssertFalse(app.interaction.isPressed)
+        XCTAssertEqual(startAttempts, 2)
+    }
+
+    @MainActor
+    func testServiceProviderReturnsTranscriptToRealTextView() throws {
+        let provider = ResenhaServiceProvider(timing: .init(timeout: 0.5, pollInterval: 0.002))
+        let pasteboard = NSPasteboard(name: .init("ResenhaServiceTests.\(UUID().uuidString)"))
+        defer { pasteboard.releaseGlobally() }
+        provider.beginDictation = {
+            DispatchQueue.main.async { provider.complete(with: "texto inserido") }
+            return true
+        }
+        var serviceError: NSString?
+        provider.dictate(pasteboard, userData: nil, error: &serviceError)
+        XCTAssertNil(serviceError)
+
+        let textView = NSTextView(frame: .zero)
+        textView.string = "antes depois"
+        textView.setSelectedRange(NSRange(location: 6, length: 0))
+        XCTAssertTrue(textView.readSelection(from: pasteboard))
+        XCTAssertEqual(textView.string, "antes texto inseridodepois")
+        XCTAssertFalse(provider.isServing)
+    }
+
+    @MainActor
+    func testServiceProviderTimeoutEmptyAndRecoveryLeaveNoPlaceholder() {
+        let provider = ResenhaServiceProvider(timing: .init(timeout: 0.02, pollInterval: 0.002))
+        var timeoutCancellationCount = 0
+        provider.cancelDictation = { timeoutCancellationCount += 1 }
+        provider.complete(with: "resultado sem requisição")
+        provider.beginDictation = { true }
+
+        let timedOut = NSPasteboard(name: .init("ResenhaServiceTimeout.\(UUID().uuidString)"))
+        defer { timedOut.releaseGlobally() }
+        var timeoutError: NSString?
+        provider.dictate(timedOut, userData: nil, error: &timeoutError)
+        XCTAssertNotNil(timeoutError)
+        XCTAssertNil(timedOut.string(forType: .string))
+        XCTAssertFalse(provider.isServing)
+        XCTAssertEqual(timeoutCancellationCount, 1)
+
+        let empty = NSPasteboard(name: .init("ResenhaServiceEmpty.\(UUID().uuidString)"))
+        defer { empty.releaseGlobally() }
+        provider.beginDictation = {
+            DispatchQueue.main.async { provider.complete(with: " \n ") }
+            return true
+        }
+        var emptyError: NSString?
+        provider.dictate(empty, userData: nil, error: &emptyError)
+        XCTAssertNotNil(emptyError)
+        XCTAssertNil(empty.string(forType: .string))
+
+        let cancelled = NSPasteboard(name: .init("ResenhaServiceCancelled.\(UUID().uuidString)"))
+        defer { cancelled.releaseGlobally() }
+        provider.beginDictation = {
+            DispatchQueue.main.async { provider.fail(with: "Ditado cancelado.") }
+            return true
+        }
+        var cancellationError: NSString?
+        provider.dictate(cancelled, userData: nil, error: &cancellationError)
+        XCTAssertEqual(cancellationError, "Ditado cancelado.")
+        XCTAssertNil(cancelled.string(forType: .string))
+
+        let recovered = NSPasteboard(name: .init("ResenhaServiceRecovery.\(UUID().uuidString)"))
+        defer { recovered.releaseGlobally() }
+        provider.beginDictation = {
+            DispatchQueue.main.async { provider.complete(with: "próxima tentativa") }
+            return true
+        }
+        var recoveryError: NSString?
+        provider.dictate(recovered, userData: nil, error: &recoveryError)
+        XCTAssertNil(recoveryError)
+        XCTAssertEqual(recovered.string(forType: .string), "próxima tentativa")
+        XCTAssertFalse(provider.isServing)
+    }
+
+    @MainActor
+    func testServiceTimeoutUsesMonotonicClockAcrossBackwardForwardAndExactBoundary() {
+        final class Clock: @unchecked Sendable {
+            private let lock = NSLock()
+            private var values: [TimeInterval] = [100, 105, 90, 109.999, 110, 1_000]
+            func read() -> TimeInterval {
+                lock.withLock { values.isEmpty ? 1_000 : values.removeFirst() }
+            }
+        }
+        let clock = Clock()
+        let provider = ResenhaServiceProvider(timing: .init(
+            timeout: 10,
+            pollInterval: 0.001,
+            uptime: { clock.read() }
+        ))
+        var cancellations = 0
+        provider.beginDictation = { true }
+        provider.cancelDictation = { cancellations += 1 }
+        let pasteboard = NSPasteboard(name: .init("ResenhaMonotonicTimeout.\(UUID().uuidString)"))
+        defer { pasteboard.releaseGlobally() }
+        var serviceError: NSString?
+
+        provider.dictate(pasteboard, userData: nil, error: &serviceError)
+
+        XCTAssertEqual(cancellations, 1)
+        XCTAssertEqual(serviceError, "O ditado excedeu o tempo máximo do Serviço.")
+        XCTAssertFalse(provider.isServing)
+
+        var deadline = MonotonicDeadline(duration: 10, startedAt: 100)
+        XCTAssertEqual(deadline.remaining(at: 105), 5)
+        XCTAssertEqual(deadline.remaining(at: 90), 5, "A backward jump must not extend the budget")
+        XCTAssertFalse(deadline.hasExpired(at: 109.999))
+        XCTAssertTrue(deadline.hasExpired(at: 110), "The exact boundary is expired")
+        XCTAssertTrue(deadline.hasExpired(at: 1_000), "A forward jump remains expired")
     }
 
     func testStaleAudioCleanupKeepsFreshAndUnrelatedFiles() throws {
@@ -397,7 +803,7 @@ final class WhisperKeyTests: XCTestCase {
         controller.show()
         XCTAssertTrue(first === controller.window)
         XCTAssertTrue(first.styleMask.contains(.resizable))
-        XCTAssertEqual(first.minSize, NSSize(width: 700, height: 500))
+        XCTAssertEqual(first.minSize, NSSize(width: 720, height: 500))
         first.orderOut(nil)
     }
 
@@ -417,6 +823,8 @@ final class WhisperKeyTests: XCTestCase {
         let first = try XCTUnwrap(controller.window)
         controller.show(snapshot: blocked, isRequesting: true)
         XCTAssertTrue(first === controller.window)
+        XCTAssertTrue(first.styleMask.contains(.resizable))
+        XCTAssertEqual(first.contentMinSize, NSSize(width: 620, height: 480))
         controller.close()
         XCTAssertFalse(first.isVisible)
     }
@@ -500,16 +908,15 @@ final class WhisperKeyTests: XCTestCase {
             "Atalho global indisponível")
     }
 
-    func testRejectedMenuRequestAndSelfPressRequiresFreshRelease() {
+    func testRejectedMenuRequestAndSelfPressRollBackAdmission() {
         for blocker in 0..<3 {
             var interaction = DictationInteraction()
             interaction.openMenuCount = blocker == 0 ? 2 : 0
             interaction.isRequestingPermission = blocker == 1
             XCTAssertFalse(interaction.press(phase: .idle, targetIsSelf: blocker == 2))
+            XCTAssertFalse(interaction.isPressed)
             interaction.openMenuCount = 0
             interaction.isRequestingPermission = false
-            XCTAssertFalse(interaction.press(phase: .idle, targetIsSelf: false), "Closing a guard must not replay a held press")
-            interaction.release()
             XCTAssertTrue(interaction.press(phase: .idle, targetIsSelf: false))
             interaction.release()
         }
@@ -517,7 +924,11 @@ final class WhisperKeyTests: XCTestCase {
 
     @MainActor
     func testActiveRecordingReleaseSurvivesMenuAndRequestGuards() {
-        let app = AppDelegate()
+        let app = AppDelegate(
+            hotkey: HotkeyMonitor(),
+            verifiedModelURL: { URL(fileURLWithPath: "/verified/model.bin") },
+            serviceStartOverride: nil
+        )
         let root = NSMenu()
         let submenu = NSMenu()
         let panel = FloatingPanelController()
@@ -531,8 +942,9 @@ final class WhisperKeyTests: XCTestCase {
         app.menuDidClose(submenu)
         app.menuDidClose(root)
         app.handleHotkeyPress(targetIsSelf: false)
-        XCTAssertEqual(coordinator.phase, .idle, "Closing the native menu does not replay its rejected press")
-        app.handleHotkeyRelease()
+        XCTAssertEqual(coordinator.phase, .failed, "A fresh invocation after closing the menu reaches coordinator admission")
+        XCTAssertFalse(app.interaction.isPressed, "A coordinator start failure rolls admission back")
+        coordinator.cancel()
         coordinator.transition(to: .recording)
         app.menuWillOpen(root)
         app.handleHotkeyRelease()
@@ -793,6 +1205,35 @@ final class WhisperKeyTests: XCTestCase {
         XCTAssertNil(PanelPlacement.screen(for: nil, screens: [], fallbackID: nil))
     }
 
+    func testTargetWindowResolverChoosesFrontmostUsableWindowAndConvertsCoordinates() {
+        let candidates = [
+            TargetWindowCandidate(ownerPID: 42, layer: 1, isOnscreen: true,
+                                  quartzFrame: CGRect(x: 10, y: 10, width: 900, height: 700), order: 0),
+            TargetWindowCandidate(ownerPID: 99, layer: 0, isOnscreen: true,
+                                  quartzFrame: CGRect(x: 20, y: 30, width: 800, height: 600), order: 1),
+            TargetWindowCandidate(ownerPID: 42, layer: 0, isOnscreen: true,
+                                  quartzFrame: CGRect(x: -1200, y: 100, width: 1000, height: 700), order: 2),
+            TargetWindowCandidate(ownerPID: 42, layer: 0, isOnscreen: true,
+                                  quartzFrame: CGRect(x: 40, y: 40, width: 1200, height: 800), order: 3)
+        ]
+        XCTAssertEqual(
+            TargetWindowResolver.frame(for: 42, candidates: candidates, primaryScreenTop: 1080),
+            CGRect(x: -1200, y: 280, width: 1000, height: 700)
+        )
+    }
+
+    func testTargetWindowResolverRejectsHiddenTinyAndForeignWindows() {
+        let candidates = [
+            TargetWindowCandidate(ownerPID: 42, layer: 0, isOnscreen: false,
+                                  quartzFrame: CGRect(x: 0, y: 0, width: 900, height: 700), order: 0),
+            TargetWindowCandidate(ownerPID: 42, layer: 0, isOnscreen: true,
+                                  quartzFrame: CGRect(x: 0, y: 0, width: 20, height: 20), order: 1),
+            TargetWindowCandidate(ownerPID: 7, layer: 0, isOnscreen: true,
+                                  quartzFrame: CGRect(x: 0, y: 0, width: 900, height: 700), order: 2)
+        ]
+        XCTAssertNil(TargetWindowResolver.frame(for: 42, candidates: candidates, primaryScreenTop: 1080))
+    }
+
     func testPanelClampsAllEdgesWithNegativeAndSmallVisibleFrames() {
         for visible in [CGRect(x: -1440, y: -900, width: 1440, height: 850), CGRect(x: -80, y: 20, width: 150, height: 90)] {
             for size in [CGSize(width: 280, height: 64), CGSize(width: 360, height: 104)] {
@@ -884,15 +1325,11 @@ final class WhisperKeyTests: XCTestCase {
             throw XCTSkip("Local Whisper model is not installed")
         }
 
-        let repository = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        let fixture = repository.appendingPathComponent("Vendor/whisper.cpp/samples/jfk.wav")
-        XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.path))
+        let fixture = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "jfk", withExtension: "wav"))
 
         let transcript = try WhisperTranscriber().transcribe(
             audioURL: fixture,
+            modelURL: model,
             language: .english,
             glossaryText: ""
         ).lowercased()
@@ -901,18 +1338,249 @@ final class WhisperKeyTests: XCTestCase {
         XCTAssertTrue(transcript.contains("country"), transcript)
     }
 
-    func testWhisperRuntimePolicyHasAnExactBound() {
-        let startedAt = Date(timeIntervalSinceReferenceDate: 100)
-        XCTAssertFalse(WhisperRuntimePolicy.hasTimedOut(
-            startedAt: startedAt,
-            now: Date(timeIntervalSinceReferenceDate: 699.999),
-            maximumRuntime: 600
-        ))
-        XCTAssertTrue(WhisperRuntimePolicy.hasTimedOut(
-            startedAt: startedAt,
-            now: Date(timeIntervalSinceReferenceDate: 700),
-            maximumRuntime: 600
-        ))
+    func testRuntimeBudgetsAreBoundedInsideServiceTimeout() {
+        XCTAssertEqual(ResenhaRuntimeLimits.maximumRecordingDuration, 300)
+        XCTAssertEqual(ResenhaRuntimeLimits.maximumInferenceDuration, 270)
+        XCTAssertEqual(ResenhaRuntimeLimits.serviceTimeout, 600)
+        XCTAssertTrue(ResenhaRuntimeLimits.serviceBudgetIsValid)
+    }
+
+    func testWhisperCancellationTokenUsesMonotonicExactDeadlineAndCancellationWins() {
+        final class Clock: @unchecked Sendable {
+            private let lock = NSLock()
+            private var value: TimeInterval = 100
+            func read() -> TimeInterval { lock.withLock { value } }
+            func set(_ value: TimeInterval) { lock.withLock { self.value = value } }
+        }
+        let clock = Clock()
+        let token = WhisperCancellationToken(maximumRuntime: 10, startedAt: 100) { clock.read() }
+        XCTAssertNil(token.abortReason())
+        clock.set(109.999)
+        XCTAssertNil(token.abortReason())
+        clock.set(110)
+        XCTAssertEqual(token.abortReason(), .timedOut)
+
+        let cancelled = WhisperCancellationToken(maximumRuntime: 10, startedAt: 100) { clock.read() }
+        cancelled.cancel()
+        XCTAssertEqual(cancelled.abortReason(), .cancelled)
+        XCTAssertEqual(cancelled.abortReason(taskIsCancelled: true), .cancelled)
+    }
+
+    func testWhisperContextUnloadGateRejectsStaleIdleCallbacks() {
+        var gate = WhisperContextUnloadGate()
+        gate.beginUse()
+        let obsolete = gate.scheduleUnload()
+        XCTAssertTrue(gate.permitsUnload(generation: obsolete))
+
+        gate.beginUse()
+        XCTAssertFalse(gate.permitsUnload(generation: obsolete), "A new inference invalidates the old idle callback")
+        let current = gate.scheduleUnload()
+        XCTAssertTrue(gate.permitsUnload(generation: current))
+        gate.invalidate()
+        XCTAssertFalse(gate.permitsUnload(generation: current), "Memory-pressure release invalidates queued idle work")
+    }
+
+    func testWhisperEngineIdleUnloadRejectsStaleCallbackAndReleasesActualContext() throws {
+        let probe = WhisperLifecycleProbe()
+        let engine = EmbeddedWhisperEngine(
+            idleLifetime: 0.10,
+            monitorsMemoryPressure: false,
+            contextLoader: { probe.load(path: $0) },
+            contextReleaser: { probe.release($0) }
+        )
+        let model = URL(fileURLWithPath: "/tmp/resenha-test-model.bin")
+        try engine.withContext(model: model) { _ in }
+        Thread.sleep(forTimeInterval: 0.06)
+        try engine.withContext(model: model) { _ in }
+        Thread.sleep(forTimeInterval: 0.06)
+
+        XCTAssertTrue(engine.lifecycleSnapshot.hasContext)
+        XCTAssertEqual(probe.snapshot.loads, 1)
+        XCTAssertEqual(probe.snapshot.releases, 0, "The first queued idle callback must be stale")
+
+        let unloaded = expectation(description: "current idle deadline releases the context")
+        DispatchQueue.global().asyncAfter(deadline: .now() + 0.08) { unloaded.fulfill() }
+        wait(for: [unloaded], timeout: 0.5)
+        XCTAssertFalse(engine.lifecycleSnapshot.hasContext)
+        XCTAssertEqual(probe.snapshot.releases, 1)
+    }
+
+    func testWhisperEngineMemoryPressureWaitsForInferenceBeforeRelease() throws {
+        let probe = WhisperLifecycleProbe()
+        let engine = EmbeddedWhisperEngine(
+            idleLifetime: 60,
+            monitorsMemoryPressure: false,
+            contextLoader: { probe.load(path: $0) },
+            contextReleaser: { probe.release($0) }
+        )
+        let model = URL(fileURLWithPath: "/tmp/resenha-test-model.bin")
+        let entered = DispatchSemaphore(value: 0)
+        let mayFinish = DispatchSemaphore(value: 0)
+        let inferenceDone = expectation(description: "inference completed")
+        let pressureDone = expectation(description: "memory pressure completed")
+
+        DispatchQueue.global().async {
+            defer { inferenceDone.fulfill() }
+            try? engine.withContext(model: model) { _ in
+                entered.signal()
+                _ = mayFinish.wait(timeout: .now() + 1)
+            }
+        }
+        XCTAssertEqual(entered.wait(timeout: .now() + 0.5), .success)
+        DispatchQueue.global().async {
+            engine.handleMemoryPressure()
+            pressureDone.fulfill()
+        }
+        Thread.sleep(forTimeInterval: 0.02)
+        XCTAssertEqual(probe.snapshot.releases, 0, "Pressure must not free a context in active use")
+        mayFinish.signal()
+
+        wait(for: [inferenceDone, pressureDone], timeout: 1)
+        XCTAssertEqual(probe.snapshot.releases, 1)
+        XCTAssertFalse(engine.lifecycleSnapshot.hasContext)
+    }
+
+    func testWhisperEngineSerializesConcurrentContextUses() throws {
+        let probe = WhisperLifecycleProbe()
+        let engine = EmbeddedWhisperEngine(
+            idleLifetime: 60,
+            monitorsMemoryPressure: false,
+            contextLoader: { probe.load(path: $0) },
+            contextReleaser: { probe.release($0) }
+        )
+        let model = URL(fileURLWithPath: "/tmp/resenha-test-model.bin")
+        let completed = expectation(description: "both context uses completed")
+        completed.expectedFulfillmentCount = 2
+
+        for _ in 0..<2 {
+            DispatchQueue.global().async {
+                defer { completed.fulfill() }
+                try? engine.withContext(model: model) { _ in
+                    probe.beginUse()
+                    Thread.sleep(forTimeInterval: 0.03)
+                    probe.endUse()
+                }
+            }
+        }
+
+        wait(for: [completed], timeout: 1)
+        XCTAssertEqual(probe.snapshot.loads, 1)
+        XCTAssertEqual(probe.snapshot.maximumConcurrentUses, 1)
+    }
+
+    func testWhisperFullHonorsCooperativeAbortCallback() throws {
+        let fixture = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "jfk", withExtension: "wav"))
+        let token = WhisperCancellationToken(maximumRuntime: 30)
+        token.cancel()
+
+        let model = try localWhisperTestModel()
+        XCTAssertThrowsError(try WhisperTranscriber().transcribe(
+            audioURL: fixture,
+            modelURL: model,
+            language: .english,
+            glossaryText: "",
+            cancellationToken: token
+        )) { error in
+            XCTAssertTrue(error is CancellationError, "Expected cooperative cancellation, got \(error)")
+        }
+    }
+
+    func testWhisperFullHonorsDeadlineInsideInference() throws {
+        let fixture = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "jfk", withExtension: "wav"))
+        let token = WhisperCancellationToken(maximumRuntime: 0)
+
+        let model = try localWhisperTestModel()
+        XCTAssertThrowsError(try WhisperTranscriber().transcribe(
+            audioURL: fixture,
+            modelURL: model,
+            language: .english,
+            glossaryText: "",
+            cancellationToken: token
+        )) { error in
+            guard case WhisperError.timedOut = error else {
+                return XCTFail("Expected cooperative timeout, got \(error)")
+            }
+        }
+    }
+
+    @MainActor
+    func testTapInterruptionCancelsArmedReleaseInsteadOfCompletingIt() async {
+        let hotkey = HotkeyMonitor()
+        let interrupted = expectation(description: "tap interruption is routed separately")
+        var releases = 0
+        hotkey.onRelease = { releases += 1 }
+        hotkey.onInterruption = { interrupted.fulfill() }
+        hotkey.process(eventType: .keyDown, keyCode: 14)
+        XCTAssertTrue(hotkey.armServiceRelease(pressedKeyCodes: [14]))
+
+        hotkey.process(eventType: .tapDisabledByTimeout, keyCode: 0)
+
+        await fulfillment(of: [interrupted], timeout: 0.5)
+        XCTAssertEqual(releases, 0)
+        XCTAssertFalse(hotkey.interruptServiceRelease())
+    }
+
+    @MainActor
+    func testSystemInterruptionTerminatesRecordingState() {
+        let hotkey = HotkeyMonitor()
+        let app = AppDelegate(hotkey: hotkey, verifiedModelURL: {
+            URL(fileURLWithPath: "/verified/model.bin")
+        }) { true }
+        let coordinator = DictationCoordinator(permissions: PermissionService(), panel: FloatingPanelController())
+        app.observeCoordinator(coordinator)
+        app.configureHotkeyRouting()
+        coordinator.transition(to: .recording)
+
+        app.handleRuntimeInterruption()
+
+        XCTAssertEqual(coordinator.phase, .failed)
+        XCTAssertEqual(coordinator.currentError?.title, "Ditado interrompido pelo sistema")
+        XCTAssertFalse(app.interaction.isPressed)
+        coordinator.cancel()
+    }
+
+    @MainActor
+    func testRecordingDeadlineCannotLeaveCoordinatorRecording() {
+        let coordinator = DictationCoordinator(permissions: PermissionService(), panel: FloatingPanelController())
+        coordinator.transition(to: .recording)
+
+        coordinator.recordingDeadlineReached()
+
+        XCTAssertNotEqual(coordinator.phase, .recording)
+        XCTAssertEqual(coordinator.phase, .failed, "A synthetic deadline without an audio file still terminates safely")
+        coordinator.cancel()
+    }
+
+    @MainActor
+    func testRecordingDeadlineWithoutKeyUpAllowsNextServiceStart() {
+        let hotkey = HotkeyMonitor()
+        var startAttempts = 0
+        let app = AppDelegate(hotkey: hotkey, verifiedModelURL: {
+            URL(fileURLWithPath: "/verified/model.bin")
+        }) {
+            startAttempts += 1
+            return true
+        }
+        let coordinator = DictationCoordinator(
+            permissions: PermissionService(),
+            panel: FloatingPanelController()
+        )
+        app.observeCoordinator(coordinator)
+        app.configureHotkeyRouting()
+
+        hotkey.process(eventType: .keyDown, keyCode: 14)
+        XCTAssertTrue(app.beginServiceDictation(pressedKeyCodes: [14], targetIsSelf: false))
+        XCTAssertTrue(app.interaction.isPressed)
+
+        coordinator.onRecordingDeadline?()
+
+        XCTAssertFalse(app.interaction.isPressed)
+        XCTAssertFalse(hotkey.interruptServiceRelease(), "The deadline terminal edge must disarm the old release")
+        hotkey.process(eventType: .keyDown, keyCode: 14)
+        XCTAssertTrue(app.beginServiceDictation(pressedKeyCodes: [14], targetIsSelf: false))
+        XCTAssertTrue(app.interaction.isPressed)
+        XCTAssertEqual(startAttempts, 2)
+        coordinator.onRecordingDeadline?()
     }
 
     @MainActor

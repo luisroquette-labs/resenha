@@ -4,7 +4,10 @@
 
 - App Privacy answer: Data Not Collected, provided the final binary has no analytics, network transcription, account, crash SDK or remote logging.
 - Microphone audio is processed on-device and deleted after each attempt.
-- Transcript history is local, optional, limited and clearable.
+- Transcript history is local, disabled on clean install, explicitly opt-in, limited and clearable.
+- **Limpar textos** removes the canonical history and every sibling quarantine named
+  `recent-transcripts.corrupt-*.json`; every matching deletion is attempted even if
+  another fails, and any incomplete sweep is reported as unavailable storage.
 - Privacy policy explains microphone, Input Monitoring, clipboard recovery, local storage and model delivery.
 - A valid `PrivacyInfo.xcprivacy` ships in `Contents/Resources`; required-reason APIs are audited on the archived binary.
 
@@ -22,11 +25,13 @@
 - Validate/upload, then verify build processing and TestFlight install before submission.
 - Show the owner the exact binary build, locales, price, territories, privacy answers, review notes and release mode before the final Submit for Review action.
 - Prefer manual release after approval for version 1.0, allowing one final product-page verification.
+- A build archived before its source fix is ineligible even when App Store Connect accepts it. Record submitted and candidate identities in `AppStore/release-state.json`; replacing, withdrawing, submitting or changing release mode requires explicit owner approval.
 - Monitor processing, review and release until terminal state; record every rejection/resolution.
 
 ## Acceptance
 
 - `PRIVACY-001`: static scan and runtime observation find no network request during dictation.
 - `PRIVACY-002`: privacy manifest validates and appears in the archive.
+- `PRIVACY-003`: clearing history leaves no canonical or quarantined transcript file.
 - `REVIEW-001`: TestFlight build reproduces `STORE-001` on a clean account/device state.
 - `RELEASE-001`: App Store public URL resolves to the approved version and installation succeeds.

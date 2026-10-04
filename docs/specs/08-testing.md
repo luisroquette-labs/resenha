@@ -17,7 +17,13 @@ Brand resonance uses the existing microphone samples. Unit checks verify bounded
 - Transcript normalization trims whitespace and rejects non-speech-only output.
 - Every completed transcript is staged on the clipboard and returned through the Service pasteboard.
 
-All local test/build commands run through `~/.local/bin/mac-gate` and use `-derivedDataPath build`, so tests and manual launch share one signed app bundle.
+All local test/build commands run through `~/.local/bin/mac-gate`. Debug/test uses bundle `br.com.luisroquette.Resenha.Debug`, product `Resenha Dev` and its own sandbox container. Release alone uses `br.com.luisroquette.Resenha`. The test host must run while `/Applications/Resenha.app` remains open; changing the bundle identifier on the command line is forbidden because isolation belongs to versioned build configuration.
+
+Product preference tests prove that a clean suite starts with transcript history disabled,
+sound favorites survive recreation and search matches names, categories, numbers and
+diacritic-insensitive text. Site tests parse canonical/Open Graph/Twitter/schema metadata,
+require lazy loading on the six gallery images and sample every published MP4 at 4 fps;
+every sample must have a distinct frame hash, exact dimensions/frame rate and no audio track.
 
 Interface checks cover current-generation/deadline dismissal, obsolete callbacks, repeated hotkey-start failure feedback, menu/request/self-target guards with unconditional recording release, partial permission changes, Settings failure guidance, safe errors, negative display coordinates/fallback/disconnection, panel layout and accessible copy. These deterministic checks do not prove hardware/TCC/caret behavior.
 
@@ -37,7 +43,11 @@ Record date, commit (or source/binary fingerprints when HEAD does not exist), ma
 
 Record native focus/click-through, ready-to-recording overlap, menu-open active release, permission request/recovery, keyboard/VoiceOver, long errors, display/Spaces/full-screen and supported appearance observations in `docs/testing/UI-REFINEMENT-EVIDENCE.md`. Use PASS/FAIL/NOT RUN and identify evidence type. Connected screens alone do not establish display behavior; a CUA timeout is a tool limitation, not an app pass or defect.
 
-Reuse an exact unchanged passing gate for prose-only changes. Code changes require the canonical mac-gate command. Quit the exact stable instance before testing if LaunchServices prevents test-runner launch; never create a second Derived Data identity to bypass it.
+Reuse an exact unchanged passing gate for prose-only changes. Code changes require the canonical mac-gate command. Keep the installed Release app open during the isolation gate. Test-generated Debug registrations may be unregistered by exact resolved path; never delete an app, worktree, archive or production registration as cleanup.
+
+The release-package validator derives version/build from `project.yml`, the archive and
+`AppStore/release-state.json`. It rejects any mismatch and is itself checked with a
+deliberately divergent candidate-version fixture; no submitted build number is hardcoded.
 
 ## Exit criteria
 

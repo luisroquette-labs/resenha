@@ -60,39 +60,61 @@ struct RecordingMeter: Equatable {
 struct RecordingWaveformView: View {
     let meter: RecordingMeter
     var fixtureReduceMotion: Bool? = nil
+    var accessibilityLayout = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        HStack(spacing: 10) {
-            resonatingMark
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 5) {
-                    Circle().fill(ResenhaTheme.signal).frame(width: 7, height: 7)
-                    Text("Ouvindo").font(.system(size: 12, weight: .semibold, design: .rounded))
+        Group {
+            if accessibilityLayout {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 10) {
+                        resonatingMark
+                        listeningSummary
+                    }
+                    waveform
                 }
-                Text(meter.elapsedText)
-                    .font(.system(size: 20, weight: .medium, design: .monospaced))
-                    .monospacedDigit()
-            }
-            let levels = meter.displayLevels(reduceMotion: fixtureReduceMotion ?? reduceMotion)
-            HStack(spacing: 1.5) {
-                ForEach(0..<RecordingMeter.barCount, id: \.self) { index in
-                    Capsule()
-                        .fill(LinearGradient(
-                            colors: [Color.primary.opacity(0.72), ResenhaTheme.signal],
-                            startPoint: .bottom,
-                            endPoint: .top
-                        ))
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 3 + CGFloat(levels[index]) * 29)
+            } else {
+                HStack(spacing: 10) {
+                    resonatingMark
+                    listeningSummary
+                    waveform
                 }
             }
-            .frame(maxWidth: .infinity)
-            .frame(height: 32)
         }
         .foregroundStyle(.primary)
         .transaction { $0.animation = nil }
         .accessibilityHidden(true)
+    }
+
+    private var listeningSummary: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 5) {
+                Circle().fill(ResenhaTheme.signal).frame(width: 7, height: 7)
+                Text("Ouvindo").font(.caption.weight(.semibold))
+            }
+            Text(meter.elapsedText)
+                .font(.title3.weight(.medium).monospaced())
+                .monospacedDigit()
+        }
+        .fixedSize(horizontal: true, vertical: true)
+    }
+
+    private var waveform: some View {
+        let levels = meter.displayLevels(reduceMotion: fixtureReduceMotion ?? reduceMotion)
+        return HStack(spacing: 1.5) {
+            ForEach(0..<RecordingMeter.barCount, id: \.self) { index in
+                Capsule()
+                    .fill(LinearGradient(
+                        colors: [Color.primary.opacity(0.72), ResenhaTheme.signal],
+                        startPoint: .bottom,
+                        endPoint: .top
+                    ))
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 3 + CGFloat(levels[index]) * 29)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 32)
     }
 
     private var resonatingMark: some View {

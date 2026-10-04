@@ -2,13 +2,19 @@
 set -euo pipefail
 
 project_root="${0:A:h:h}"
-archive="${1:-$project_root/build/archive/Resenha-1.0.0-b1.xcarchive}"
+source_version="$(awk '/MARKETING_VERSION:/{print $2; exit}' "$project_root/project.yml")"
+source_build="$(awk '/CURRENT_PROJECT_VERSION:/{print $2; exit}' "$project_root/project.yml")"
+archive="${1:-$project_root/build/archive/Resenha-${source_version}-b${source_build}.xcarchive}"
+release_state="${2:-$project_root/AppStore/release-state.json}"
 screenshots="$project_root/AppStore/screenshots/pt-BR"
 metadata="$project_root/AppStore/metadata/pt-BR.md"
 info_source="$project_root/Config/ResenhaStore-Info.plist"
+source "$project_root/Scripts/release-source-contract.sh"
 
 fail() { print -u2 "FALHOU: $*"; exit 1; }
 pass() { print "PASS: $*"; }
+entitlements="$(mktemp "${TMPDIR:-/tmp}/resenha-entitlements.XXXXXX")"
+trap 'rm -f "$entitlements"' EXIT
 
 [[ -f "$metadata" ]] || fail "metadados ausentes"
 store_name="$(sed -n '1s/^# //p' "$metadata")"
@@ -41,16 +47,42 @@ rg -q 'AQ\.Ab8RN6' "$project_root" --glob '!build/**' && fail "prefixo de chave 
 pass "nenhuma credencial nos ativos"
 
 [[ -d "$archive" ]] || fail "archive ausente: $archive"
+[[ -f "$release_state" ]] || fail "estado de release ausente: $release_state"
 app="$archive/Products/Applications/Resenha.app"
 [[ -d "$app" ]] || fail "Resenha.app ausente no archive"
 archive_info="$app/Contents/Info.plist"
 [[ "$(plutil -extract CFBundleIdentifier raw "$archive_info")" == br.com.luisroquette.Resenha ]] || fail "bundle ID arquivado"
-[[ "$(plutil -extract CFBundleShortVersionString raw "$archive_info")" == 1.0.0 ]] || fail "versão arquivada"
-[[ "$(plutil -extract CFBundleVersion raw "$archive_info")" == 1 ]] || fail "build arquivado"
+archive_version="$(plutil -extract CFBundleShortVersionString raw "$archive_info")"
+archive_build="$(plutil -extract CFBundleVersion raw "$archive_info")"
+candidate_version="$(plutil -extract candidate.version raw "$release_state")"
+candidate_commit="$(plutil -extract candidate.sourceCommit raw "$release_state" 2>/dev/null || true)"
+minimum_build="$(plutil -extract candidate.minimumBuild raw "$release_state")"
+submitted_build="$(plutil -extract submitted.build raw "$release_state")"
+[[ "$archive_version" == "$source_version" ]] || fail "versão do archive ($archive_version) diverge da fonte ($source_version)"
+[[ "$archive_version" == "$candidate_version" ]] || fail "versão do archive diverge do candidato ($candidate_version)"
+[[ "$archive_build" == "$source_build" ]] || fail "build do archive ($archive_build) diverge da fonte ($source_build)"
+archive_commit="$(plutil -extract ResenhaSourceCommit raw "$archive_info" 2>/dev/null || true)"
+[[ "$archive_commit" == "$candidate_commit" ]] \
+  || fail "source commit do archive diverge do candidato"
+validate_release_source_commit "$project_root" "$archive_commit" \
+  || fail "source commit do archive não reproduz as fontes relevantes"
+(( archive_build >= minimum_build )) || fail "build $archive_build abaixo do mínimo $minimum_build"
+(( archive_build > submitted_build )) || fail "build $archive_build não supera o submetido $submitted_build"
 [[ "$(plutil -extract ITSAppUsesNonExemptEncryption raw "$archive_info" 2>/dev/null || true)" == false ]] || fail "archive precisa ser refeito com export compliance"
 file "$app/Contents/MacOS/Resenha" | grep -q 'arm64' || fail "binário não é arm64"
 codesign --verify --deep --strict "$app" || fail "assinatura inválida"
+codesign -d --entitlements :- "$app" >"$entitlements" 2>/dev/null
+[[ "$(/usr/libexec/PlistBuddy -c 'Print :com.apple.security.app-sandbox' "$entitlements")" == true ]] || fail "App Sandbox ausente"
+[[ "$(/usr/libexec/PlistBuddy -c 'Print :com.apple.security.device.audio-input' "$entitlements")" == true ]] || fail "audio-input ausente"
+[[ "$(/usr/libexec/PlistBuddy -c 'Print :com.apple.security.network.client' "$entitlements")" == true ]] || fail "network client ausente"
+[[ "$(plutil -p "$entitlements" | grep -c ' => ')" == 3 ]] \
+  || fail "archive contém entitlement adicional"
 [[ -f "$app/Contents/Resources/PrivacyInfo.xcprivacy" ]] || fail "PrivacyInfo.xcprivacy ausente"
-pass "archive 1.0.0 (1), arm64, assinado e com privacy manifest"
+for notice in THIRD_PARTY_NOTICES.md LICENSE-whisper.cpp.txt LICENSE-OpenAI-Whisper.txt; do
+  [[ -f "$app/Contents/Resources/$notice" ]] || fail "aviso/licença ausente: $notice"
+done
+grep -a -F -q 'WHISPER_MODEL_PATH' "$app/Contents/MacOS/Resenha" \
+  && fail "override de modelo presente no binário Release"
+pass "archive $archive_version ($archive_build), source ${archive_commit[1,12]}, arm64, assinado e com privacy manifest"
 
 print "Pacote da App Store validado."

@@ -76,13 +76,13 @@ Menus usam grupos pequenos, rótulos curtos e ícones uniformes quando presentes
 
 ### 4. Ajustes
 
-Janela nativa redimensionável, com navegação horizontal numerada e seção preservada enquanto a janela é reutilizada.
+Janela nativa redimensionável, com barra lateral semântica e seção preservada enquanto a janela é reutilizada.
 
 | Painel | Conteúdo | Marco |
 |---|---|---|
-| Geral | iniciar ao login, HUD, sons e histórico local | entregue |
+| Geral | iniciar ao login, HUD, sons e histórico local opt-in | entregue |
 | Atalho | escolher uma combinação segura e restaurar o padrão | entregue |
-| Sons | escolher e ouvir 70 confirmações locais curtas | entregue |
+| Sons | buscar, favoritar, escolher e ouvir 70 confirmações locais curtas | entregue |
 | Áudio | estado do microfone e explicação da captura local | entregue |
 | Transcrição | idioma, modelo local e vocabulário pessoal | entregue |
 | Sobre | versão, privacidade e links do projeto | entregue |

@@ -5,7 +5,6 @@ struct MenuStatusPresentation {
     let snapshot: PermissionSnapshot
     let error: DictationErrorPresentation?
     var hotkeyUnavailable = false
-    var shortcut: HotkeyShortcut = .rightOption
 
     var activity: String {
         switch phase {
