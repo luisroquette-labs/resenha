@@ -13,7 +13,8 @@ import { createPreviewServer } from './site.mjs';
 const macos = { state: 'published', platform: 'macos', version: 'v0.0.0-test', architecture: 'arm64', minimumOS: 'macOS 14+',
   url: 'https://github.com/example/resenha-test/releases/download/v0.0.0-test/Resenha-test.dmg',
   evidence: { channel: 'macos', url: 'https://github.com/example/resenha-test/releases/download/v0.0.0-test/Resenha-test.dmg',
-    verifiedAt: '2026-10-02T00:00:00Z', artifact: { platform: 'macos', version: 'v0.0.0-test' } } };
+    verifiedAt: '2026-10-02T00:00:00Z', artifact: { platform: 'macos', version: 'v0.0.0-test',
+      sha256: 'a'.repeat(64), notarizationId: '12345678-1234-1234-1234-123456789abc', notarizationStatus: 'Accepted' } } };
 const negative = (name, change, channel = 'macos') => {
   const record = structuredClone(macos);
   change(record);
@@ -50,6 +51,8 @@ export const destinationFixtures = [
   negative('missing-artifact', r => { delete r.evidence.artifact; }),
   negative('missing-artifact-platform', r => { delete r.evidence.artifact.platform; }),
   negative('missing-artifact-version', r => { delete r.evidence.artifact.version; }),
+  negative('missing-artifact-sha256', r => { delete r.evidence.artifact.sha256; }),
+  negative('invalid-notarization', r => { r.evidence.artifact.notarizationStatus = 'Rejected'; }),
   { name: 'valid-macos-release', channel: 'macos', record: structuredClone(macos), active: true },
   { name: 'valid-public-source', channel: 'source', active: true, record: { state: 'published',
     url: 'https://github.com/example/resenha-test', evidence: { channel: 'source',
@@ -72,11 +75,11 @@ function get(origin, path, method = 'GET') {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
-  test('CK-7: exact finite catalogue has 28 inactive and three active fixtures', () => {
-    assert.equal(destinationFixtures.length, 31);
-    assert.equal(new Set(destinationFixtures.map(f => f.name)).size, 31);
-    assert.ok(destinationFixtures.slice(0, 28).every(f => !f.active));
-    assert.ok(destinationFixtures.slice(28).every(f => f.active));
+  test('CK-7: exact finite catalogue has 30 inactive and three active fixtures', () => {
+    assert.equal(destinationFixtures.length, 33);
+    assert.equal(new Set(destinationFixtures.map(f => f.name)).size, 33);
+    assert.ok(destinationFixtures.slice(0, 30).every(f => !f.active));
+    assert.ok(destinationFixtures.slice(30).every(f => f.active));
   });
   for (const fixture of destinationFixtures) test(`CK-7: ${fixture.name}`, () => {
     const before = structuredClone(fixture.record);
@@ -87,20 +90,20 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
     assert.ok(Object.isFrozen(output));
     assert.deepEqual(fixture.record, before);
   });
-  test('CK-7/15: published source resolves while unreleased channels fail closed', () => {
+  test('CK-7/15: published DMG and source resolve while retired Store fails closed', () => {
     assert.equal(resolveDestination('source', releaseState.source).active, true);
     assert.equal(resolveDestination('source', releaseState.source).href, 'https://github.com/luisroquette/resenha');
-    for (const channel of ['macos', 'store']) {
-      assert.equal(releaseState[channel].url, null);
-      assert.equal(releaseState[channel].evidence, null);
-      assert.equal(resolveDestination(channel, releaseState[channel]).active, false);
-    }
+    assert.equal(resolveDestination('macos', releaseState.macos).active, true);
+    assert.match(resolveDestination('macos', releaseState.macos).href, /Resenha-1\.0\.0-arm64\.dmg$/u);
+    assert.equal(releaseState.store.url, null);
+    assert.equal(releaseState.store.evidence, null);
+    assert.equal(resolveDestination('store', releaseState.store).active, false);
     for (const channel of ['macos', 'source', 'store'])
       for (const record of [null, undefined, {}, '', [], { state: 'published' }]) assert.equal(resolveDestination(channel, record).active, false);
     assert.equal(resolveDestination('__proto__', macos).active, false);
   });
   test('CK-7: malformed evidence and concrete-destination partitions', () => {
-    for (const fixture of destinationFixtures.slice(28)) {
+    for (const fixture of destinationFixtures.slice(30)) {
       for (const change of [r => { r.evidence.channel = 'other'; }, r => { r.evidence.verifiedAt = 'invalid'; },
         r => { r.url += '?fake=1'; r.evidence.url = r.url; }, r => { r.url += '#fake'; r.evidence.url = r.url; },
         r => { r.url = r.url.replace('https://', 'https://').replace(/(\.com)/u, '$1:444'); r.evidence.url = r.url; }]) {
@@ -116,16 +119,16 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
       const record = structuredClone(macos); record.url = url; record.evidence.url = url;
       assert.equal(resolveDestination('macos', record).active, false);
     }
-    const source = structuredClone(destinationFixtures[29].record);
+    const source = structuredClone(destinationFixtures[31].record);
     source.url = 'https://github.com/example'; source.evidence.url = source.url;
     assert.equal(resolveDestination('source', source).active, false);
-    const store = structuredClone(destinationFixtures[30].record);
+    const store = structuredClone(destinationFixtures[32].record);
     store.url = 'https://apps.apple.com/br/app/resenha'; store.evidence.url = store.url;
     assert.equal(resolveDestination('store', store).active, false);
   });
   test('CK-16: importing fixtures registers no tests and opens no server', () => {
     const stdout = execFileSync(process.execPath, ['--input-type=module', '-e',
-      `const {destinationFixtures}=await import(${JSON.stringify(import.meta.url)}); if(destinationFixtures.length!==31) process.exit(2);`],
+      `const {destinationFixtures}=await import(${JSON.stringify(import.meta.url)}); if(destinationFixtures.length!==33) process.exit(2);`],
     { encoding: 'utf8', timeout: 5000 });
     assert.equal(stdout, '');
   });
@@ -219,6 +222,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
         assert.ok((html.match(/data-reveal/gu) ?? []).length >= 8);
         assert.match(html, /type="module"/u);
         assert.match(html, /styles\.css\?v=20261003-2/u);
+        assert.match(html, /release\.mjs\?v=20261004-1/u);
         assert.match(html, /media\.mjs\?v=20261003-2/u);
         const media = await get(preview.origin, prefix + 'media.mjs');
         assert.equal(media.status, 200);
@@ -237,6 +241,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
         assert.match(comparison.body, /wisprflow\.ai\/pricing/u);
         assert.match(comparison.body, /application\/ld\+json/u);
         assert.match(comparison.body, /src="\.\.\/media\.mjs\?v=20261003-2"/u);
+        assert.match(comparison.body, /src="\.\.\/release\.mjs\?v=20261004-1"/u);
         assert.ok((comparison.body.match(/data-reveal/gu) ?? []).length >= 5);
         const robots = await get(preview.origin, prefix + 'robots.txt');
         assert.equal(robots.status, 200);

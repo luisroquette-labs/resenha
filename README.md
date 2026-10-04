@@ -42,6 +42,20 @@ O target `WhisperKey` gera um único app de distribuição direta com bundle ID
 `br.com.luisroquette.Resenha`. Contribuidores podem selecionar seu próprio
 Development Team localmente sem alterar o código versionado.
 
+## Gerar o DMG oficial
+
+O release usa `Developer ID`, Hardened Runtime e notarização Apple, sem App
+Sandbox. O DMG contém o aplicativo e o atalho `Applications`.
+
+```sh
+~/.local/bin/mac-gate ./Scripts/build-release-dmg.sh
+./Scripts/notarize-release-dmg.sh build/direct/Resenha-1.0.0-arm64.dmg
+```
+
+O segundo comando envia o DMG à Apple usando o perfil de Keychain definido em
+`RESENHA_NOTARY_PROFILE` (padrão: `notchagent-notary`) e valida o ticket com
+Gatekeeper. Cada artefato recebe um arquivo `.sha256` correspondente.
+
 ## Arquitetura
 
 ```text

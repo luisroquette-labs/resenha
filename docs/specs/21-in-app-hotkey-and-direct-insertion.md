@@ -1,6 +1,6 @@
 # SPEC-021 — Atalho livre no app e inserção direta
 
-Status: autorizado; implementação em andamento
+Status: implementado; distribuição definida pela SPEC-022
 
 ## Decisão
 

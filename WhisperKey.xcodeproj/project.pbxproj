@@ -28,6 +28,7 @@
 		8A12E0347CA26301459DABDD /* MenuPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E88ECFDFC9BE5A2B95ED500 /* MenuPresentation.swift */; };
 		A43F5E47CFC6FC2CDEC601A4 /* DictationCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E0F01DAE4C30ED2DC6B9DBC /* DictationCoordinator.swift */; };
 		B35865AFF46A73E125E89E8F /* WhisperKeyApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FFCCC5A27F52BFFEE1004E2 /* WhisperKeyApp.swift */; };
+		C2AE8F8BDE3F2909C47F5A3E /* jfk.wav in Resources */ = {isa = PBXBuildFile; fileRef = EA7FF21487DD1F97FC4D871F /* jfk.wav */; };
 		C4A5F5D768D1319B58EE2118 /* ResenhaDesign.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD98C7E641E041C3A2E5E855 /* ResenhaDesign.swift */; };
 		D7739963D1B010F882D8BCA0 /* WhisperTranscriber.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAC1740D72EC6212C4303041 /* WhisperTranscriber.swift */; };
 		D853F8CE772EBAB3FED1F4F7 /* FloatingPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F90F5A838310B1F6007F64FE /* FloatingPanel.swift */; };
@@ -75,6 +76,7 @@
 		D37823F6AEBFF7A451345AD9 /* ShortcutCaptureController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutCaptureController.swift; sourceTree = "<group>"; };
 		D4A8FD7C33E4604E0E2BE7C1 /* RecordingWaveformView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingWaveformView.swift; sourceTree = "<group>"; };
 		DC280A6E884D7AF1EBD71925 /* WhisperKeyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhisperKeyTests.swift; sourceTree = "<group>"; };
+		EA7FF21487DD1F97FC4D871F /* jfk.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = jfk.wav; sourceTree = "<group>"; };
 		F6D551801267264DB250896E /* PanelPlacement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PanelPlacement.swift; sourceTree = "<group>"; };
 		F90F5A838310B1F6007F64FE /* FloatingPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatingPanel.swift; sourceTree = "<group>"; };
 		FD3A8F8F80E9569C5B9B6616 /* ProductPreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductPreferences.swift; sourceTree = "<group>"; };
@@ -99,6 +101,7 @@
 			isa = PBXGroup;
 			children = (
 				E997ABCD3F17473CF7C7AE6B /* Config */,
+				A6B60FE3D8DA3A1466F90245 /* samples */,
 				EE8A65A769C7C55A687549E3 /* WhisperKey */,
 				8A9681C9A56F1D758D1A5E09 /* WhisperKeyTests */,
 				EAFE19FE782D0432CC9A790B /* Frameworks */,
@@ -113,6 +116,15 @@
 			);
 			name = WhisperKeyTests;
 			path = Tests/WhisperKeyTests;
+			sourceTree = "<group>";
+		};
+		A6B60FE3D8DA3A1466F90245 /* samples */ = {
+			isa = PBXGroup;
+			children = (
+				EA7FF21487DD1F97FC4D871F /* jfk.wav */,
+			);
+			name = samples;
+			path = Vendor/whisper.cpp/samples;
 			sourceTree = "<group>";
 		};
 		E997ABCD3F17473CF7C7AE6B /* Config */ = {
@@ -200,6 +212,7 @@
 			buildConfigurationList = 12CA265313F6A57BA00F9433 /* Build configuration list for PBXNativeTarget "WhisperKeyTests" */;
 			buildPhases = (
 				1989CE8996C3CD1E1D461901 /* Sources */,
+				E85335692FF5C8A4C3F15685 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -259,6 +272,14 @@
 			files = (
 				21BFEB851E15B4030C254977 /* Assets.xcassets in Resources */,
 				73B3AA17549C4AF0E03C6F25 /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E85335692FF5C8A4C3F15685 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C2AE8F8BDE3F2909C47F5A3E /* jfk.wav in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
