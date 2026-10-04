@@ -42,7 +42,7 @@ that collides with the Windows SDK reference pack. NuGet's official MSTest.Sdk
 `None` extension profile avoids optional coverage/reporting packages; it does
 not disable test execution.
 
-All six per-project `packages.lock.json` files were generated with SDK 10.0.401,
+All seven per-project `packages.lock.json` files were generated with SDK 10.0.401,
 reviewed and accepted by a subsequent locked restore. The approved Windows host
 must reproduce that locked graph; it must not update the locks implicitly.
 
@@ -59,8 +59,9 @@ checks belong to later steps; this TFM alone cannot establish compatibility.
   later steps propose changes before touching these files.
 - Step 05 owns the broker entry point after handoff; step 11 owns presentation;
   step 12 owns final `App.xaml.cs` composition.
-- Audio/input/model/inference/clipboard adapters, native CMake, release schema,
-  installer and release scripts are reserved for their respective later steps.
+- The installer, release verifier, physical-evidence collector and site projection
+  now exist as fail-closed contracts. They remain unexecuted on Windows and do
+  not establish a distributable artifact.
 
 Official pin sources: [.NET 10](https://dotnet.microsoft.com/en-us/download/dotnet/10.0),
 [MSTest.Sdk 4.4.0](https://www.nuget.org/packages/MSTest.Sdk/4.4.0).

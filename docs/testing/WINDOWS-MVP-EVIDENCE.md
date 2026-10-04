@@ -5,8 +5,9 @@ Contract: [SPEC-023](../specs/23-windows-mvp.md).
 Release identity: [release evidence](WINDOWS-RELEASE-EVIDENCE.md).
 
 Development evidence on 2026-10-04: locked restore and the complete Windows/x64
-managed solution cross-compiled on macOS with zero warnings/errors; 127 portable
-Core tests, 67 portable Platform tests and 146 Node contract/site tests passed.
+managed solution cross-compiled on macOS with zero warnings/errors; 145 portable
+Core tests, 43 explicitly portable plus 34 additional nonnative Platform tests,
+and 156 Node contract/site tests passed.
 Implemented boundaries cover the shortcut watchdog, WASAPI conversion policy,
 owned storage/model leases, kill-on-close Whisper process and isolated UIA
 target broker. These are compile/portable-test results only. Win32 execution,

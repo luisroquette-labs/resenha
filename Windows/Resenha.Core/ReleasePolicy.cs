@@ -105,7 +105,7 @@ public static class ReleasePolicy
         }
         foreach (var path in new[] { "Windows/global.json", "Windows/toolchain-lock.json", "Windows/native/CMakePresets.json", "Windows/model-manifest.json" })
             Require(inputPaths.Contains(path), "build.missing-input:" + path);
-        foreach (var project in new[] { "Resenha.Core", "Resenha.Core.Tests", "Resenha.Platform", "Resenha.Platform.Tests", "Resenha.TargetBroker", "Resenha.Windows" })
+        foreach (var project in new[] { "Resenha.Core", "Resenha.Core.Tests", "Resenha.Platform", "Resenha.Platform.Tests", "Resenha.ReleaseVerifier", "Resenha.TargetBroker", "Resenha.Windows" })
             Require(inputPaths.Contains($"Windows/{project}/packages.lock.json"), "build.dependency-locks");
         VerifyFile(build.GetProperty("preflight").GetProperty("report"), inputs);
     }

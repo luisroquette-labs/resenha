@@ -24,10 +24,10 @@ Truthful Windows status/requirements/privacy copy and current browser regression
 
 #### Subtasks
 
-- [ ] Add release-dependent Windows card/copy and exact OS/CPU/RAM requirements in home and comparison page without altering the Mac destination.
-- [ ] Update website and application privacy disclosures for model download, temporary owned audio, RAM-only result and required site WhatsApp.
-- [ ] Refresh audit.mjs stale prototype assertions, current fingerprints and platform-specific modal flows; keep existing supported browser layouts.
-- [ ] Write browser regression cases for keyboard navigation, close/reopen/platform switch, required blank fields and no real submission; run browser checks through mac-gate and retain reports.
+- [x] Add release-dependent Windows card/copy and exact OS/CPU/RAM requirements in home and comparison page without altering the Mac destination.
+- [x] Update website and application privacy disclosures for model download, temporary owned audio, RAM-only result and required site WhatsApp.
+- [x] Refresh audit.mjs stale prototype assertions, current fingerprints and platform-specific modal flows; keep existing supported browser layouts.
+- [x] Write browser regression cases for keyboard navigation, close/reopen/platform switch, required blank fields and no real submission; run browser checks through mac-gate and retain reports.
 
 #### Blockers & Risks
 

@@ -8,13 +8,19 @@
   <link rel="canonical" href="https://luisroquette.github.io/resenha/">
   <meta property="og:type" content="website">
   <meta property="og:locale" content="pt_BR">
+  <meta property="og:url" content="https://luisroquette.github.io/resenha/">
   <meta property="og:title" content="Resenha — alternativa open source ao Wispr Flow">
   <meta property="og:description" content="Ditado gratuito para Mac, processado localmente e sem limite semanal de palavras.">
+  <meta property="og:image" content="https://luisroquette.github.io/resenha/assets/brand/resenha-app-icon.png">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Resenha — ditado local e gratuito para Mac">
+  <meta name="twitter:description" content="Fale, solte e continue escrevendo. Sem conta, assinatura ou limite semanal.">
+  <meta name="twitter:image" content="https://luisroquette.github.io/resenha/assets/brand/resenha-app-icon.png">
   <meta name="theme-color" content="#f1eee4">
   <link rel="icon" href="assets/brand/resenha-app-icon.png">
   <link rel="stylesheet" href="styles.css?v=20261004-3">
   <script type="module" src="analytics.mjs?v=20261004-1"></script>
-  <script type="module" src="release.mjs?v=20261004-3"></script>
+  <script type="module" src="release.mjs?v=20261004-4"></script>
   <script type="module" src="media.mjs?v=20261003-2"></script>
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Resenha","applicationCategory":"UtilitiesApplication","operatingSystem":"macOS 14 ou posterior","isAccessibleForFree":true,"license":"https://opensource.org/license/mit","description":"Alternativa gratuita e open source ao Wispr Flow para ditado local no Mac."}</script>
 </head>
@@ -46,8 +52,8 @@
         </div>
       </div>
 
-      <div class="hero-stage" aria-label="Demonstração visual do Resenha transcrevendo uma frase">
-        <p class="hero-stamp" aria-label="Grátis e open source"><span>R$ 0</span>OPEN SOURCE</p>
+      <div class="hero-stage" role="group" aria-label="Demonstração visual do Resenha transcrevendo uma frase">
+        <p class="hero-stamp"><span>R$ 0</span>OPEN SOURCE</p>
         <div class="sound-rings" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
         <div class="editor-window">
           <div class="window-bar" aria-hidden="true"><span></span><span></span><span></span><b>rascunho.txt</b></div>
@@ -84,7 +90,7 @@
           <p class="comparison-lead">O plano gratuito do Wispr Flow informa um limite semanal no desktop. O Resenha não impõe franquia: ele roda no seu próprio Mac, sob licença MIT.</p>
           <a class="button button-light" href="alternativa-wispr-flow/">Ver a comparação completa <span aria-hidden="true">↘</span></a>
         </div>
-        <div class="comparison-card" aria-label="Resumo da comparação entre Resenha e Wispr Flow">
+        <div class="comparison-card" role="group" aria-label="Resumo da comparação entre Resenha e Wispr Flow">
           <div class="comparison-head"><span>O que muda</span><b>Resenha</b><b>Wispr Flow Free</b></div>
           <div><span>Limite semanal</span><strong>Não impõe</strong><span>2.000 palavras no desktop</span></div>
           <div><span>Preço</span><strong>Grátis</strong><span>Grátis com limite</span></div>
@@ -130,7 +136,7 @@
           <figcaption><span>02 / TOUR DOS AJUSTES</span><h3>Seis áreas. Nenhuma bagunça.</h3><p>Geral, atalho, sons, áudio, transcrição e informações do aplicativo.</p></figcaption>
         </figure>
 
-        <div class="screen-gallery" id="telas" aria-label="Galeria das telas do Resenha">
+        <div class="screen-gallery" id="telas" role="region" tabindex="0" aria-label="Galeria das telas do Resenha">
           <figure><div><img src="assets/product/settings-general.webp" alt="Tela Geral dos ajustes do Resenha"></div><figcaption><b>01</b> Geral</figcaption></figure>
           <figure><div><img src="assets/product/settings-shortcut.webp" alt="Tela de personalização do atalho do Resenha"></div><figcaption><b>02</b> Atalho</figcaption></figure>
           <figure><div><img src="assets/product/settings-sounds.webp" alt="Biblioteca de sons rápidos do Resenha"></div><figcaption><b>03</b> Sons</figcaption></figure>
@@ -190,12 +196,13 @@
       <div class="download-card">
         <div class="download-icon"><img src="assets/brand/resenha-app-icon.png" alt="Ícone do Resenha" width="128" height="128"></div>
         <div class="download-copy">
-          <p class="kicker">Versão 1.0 para macOS</p>
+          <p class="kicker">Resenha para desktop</p>
           <h2 id="download-title">Fale quanto quiser.</h2>
           <p>Grátis, open source, sem limite semanal e otimizado para Apple Silicon. Requer macOS 14 ou posterior.</p>
         </div>
         <div class="download-actions">
           <div class="release-slot" data-release-channel="macos"><strong>Baixar para macOS</strong><span>DMG assinado e notarizado pela Apple.</span></div>
+          <div class="release-slot" data-release-channel="windows"><strong>Windows em validação</strong><span>Será liberado somente após assinatura e testes físicos.</span></div>
           <div class="release-slot secondary-release" data-release-channel="source"><strong>Ver código no GitHub</strong><span>Licença MIT e desenvolvimento público.</span></div>
         </div>
       </div>
@@ -209,14 +216,14 @@
         <details><summary>Posso escolher o atalho?</summary><p>Sim. Grave qualquer tecla ou combinação dentro do próprio Resenha, inclusive Option direita isolada.</p></details>
         <details><summary>O Resenha é uma alternativa ao Wispr Flow?</summary><p>Sim, para quem procura ditado no Mac sem assinatura, sem conta e sem limite semanal. O Resenha é local e open source; não tenta reproduzir todos os recursos em nuvem e de equipe do Wispr Flow.</p></details>
         <details><summary>Quais idiomas estão disponíveis?</summary><p>Português do Brasil, inglês e espanhol. Em PT-BR, o vocabulário pessoal ajuda a preservar nomes, siglas e palavras em inglês.</p></details>
-        <details><summary>Existe versão para Windows?</summary><p>O foco da versão 1.0 é macOS com Apple Silicon. Windows continua no roteiro, mas ainda não tem data pública.</p></details>
+        <details><summary>Existe versão para Windows?</summary><p>A versão nativa para Windows 10/11 x64 está em validação. O botão continuará desativado até o mesmo instalador passar por assinatura confiável, scan e testes físicos nos dois sistemas.</p></details>
       </div>
     </section>
   </main>
 
   <footer class="site-footer shell">
     <a class="brand" href="#inicio" aria-label="Resenha, voltar ao início"><img src="assets/brand/resenha-mark.svg" alt="" width="36" height="36"><span>resenha.</span></a>
-    <p>Feito em português.<br><span>Processado no seu Mac.</span></p>
+    <p>Feito em português.<br><span>Processado no seu computador.</span></p>
     <div><a href="#privacidade">Privacidade</a><a href="#codigo">MIT</a></div>
   </footer>
 </body>

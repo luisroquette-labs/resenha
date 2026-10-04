@@ -24,9 +24,9 @@ Inno Setup 6.7.3 per-user x64 installer recipe and clean-source build/sign/hash 
 
 #### Subtasks
 
-- [ ] Implement Inno per-user fixed-AppId installer with PrivilegesRequired=lowest, exact product OS/CPU guards, no startup/service/updater and complete notices.
-- [ ] Implement build-release.ps1 host/tool/source checks, cwd pinning, self-contained publish/native dependency inventory and signing sequence; keep secrets/private keys out of output.
-- [ ] Emit unsigned-development versus release-blocked states truthfully; no self-signed root or unavailable certificate can satisfy public readiness.
+- [x] Implement Inno per-user fixed-AppId installer with PrivilegesRequired=lowest, exact product OS/CPU guards, no startup/service/updater and complete notices.
+- [x] Implement build-release.ps1 host/tool/source checks, cwd pinning, self-contained publish/native dependency inventory and signing sequence; keep secrets/private keys out of output.
+- [x] Emit unsigned-development versus release-blocked states truthfully; no self-signed root or unavailable certificate can satisfy public readiness.
 - [ ] Add packaging contract tests and Windows installer lifecycle tests for spaces/non-ASCII/normal-user/retained-data/uninstall; test missing certificate and stale source rejection.
 
 #### Blockers & Risks

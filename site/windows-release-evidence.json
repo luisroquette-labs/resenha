@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "state": "unavailable",
+  "platform": "windows",
+  "reason": "Aguardando instalador assinado, scan, testes físicos no Windows 10/11 e verificação dos bytes hospedados.",
+  "release": null
+}

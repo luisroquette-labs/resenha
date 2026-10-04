@@ -73,7 +73,7 @@ A inserção usa Acessibilidade para devolver o foco ao aplicativo original e
 simular `Command + V`. Microfone, Monitoramento de Entrada e Acessibilidade são
 explicados e solicitados separadamente.
 
-## Contrato Windows — implementação pendente
+## Windows — implementação em validação
 
 Arquitetura aceita: C# 14/WPF, SDK .NET `10.0.401`, Desktop Runtime `10.0.12`
 self-contained e whisper.cpp local como CLI; nenhum Windows App SDK, backend,
@@ -105,6 +105,11 @@ dedicados ainda são pré-requisitos pendentes, não recursos comprovados.
 Esse comando verifica contratos documentais; não executa Windows nem valida
 microfone, instalador, assinatura ou publicação. Os comandos Windows previstos
 ficam na spec e devem falhar quando ferramentas/evidências estiverem ausentes.
+
+O pipeline de release é deliberadamente bloqueante: `build-release.ps1` exige
+host físico inventariado e certificado público; `verify-release.ps1` confere os
+bytes, Authenticode, Defender e o dossiê; `promote-release.mjs` somente projeta
+um destino do site após evidência hospedada válida. Nenhum deles publica sozinho.
 
 ## Desenvolvimento orientado por especificação
 

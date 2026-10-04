@@ -1,9 +1,11 @@
-import { openDownloadGate } from './download-gate.mjs?v=20261004-2';
+import { openDownloadGate } from './download-gate.mjs?v=20261004-4';
+import { platformConfig } from './download-platforms.mjs?v=20261004-1';
 
 const copy = Object.freeze({
   macos: { label: 'Download em preparação', ready: 'Baixar para macOS', reason: 'Ainda não há um instalador público verificado.' },
   source: { label: 'Código público em preparação', ready: 'Ver código no GitHub', reason: 'O repositório público ainda não foi publicado.' },
   store: { label: 'Mac App Store não utilizada', ready: 'Ver na Mac App Store', reason: 'O Resenha para Mac é distribuído diretamente em DMG.' },
+  windows: { label: 'Windows em validação', ready: 'Baixar para Windows', reason: 'O instalador será liberado após assinatura, scan e testes físicos no Windows 10 e 11.' },
 });
 
 export const releaseState = Object.freeze({
@@ -19,6 +21,8 @@ export const releaseState = Object.freeze({
     evidence: Object.freeze({ channel: 'source', url: 'https://github.com/luisroquette/resenha',
       verifiedAt: '2026-10-03T02:30:00Z' }) }),
   store: Object.freeze({ state: 'planned', url: null, evidence: null }),
+  windows: Object.freeze({ state: 'unavailable', platform: 'windows', version: null,
+    architecture: 'x64', minimumOS: 'Windows 10 22H2 / Windows 11 25H2', url: null, evidence: null }),
 });
 
 const nonempty = value => typeof value === 'string' && value.trim().length > 0;
@@ -39,7 +43,7 @@ export function resolveDestination(channel, record) {
   const repo = '[A-Za-z0-9_-]+/[A-Za-z0-9_.-]+';
   const permitted = channel === 'source'
     ? url.hostname === 'github.com' && new RegExp(`^/${repo}/?$`).test(url.pathname)
-    : channel === 'macos'
+    : channel === 'macos' || channel === 'windows'
       ? url.hostname === 'github.com' && new RegExp(`^/${repo}/releases/download/(?!latest/)[A-Za-z0-9_.-]+/[^/]+$`).test(url.pathname)
       : url.hostname === 'apps.apple.com' && /^\/(?:[a-z]{2}\/)?app\/(?:[^/]+\/)?id[1-9]\d*\/?$/u.test(url.pathname);
   if (!permitted) return inactive();
@@ -51,15 +55,35 @@ export function resolveDestination(channel, record) {
     || !/^[a-f0-9]{64}$/u.test(evidence.artifact.sha256 ?? '')
     || !/^[a-f0-9-]{36}$/u.test(evidence.artifact.notarizationId ?? '')
     || evidence.artifact.notarizationStatus !== 'Accepted')) return inactive();
+  if (channel === 'windows') {
+    const expectedName = `Resenha-${record.version}-windows-x64-setup.exe`;
+    const expectedPath = `/luisroquette/resenha/releases/download/windows-v${record.version}/${expectedName}`;
+    if (record.platform !== 'windows' || record.architecture !== 'x64' || !nonempty(record.version)
+      || url.pathname !== expectedPath || evidence.artifact?.platform !== 'windows'
+      || evidence.artifact.version !== record.version || evidence.artifact.filename !== expectedName
+      || !/^[a-f0-9]{64}$/u.test(evidence.artifact.sha256 ?? '')
+      || !/^[a-f0-9]{40}$/u.test(evidence.artifact.sourceCommit ?? '')
+      || evidence.artifact.signature !== 'valid-trusted-rfc3161'
+      || evidence.artifact.scan !== 'passed-zero-detections'
+      || evidence.artifact.physicalWindows10 !== true || evidence.artifact.physicalWindows11 !== true
+      || evidence.artifact.hostedSha256 !== evidence.artifact.sha256) return inactive();
+  }
   return Object.freeze({ active: true, href: raw, label: wording.ready,
-    reason: channel === 'macos' ? `${record.version} · ${record.architecture} · ${record.minimumOS}` : 'Destino publicado e verificado.' });
+    reason: ['macos', 'windows'].includes(channel) ? `${record.version} · ${record.architecture} · ${record.minimumOS}` : 'Destino publicado e verificado.' });
+}
+
+export function resolvePresentation(channel, record, formConfig = platformConfig(channel)) {
+  const destination = resolveDestination(channel, record);
+  if (!destination.active || !['macos', 'windows'].includes(channel) || formConfig) return destination;
+  return Object.freeze({ active: false, href: null, label: copy[channel].label,
+    reason: 'O formulário verificado desta plataforma ainda não está disponível.' });
 }
 
 export function applyReleaseState(root, state = releaseState) {
   for (const slot of root.querySelectorAll('[data-release-channel]')) {
     const channel = slot.dataset.releaseChannel;
-    const result = resolveDestination(channel, state?.[channel]);
-    const gatedDownload = result.active && channel === 'macos';
+    const result = resolvePresentation(channel, state?.[channel]);
+    const gatedDownload = result.active && ['macos', 'windows'].includes(channel);
     const action = slot.ownerDocument.createElement(result.active ? (gatedDownload ? 'button' : 'a') : 'span');
     action.className = 'release-action';
     action.textContent = result.label;
@@ -67,7 +91,7 @@ export function applyReleaseState(root, state = releaseState) {
       action.type = 'button';
       action.dataset.downloadGate = 'true';
       action.setAttribute('aria-haspopup', 'dialog');
-      action.addEventListener('click', openDownloadGate);
+      action.addEventListener('click', () => openDownloadGate(channel));
     } else if (result.active) action.href = result.href;
     else action.setAttribute('aria-disabled', 'true');
     const reason = slot.ownerDocument.createElement('p');

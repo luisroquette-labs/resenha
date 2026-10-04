@@ -57,8 +57,8 @@ unreviewed obsolete security patches block release.
    Repackaging or signing after scan/QA invalidates all downstream proof.
 5. Run `pwsh -NoProfile -File Scripts/windows/verify-release.ps1 -Artifact <path> -Evidence <json>`.
    Require matching signatures, hash, complete scans and physical reports. The
-   proposed scripts are implementation contracts until present and executed;
-   no successful exit alone proves human observations or permits publication.
+   scripts are implemented but remain unexecuted on Windows; no successful exit
+   alone proves human observations or permits publication.
 
 Expected generated directory: `artifacts/windows/<version>/<source-sha>/` with
 `app/`, `Resenha-<version>-windows-x64-setup.exe`, matching `.sha256`,

@@ -7,6 +7,10 @@ const read = path => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8'
 const schemaText = read('Windows/release-manifest.schema.json');
 const schema = JSON.parse(schemaText);
 const core = read('Windows/Resenha.Core/ReleasePolicy.cs');
+const buildScript = read('Scripts/windows/build-release.ps1');
+const verifyScript = read('Scripts/windows/verify-release.ps1');
+const collectorScript = read('Scripts/windows/collect-physical-evidence.ps1');
+const installer = read('Windows/Installer/Resenha.iss');
 const fixtures = new Map(['candidate-ready', 'hosted-ready'].map(stage => [stage, JSON.parse(read(`Scripts/fixtures/windows-release/synthetic-${stage}.bundle.json`))]));
 const { cases } = JSON.parse(read('Scripts/fixtures/windows-release/negative-cases.json'));
 
@@ -137,4 +141,33 @@ test('anglicism retention applies to PT-BR and Spanish only, while English must 
   assert.equal(english.anglicismRetention, 'not-applicable');
   assert.deepEqual(schemaErrors(english, rule, schema), []);
   assert.ok(schemaErrors({ ...english, anglicismRetention: 1 }, rule, schema).length);
+});
+
+test('release tooling fails closed and cannot publish or silently invent physical passes', () => {
+  assert.match(buildScript, /approved-windows-host/u);
+  assert.match(buildScript, /HasPrivateKey/u);
+  assert.match(buildScript, /self-signed certificate cannot create a public release/u);
+  assert.match(buildScript, /immutable artifact directory already exists/u);
+  assert.match(buildScript, /signtool verify \/pa \/all \/v/u);
+  assert.match(buildScript, /signed-candidate-awaiting-defender-and-physical-evidence/u);
+  assert.match(verifyScript, /Get-AuthenticodeSignature/u);
+  assert.match(verifyScript, /Get-MpComputerStatus/u);
+  assert.match(verifyScript, /definitions are older than 24 hours/u);
+  assert.match(verifyScript, /canEnablePublicDownload/u);
+  assert.match(collectorScript, /Virtual hardware cannot produce physical release evidence/u);
+  assert.match(collectorScript, /Exactly ten observed cycles are required/u);
+  assert.match(collectorScript, /outcome -ne 'observed-pass'/u);
+  assert.match(collectorScript, /At least 8 GiB of physical RAM is required/u);
+  assert.match(collectorScript, /Only \$expectedCaption Home\/Pro is accepted/u);
+  for (const script of [buildScript, verifyScript, collectorScript]) assert.doesNotMatch(script, /gh\s+release|Invoke-WebRequest|Start-BitsTransfer/u);
+});
+
+test('installer is per-user, signed, fixed-identity and owns only Resenha data', () => {
+  assert.match(installer, /AppId=\{\{A83D31F2-02BC-4F04-A101-7120B87F8E38\}/u);
+  assert.match(installer, /DefaultDirName=\{localappdata\}\\Programs\\Resenha/u);
+  assert.match(installer, /PrivilegesRequired=lowest/u);
+  assert.match(installer, /SignedUninstaller=yes/u);
+  assert.match(installer, /SignTool=resenha/u);
+  assert.match(installer, /Remove model and settings|Remover também o modelo local/u);
+  assert.doesNotMatch(installer, /runascurrentuser|restartreplace|uninsneveruninstall/u);
 });

@@ -24,8 +24,8 @@ Fail-closed verifier/collector/promotion tooling, tamper fixtures and lightweigh
 
 #### Subtasks
 
-- [ ] Implement signature/Defender/hash/report verification with remediation disabled and explicit candidate versus full hosted-release stages; no circular manifest hash.
-- [ ] Implement physical evidence collection and public projection allowlist; promote-release.mjs only writes validated projection and never uploads, submits forms or mutates CF Gauss.
+- [x] Implement signature/Defender/hash/report verification with remediation disabled and explicit candidate versus full hosted-release stages; no circular manifest hash.
+- [x] Implement physical evidence collection and public projection allowlist; promote-release.mjs only writes validated projection and never uploads, submits forms or mutates CF Gauss.
 - [ ] Add PowerShell/Node negative tests for tampered bytes/report refs, stale definitions, insufficient OS coverage, forged passed flags and self-signed chains; run portable tests through mac-gate and native tests on Windows.
 - [ ] Create windows-contracts.yml and update site-tests.yml filters for all policy inputs; inspect actual repo deployment/protected checks and record missing Vercel configuration as unresolved rather than green.
 

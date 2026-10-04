@@ -7,9 +7,9 @@ import test from 'node:test';
 const root = dirname(fileURLToPath(import.meta.url));
 const read = (path) => readFileSync(resolve(root, path), 'utf8');
 const json = (path) => JSON.parse(read(path));
-const projects = ['Resenha.Core', 'Resenha.Platform', 'Resenha.Windows', 'Resenha.TargetBroker', 'Resenha.Core.Tests', 'Resenha.Platform.Tests'];
+const projects = ['Resenha.Core', 'Resenha.Platform', 'Resenha.Windows', 'Resenha.TargetBroker', 'Resenha.Core.Tests', 'Resenha.Platform.Tests', 'Resenha.ReleaseVerifier'];
 
-test('solution references exactly the six existing projects with no escaping references', () => {
+test('solution references exactly the seven existing projects with no escaping references', () => {
   const declared = [...read('Resenha.Windows.sln').matchAll(/^Project\("[^"]+"\) = "([^"]+)", "([^"]+)"/gm)];
   assert.deepEqual(declared.map((match) => match[1]), projects);
   for (const [, , path] of declared) assert.ok(existsSync(resolve(root, path.replaceAll('\\', '/'))));

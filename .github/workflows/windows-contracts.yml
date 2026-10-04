@@ -1,0 +1,35 @@
+name: Windows contracts
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/windows-contracts.yml'
+      - 'Scripts/windows-release.test.mjs'
+      - 'Scripts/windows-docs.test.mjs'
+      - 'Scripts/fixtures/windows-release/**'
+      - 'Windows/release-manifest.schema.json'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/windows-contracts.yml'
+      - 'Scripts/windows-release.test.mjs'
+      - 'Scripts/windows-docs.test.mjs'
+      - 'Scripts/fixtures/windows-release/**'
+      - 'Windows/release-manifest.schema.json'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-contracts-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Validate portable release and documentation contracts
+        run: node --test Scripts/windows-release.test.mjs Scripts/windows-docs.test.mjs

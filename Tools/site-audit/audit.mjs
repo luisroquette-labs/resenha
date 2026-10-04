@@ -10,7 +10,8 @@ import AxeBuilder from '@axe-core/playwright';
 import lighthouse from 'lighthouse';
 import { createPreviewServer } from '../../Scripts/site.mjs';
 import { destinationFixtures } from '../../Scripts/site.test.mjs';
-import { releaseState, resolveDestination } from '../../site/release.mjs';
+import { releaseState, resolvePresentation } from '../../site/release.mjs';
+import { DOWNLOAD_PLATFORMS } from '../../site/download-platforms.mjs';
 
 const repo = fileURLToPath(new URL('../../', import.meta.url));
 const output = join(repo, 'build/site-audit');
@@ -28,8 +29,10 @@ const check = async (name, run) => {
 };
 const hash = async file => createHash('sha256').update(await readFile(join(repo, file))).digest('hex');
 const fingerprints = {};
-for (const file of ['site/index.html', 'site/styles.css', 'site/release.mjs', 'Scripts/site.mjs',
-  'Scripts/site.test.mjs', 'Tools/site-audit/audit.mjs', 'Tools/site-audit/package.json', 'Tools/site-audit/package-lock.json']) fingerprints[file] = await hash(file);
+for (const file of ['site/index.html', 'site/styles.css', 'site/release.mjs', 'site/download-gate.mjs',
+  'site/download-platforms.mjs', 'site/windows-release-evidence.json', 'Scripts/windows/promote-release.mjs',
+  'Scripts/site.mjs', 'Scripts/site.test.mjs', 'Tools/site-audit/audit.mjs', 'Tools/site-audit/package.json',
+  'Tools/site-audit/package-lock.json']) fingerprints[file] = await hash(file);
 const packages = {};
 for (const name of ['playwright', '@axe-core/playwright', 'lighthouse']) {
   packages[name] = JSON.parse(await readFile(new URL(`node_modules/${name}/package.json`, import.meta.url), 'utf8')).version;
@@ -41,7 +44,11 @@ await save('environment.json', environment);
 
 // An owned deny-only loopback proxy also blocks browser background outbound traffic.
 const proxy = createServer((req, res) => { network.push({ action: 'proxy-blocked', url: req.url }); res.writeHead(403); res.end(); });
-proxy.on('connect', (req, socket) => { network.push({ action: 'proxy-blocked-connect', url: req.url }); socket.end('HTTP/1.1 403 Forbidden\r\n\r\n'); });
+proxy.on('connect', (req, socket) => {
+  network.push({ action: 'proxy-blocked-connect', url: req.url });
+  socket.on('error', () => {}); socket.end('HTTP/1.1 403 Forbidden\r\n\r\n');
+});
+proxy.on('clientError', (_error, socket) => { socket.on('error', () => {}); socket.end('HTTP/1.1 400 Bad Request\r\n\r\n'); });
 await new Promise(accept => proxy.listen(0, '127.0.0.1', accept));
 owned.push(() => new Promise(accept => proxy.close(accept)));
 const browserArgs = [`--proxy-server=http://127.0.0.1:${proxy.address().port}`, '--proxy-bypass-list=127.0.0.1',
@@ -51,7 +58,15 @@ async function guard(context, origin) {
   await context.route('**/*', async route => {
     const url = route.request().url();
     if (new URL(url).origin === origin) { network.push({ action: 'local', url }); await route.continue(); }
-    else { network.push({ action: 'intercepted', url }); await route.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><title>Intercepted synthetic action</title>' }); }
+    else if (url === 'https://www.googletagmanager.com/gtm.js?id=GTM-N9M32M9K') {
+      network.push({ action: 'blocked-analytics', url }); await route.abort('blockedbyclient');
+    } else {
+      network.push({ action: 'intercepted', url });
+      const form = url.includes('/t/formembed-');
+      const body = form ? `<!doctype html><meta charset="utf-8"><form><input name="name" required><input name="email" type="email" required><input name="whatsapp" required pattern="[0-9+ ()-]{8,}"><button>Continuar</button></form><script>document.querySelector('form').addEventListener('submit',event=>{event.preventDefault();if(!event.target.reportValidity())return;parent.postMessage({source:'cfgauss-embed-form',formId:'0a702231-3472-412f-8e3b-00ecfa481100',event:'success'},'*')})</script>`
+        : '<!doctype html><title>Intercepted synthetic action</title>';
+      await route.fulfill({ status: 200, contentType: 'text/html', body });
+    }
   });
 }
 async function dimensions(page) {
@@ -83,17 +98,19 @@ async function responsive(page, name, enforce = true) {
   return { ...size, screenshot: `${name}.png` };
 }
 async function content(page) {
-  const text = await page.locator('body').innerText();
-  for (const phrase of ['Resenha', 'Segure a tecla.', 'Fale do seu jeito.', 'Solte. Está escrito.', 'cursor original',
-    'Right Option', 'planejada', 'whisper.cpp', 'OpenAI', 'áudio será enviado', 'cobrança separada',
-    'não recebe chaves', 'Apache 2.0', 'WinUI', 'Rust', 'não há instalador independente', 'Windows ainda não foi implementada',
-    'Prévia ilustrativa', 'compatibilidade varia', 'validação de uso ainda está em andamento']) assert.ok(text.toLocaleLowerCase('pt-BR').includes(phrase.toLocaleLowerCase('pt-BR')), `Missing honest content: ${phrase}`);
-  assert.equal(await page.locator('form,input,iframe,audio,video').count(), 0);
-  assert.equal(await page.locator('a[href^="http"]').count(), 0);
-  assert.equal(await page.locator('link[rel="canonical"],meta[property="og:url"],script[type="application/ld+json"]').count(), 0);
+  const rawText = await page.locator('body').innerText();
+  const text = rawText.replace(/\s+/gu, ' ').trim();
+  for (const phrase of ['Resenha', 'Fale sem contar palavras.', 'Deixe o cursor no campo', 'O HUD responde',
+    'O Whisper transcreve localmente', 'cursor já está',
+    '⌥ direita', 'Windows em validação', 'whisper.cpp', 'sem limite semanal',
+    'licença MIT']) assert.ok(text.toLocaleLowerCase('pt-BR').includes(phrase.toLocaleLowerCase('pt-BR')), `Missing honest content: ${phrase}`);
+  assert.equal(await page.locator('form,input,iframe,audio').count(), 0);
+  assert.equal(await page.locator('video').count(), 2);
+  assert.ok(await page.locator('a[href^="http"],link[rel="canonical"][href^="http"]').count() >= 1);
+  assert.equal(await page.locator('link[rel="canonical"],meta[property="og:url"],script[type="application/ld+json"]').count(), 3);
   assert.equal(await page.locator('html').getAttribute('lang'), 'pt-BR');
-  assert.match(await page.title(), /Resenha.*desenvolvimento/u);
-  assert.match(await page.locator('meta[name="description"]').getAttribute('content'), /desenvolvimento.*Windows planejado/u);
+  assert.match(await page.title(), /Alternativa gratuita.*Resenha/u);
+  assert.match(await page.locator('meta[name="description"]').getAttribute('content'), /alternativa gratuita.*Wispr Flow/u);
   await save('visible-copy.json', { text, title: await page.title() });
   return { text: 'visible-copy.json', forbiddenInteractiveElements: 0, externalLinks: 0 };
 }
@@ -103,13 +120,15 @@ async function adapter(page, base, fixture) {
   const slotChannel = channel === 'other' ? 'macos' : channel;
   await page.evaluate(async ({ base, channel, slotChannel, record }) => {
     const { applyReleaseState } = await import(new URL('release.mjs', base).href);
-    const slot = document.querySelector(`[data-release-channel="${slotChannel}"]`);
+    document.querySelectorAll('[data-audit-target]').forEach(element => delete element.dataset.auditTarget);
+    const slot = document.querySelector(`[data-release-channel="${slotChannel}"]`) ?? document.querySelector('[data-release-channel="source"]');
     slot.dataset.releaseChannel = channel;
+    slot.dataset.auditTarget = 'true';
     applyReleaseState(document, { [channel]: record });
   }, { base, channel, slotChannel, record: fixture.record });
-  const slot = page.locator(`[data-release-channel="${channel}"]`);
-  const expected = resolveDestination(channel, fixture.record);
-  assert.equal(await slot.locator('a').count(), fixture.active ? 1 : 0);
+  const slot = page.locator('[data-audit-target="true"]');
+  const expected = resolvePresentation(channel, fixture.record);
+  assert.equal(await slot.locator('a,button').count(), expected.active ? 1 : 0);
   assert.equal(await slot.locator('.release-action').innerText(), expected.label);
   assert.equal(await slot.locator('.release-reason').innerText(), expected.reason);
   return slot;
@@ -118,21 +137,30 @@ async function destinations(page, base) {
   for (const fixture of destinationFixtures) {
     await check(`CK-7 adapter ${fixture.name}`, async () => {
       const slot = await adapter(page, base, fixture);
-      if (!fixture.active) assert.equal(await slot.locator('.release-action').getAttribute('aria-disabled'), 'true');
+      const expected = resolvePresentation(fixture.channel, fixture.record);
+      if (!expected.active) assert.equal(await slot.locator('.release-action').getAttribute('aria-disabled'), 'true');
+      else if (fixture.channel === 'macos') assert.equal(await slot.locator('button').count(), 1);
       else assert.equal(await slot.locator('a').getAttribute('href'), fixture.record.url);
-      return { channel: fixture.channel, active: fixture.active };
+      return { channel: fixture.channel, active: expected.active };
     });
     for (const action of ['mouse', 'keyboard']) await check(`CK-7 ${action} ${fixture.name}`, async () => {
       const slot = await adapter(page, base, fixture);
       const initial = page.url(), offset = network.length;
       let downloads = 0; const onDownload = () => { downloads++; }; page.on('download', onDownload);
       try {
-        if (fixture.active) {
+        const expected = resolvePresentation(fixture.channel, fixture.record);
+        if (expected.active && fixture.channel !== 'macos') {
           const reached = page.waitForURL(fixture.record.url);
           if (action === 'mouse') await slot.locator('a').click();
           else { await slot.locator('a').focus(); await page.keyboard.press('Enter'); }
           await reached;
           assert.ok(network.slice(offset).some(entry => entry.action === 'intercepted' && entry.url === fixture.record.url));
+        } else if (expected.active) {
+          if (action === 'mouse') await slot.locator('button').click();
+          else { await slot.locator('button').focus(); await page.keyboard.press('Enter'); }
+          await page.locator('dialog[open]').waitFor();
+          await page.keyboard.press('Escape');
+          assert.equal(page.url(), initial); assert.equal(downloads, 0);
         } else {
           if (action === 'mouse') await slot.locator('.release-action').click();
           else {
@@ -146,34 +174,85 @@ async function destinations(page, base) {
           assert.equal(page.url(), initial); assert.equal(downloads, 0);
           assert.equal(network.slice(offset).filter(entry => entry.action !== 'proxy-blocked').length, 0);
         }
-        return { intercepted: fixture.active, navigated: fixture.active, downloads };
+        return { active: expected.active, navigated: expected.active && fixture.channel !== 'macos', downloads };
       } finally { page.off('download', onDownload); }
     });
   }
 }
+
+async function downloadGate(page, base) {
+  await page.goto(base);
+  await page.locator('[data-release-channel="macos"] button').click();
+  const dialog = page.locator('dialog[open]'); await dialog.waitFor();
+  const frame = page.frameLocator('iframe[title="Liberar download do Resenha"]');
+  await frame.locator('button').click();
+  assert.equal(page.url(), base, 'Blank required fields cannot complete the gate');
+  await frame.locator('input[name="name"]').fill('Teste Resenha');
+  await frame.locator('input[name="email"]').fill('invalido');
+  await frame.locator('input[name="whatsapp"]').fill('31999999999');
+  await frame.locator('button').click();
+  assert.equal(page.url(), base, 'Invalid email cannot complete the gate');
+  await page.evaluate(async () => {
+    const stale = document.querySelector('iframe').contentWindow;
+    document.querySelector('dialog').close();
+    const { openDownloadGate } = await import('./download-gate.mjs');
+    openDownloadGate('macos');
+    window.dispatchEvent(new MessageEvent('message', { origin: 'https://cfgauss.com.br', source: stale,
+      data: { source: 'cfgauss-embed-form', formId: '0a702231-3472-412f-8e3b-00ecfa481100', event: 'success' } }));
+  });
+  await dialog.waitFor();
+  await page.waitForTimeout(450); assert.equal(page.url(), base, 'Closed-session completion cannot redirect');
+  assert.equal(await page.evaluate(async () => (await import('./download-gate.mjs')).openDownloadGate('windows')), false);
+  assert.equal(await dialog.count(), 1, 'Unavailable Windows cannot replace the active Mac dialog');
+  await frame.locator('input[name="name"]').fill('Teste Resenha');
+  await frame.locator('input[name="email"]').fill('teste@example.invalid');
+  await frame.locator('input[name="whatsapp"]').fill('31999999999');
+  const redirect = page.waitForURL(/formredirect-/u); await frame.locator('button').click(); await redirect;
+  return { blankRejected: true, invalidEmailRejected: true, staleRejected: true, windowsUnavailable: true,
+    realSubmission: false, syntheticIdentity: true };
+}
 async function keyboard(page, base) {
   await page.goto(base);
-  const controls = await page.locator('a,summary').count();
-  await page.locator('a,summary').evaluateAll(elements => elements.forEach((el, i) => el.dataset.auditOrder = i));
+  const candidates = page.locator('a[href],button:not([disabled]),summary,video[controls],[tabindex="0"]');
+  await candidates.evaluateAll(elements => {
+    let order = 0;
+    for (const element of elements) {
+      delete element.dataset.auditOrder;
+      if (element.getClientRects().length && getComputedStyle(element).visibility !== 'hidden') {
+        element.dataset.auditOrder = String(order++);
+      }
+    }
+  });
+  const controls = await page.locator('[data-audit-order]').count();
   const trace = [];
-  for (let i = 0; i < controls; i++) {
+  let expected = 0;
+  for (let presses = 0; expected < controls && presses < controls + 20; presses++) {
     await page.keyboard.press('Tab');
+    await page.waitForTimeout(600);
     const focus = await page.evaluate(() => {
       const el = document.activeElement, css = getComputedStyle(el), rect = el.getBoundingClientRect();
       return { order: Number(el.dataset.auditOrder), name: el.getAttribute('aria-label') || el.textContent.trim(), tag: el.tagName,
         outline: css.outlineStyle, outlineWidth: css.outlineWidth, outlineColor: css.outlineColor, rect: rect.toJSON(), viewport: { innerWidth, innerHeight } };
     });
-    trace.push(focus); assert.equal(focus.order, i); assert.ok(focus.name);
-    assert.ok(focus.outline !== 'none' && parseFloat(focus.outlineWidth) >= 3);
+    trace.push(focus);
+    if (focus.tag === 'VIDEO' && focus.order === expected - 1) continue;
+    assert.equal(focus.order, expected); assert.ok(focus.name); expected++;
+    assert.ok(focus.outline !== 'none' && parseFloat(focus.outlineWidth) >= 3,
+      `Focused control lacks a 3px indicator: ${JSON.stringify(focus)}`);
     assert.ok(focus.rect.left >= 0 && focus.rect.right <= focus.viewport.innerWidth + 1);
-    assert.ok(focus.rect.top >= 0 && focus.rect.bottom <= focus.viewport.innerHeight + 1);
+    const fullyFits = focus.rect.height <= focus.viewport.innerHeight;
+    assert.ok(fullyFits ? focus.rect.top >= 0 && focus.rect.bottom <= focus.viewport.innerHeight + 1
+      : focus.rect.top <= focus.viewport.innerHeight && focus.rect.bottom >= 0,
+    `Focused control is outside the viewport: ${JSON.stringify(focus)}`);
   }
+  assert.equal(expected, controls, 'Every authored keyboard control must be reached');
   await save('focus-trace.json', trace);
-  await page.keyboard.press('Tab'); await page.keyboard.press('Tab');
+  await page.keyboard.press('Tab');
+  if (await page.evaluate(() => document.activeElement.dataset.auditOrder) !== '0') await page.keyboard.press('Tab');
   assert.equal(await page.evaluate(() => document.activeElement.dataset.auditOrder), '0', 'Tab exits last control and returns to first');
   await page.keyboard.press('Enter'); assert.equal(new URL(page.url()).hash, '#conteudo');
   await page.goto(base);
-  for (let i = 0; i < 5; i++) await page.keyboard.press('Tab');
+  await page.locator('a[href="#download"]').first().focus();
   await page.keyboard.press('Enter'); assert.equal(new URL(page.url()).hash, '#download');
   for (const summary of await page.locator('summary').all()) {
     await summary.focus(); await page.keyboard.press('Enter'); assert.equal(await summary.locator('..').getAttribute('open'), '');
@@ -188,6 +267,17 @@ async function accessibility(page, name) {
   assert.deepEqual(result.violations, [], `${name}: axe violations`);
   const contrastReview = [];
   for (const incomplete of result.incomplete) {
+    if (incomplete.id === 'video-caption') {
+      for (const node of incomplete.nodes) {
+        assert.equal(node.target.length, 1, 'Nested video target needs explicit review');
+        const reviewed = await page.locator(node.target[0]).evaluate(video => ({ muted: video.muted,
+          label: video.getAttribute('aria-label'), audioTracks: video.audioTracks?.length ?? null }));
+        assert.equal(reviewed.muted, true, 'Promotional video must default to muted');
+        assert.ok(reviewed.label, 'Promotional video needs an accessible label');
+        contrastReview.push({ kind: 'muted promotional video', ...reviewed });
+      }
+      continue;
+    }
     assert.equal(incomplete.id, 'color-contrast', 'Unexpected indeterminate axe rule requires review');
     for (const node of incomplete.nodes) {
       assert.equal(node.target.length, 1, 'Nested target needs explicit review');
@@ -203,23 +293,32 @@ async function accessibility(page, name) {
           if (!color.includes('rgba') || !color.endsWith(', 0)')) base = color;
           parent = parent.parentElement;
         }
-        return { kind: 'gradient text', foreground: style.color, background: base, image: style.backgroundImage };
+        return { kind: 'contrast text', foreground: style.color, background: base, image: style.backgroundImage };
       });
-      if (review.kind === 'gradient text') {
-        assert.ok(review.image.startsWith('repeating-linear-gradient('), 'Only inspected ruled-note gradient supported');
-        const colors = [...review.image.matchAll(/rgba?\([^)]+\)/gu)].map(match => match[0]);
-        const luminance = color => {
+      if (review.kind === 'contrast text') {
+        assert.ok(review.image === 'none' || review.image.startsWith('repeating-linear-gradient('),
+          'Only solid and inspected ruled-note backgrounds are supported');
+        const colors = review.image === 'none' ? [] : [...review.image.matchAll(/rgba?\([^)]+\)/gu)].map(match => match[0]);
+        const parseColor = color => {
           const channels = color.match(/[\d.]+/gu).map(Number);
-          assert.ok(channels.length === 3 || channels[3] === 0 || channels[3] === 1, 'Partial transparency needs compositing review');
-          return channels.slice(0, 3).map(value => value / 255).map(value => value <= .04045 ? value / 12.92 : ((value + .055) / 1.055) ** 2.4)
-            .reduce((sum, value, index) => sum + value * [.2126, .7152, .0722][index], 0);
+          assert.ok(channels.length === 3 || channels.length === 4, 'Only RGB and RGBA colors are supported');
+          return { rgb: channels.slice(0, 3), alpha: channels[3] ?? 1 };
         };
-        const foreground = luminance(review.foreground);
-        review.backgrounds = [review.background, ...colors.filter(color => !color.endsWith(', 0)'))];
-        review.ratios = review.backgrounds.map(color => {
-          const background = luminance(color); return (Math.max(foreground, background) + .05) / (Math.min(foreground, background) + .05);
+        const base = parseColor(review.background);
+        assert.equal(base.alpha, 1, 'Base background must be opaque');
+        const composite = color => {
+          const layer = parseColor(color);
+          return layer.rgb.map((value, index) => value * layer.alpha + base.rgb[index] * (1 - layer.alpha));
+        };
+        const luminance = rgb => rgb.map(value => value / 255).map(value => value <= .04045 ? value / 12.92 : ((value + .055) / 1.055) ** 2.4)
+            .reduce((sum, value, index) => sum + value * [.2126, .7152, .0722][index], 0);
+        const foreground = luminance(composite(review.foreground));
+        review.backgrounds = [review.background, ...colors.filter(color => parseColor(color).alpha > 0)];
+        review.ratios = review.backgrounds.map((color, index) => {
+          const background = luminance(index === 0 ? base.rgb : composite(color));
+          return (Math.max(foreground, background) + .05) / (Math.min(foreground, background) + .05);
         });
-        assert.ok(review.ratios.every(value => value >= 4.5), 'Every ruled-note background must meet normal-text AA contrast');
+        assert.ok(review.ratios.every(value => value >= 4.5), 'Every reviewed background must meet normal-text AA contrast');
       }
       contrastReview.push({ selector, ...review });
     }
@@ -229,7 +328,7 @@ async function accessibility(page, name) {
   assert.equal(await page.locator('header nav[aria-label],footer').count(), 2);
   assert.equal(await page.locator('svg:not([aria-hidden="true"]):not(.preview-hud svg)').count(), 0);
   assert.equal(await page.locator('img:not([alt])').count(), 0);
-  assert.match(await page.locator('figure figcaption').innerText(), /Prévia ilustrativa/iu);
+  assert.match(await page.locator('figure figcaption').first().innerText(), /Demonstração do HUD/iu);
   return { report: `axe-${name}.json`, violations: 0, rawIncomplete: result.incomplete.map(item => ({ id: item.id, impact: item.impact })),
     unresolved: 0, supplementalReview: `contrast-${name}.json`, resolvedNodes: contrastReview.length };
 }
@@ -246,18 +345,24 @@ async function browserAudit() {
     await context.tracing.start({ screenshots: true, snapshots: true, sources: true });
     const page = await context.newPage(); await page.goto(server.url);
     const essentialText = await page.evaluate(() => {
-      const clone = document.body.cloneNode(true); clone.querySelectorAll('[data-release-channel],script').forEach(el => el.remove());
+      const clone = document.body.cloneNode(true);
+      clone.querySelectorAll('[data-release-channel],[data-site-enhancement],script').forEach(el => el.remove());
       return clone.textContent.replace(/\s+/gu, ' ').trim();
     });
     const suffix = prefix === '/' ? 'root' : 'subpath';
     await check(`CK-1–6/8/11 honest content ${suffix}`, () => content(page));
     await check(`CK-7/15 default slots ${suffix}`, async () => {
-      for (const channel of ['macos', 'source', 'store']) {
-        const slot = page.locator(`[data-release-channel="${channel}"]`);
-        assert.equal(await slot.locator('a').count(), 0); assert.ok((await slot.innerText()).length > 30);
+      for (const channel of ['macos', 'source', 'windows']) {
+        const slots = page.locator(`[data-release-channel="${channel}"]`);
+        for (const slot of await slots.all()) {
+          if (channel === 'macos') assert.equal(await slot.locator('button').count(), 1);
+          else if (channel === 'source') assert.equal(await slot.locator('a').count(), 1);
+          else assert.equal(await slot.locator('a,button').count(), 0);
+          assert.ok((await slot.innerText()).length > 30);
+        }
       }
-      assert.equal(await page.locator('.site-header a[href="#download"],.hero a[href="#download"],.closing a[href="#download"]').count(), 3);
-      return { sharedLocalDownloadAnchors: 3, inactiveSlots: 3 };
+      assert.equal(await page.locator('.site-header a[href="#download"],.hero a[href="#download"],.closing a[href="#download"]').count(), 2);
+      return { sharedLocalDownloadAnchors: 2, macosReady: true, sourceReady: true, windowsUnavailable: true };
     });
     const widths = [...new Set([319, 320, 321, 768, 1440, ...breakpoints.flatMap(value => [value - 1, value, value + 1])])].sort((a, b) => a - b);
     for (const width of widths) await check(`CK-9 ${suffix} width ${width}`, async () => {
@@ -269,7 +374,7 @@ async function browserAudit() {
     await check(`CK-10 axe ${suffix} mobile`, () => accessibility(page, `${suffix}-mobile`));
     await page.setViewportSize({ width: 1440, height: 1000 });
     await check(`CK-10 keyboard/FAQ ${suffix}`, () => keyboard(page, server.url));
-    if (prefix === '/') await destinations(page, server.url);
+    if (prefix === '/') { await destinations(page, server.url); await check('CK-10 form session and platform isolation', () => downloadGate(page, server.url)); }
     else {
       for (const fixture of [destinationFixtures[0], ...destinationFixtures.slice(28)]) await check(`CK-7 subpath adapter ${fixture.name}`, async () => {
         await adapter(page, server.url, fixture); return { active: fixture.active };
@@ -284,15 +389,19 @@ async function browserAudit() {
         await guard(variantContext, server.origin); const variantPage = await variantContext.newPage(); await variantPage.goto(server.url);
         await content(variantPage);
         const equivalentText = await variantPage.evaluate(() => {
-          const clone = document.body.cloneNode(true); clone.querySelectorAll('[data-release-channel],script').forEach(el => el.remove());
+          const clone = document.body.cloneNode(true);
+          clone.querySelectorAll('[data-release-channel],[data-site-enhancement],script').forEach(el => el.remove());
           return clone.textContent.replace(/\s+/gu, ' ').trim();
         });
         assert.equal(equivalentText, essentialText, 'No-JS/motion/appearance must retain identical essential content');
-        assert.equal(await variantPage.locator('[data-release-channel] a').count(), 0);
+        assert.equal(await variantPage.locator('[data-release-channel] a').count(), variant === 'no-js' ? 0 : 2);
         for (const summary of await variantPage.locator('summary').all()) { await summary.click(); assert.equal(await summary.locator('..').getAttribute('open'), ''); }
         if (variant !== 'no-js') {
-          assert.equal(await variantPage.evaluate(() => document.getAnimations().length), 0);
-          if (variant === 'reduced-motion') assert.equal(await variantPage.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches), true);
+          if (variant === 'reduced-motion') {
+            assert.equal(await variantPage.evaluate(() => document.getAnimations().length), 0);
+            assert.equal(await variantPage.evaluate(() => matchMedia('(prefers-reduced-motion: reduce)').matches), true);
+          }
+          if (variant === 'dark') assert.equal(await variantPage.evaluate(() => matchMedia('(prefers-color-scheme: dark)').matches), true);
           await accessibility(variantPage, `${suffix}-${variant}`);
         }
         return { ...await responsive(variantPage, `${suffix}-${variant}`), options, faqAccessibleWithoutEnhancement: true };
@@ -390,7 +499,8 @@ async function lighthouseAudit() {
 try {
   if (kind === 'browser') await browserAudit(); else await lighthouseAudit();
   await check('CK-13 intercepted destinations only', async () => {
-    const permitted = new Set(destinationFixtures.filter(item => item.active).map(item => item.record.url));
+    const permitted = new Set([...destinationFixtures.filter(item => item.active).map(item => item.record.url),
+      DOWNLOAD_PLATFORMS.macos.formUrl, DOWNLOAD_PLATFORMS.macos.redirectUrl]);
     const intercepted = network.filter(item => item.action === 'intercepted');
     assert.ok(intercepted.every(item => permitted.has(item.url)), 'Unexpected external site request');
     return { interceptedSyntheticActions: intercepted.length, escapedRequests: 0, denyProxyBlocks: network.filter(item => item.action.startsWith('proxy-blocked')).length };

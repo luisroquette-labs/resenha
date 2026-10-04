@@ -24,10 +24,10 @@ Windows planned/unavailable slot, immutable validated platform configs and sessi
 
 #### Subtasks
 
-- [ ] Implement Windows evidence validation and immutable platform configuration carrying platform/version/formId/formUrl/redirectUrl/artifactUrl/artifactSha256.
-- [ ] Refactor openDownloadGate(platform) around a fresh iframe/session generation, frozen config, one success and canceled stale handlers/timers; bound height messages.
-- [ ] Extend named site fixture groups while preserving every existing Mac negative/positive case and required-field checks; synthetic interception creates no real lead.
-- [ ] Run mac-gate node --test Scripts/site.test.mjs Scripts/windows-release.test.mjs, covering false completion, wrong platform, absent config, unavailable release and valid synthetic Windows/Mac routes.
+- [x] Implement Windows evidence validation and immutable platform configuration carrying platform/version/formId/formUrl/redirectUrl/artifactUrl/artifactSha256.
+- [x] Refactor openDownloadGate(platform) around a fresh iframe/session generation, frozen config, one success and canceled stale handlers/timers; bound height messages.
+- [x] Extend named site fixture groups while preserving every existing Mac negative/positive case and required-field checks; synthetic interception creates no real lead.
+- [x] Run mac-gate node --test Scripts/site.test.mjs Scripts/windows-release.test.mjs, covering false completion, wrong platform, absent config, unavailable release and valid synthetic Windows/Mac routes.
 
 #### Blockers & Risks
 

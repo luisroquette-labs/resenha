@@ -31,12 +31,14 @@ function loadTagManager() {
 function renderConsentControls(storedChoice) {
   const banner = document.createElement('aside');
   banner.className = 'consent-banner';
+  banner.dataset.siteEnhancement = 'analytics-consent';
   banner.setAttribute('aria-label', 'Preferências de métricas');
   banner.innerHTML = `<div><strong>Métricas do site</strong><p>Usamos GA4 para entender visitas e downloads. Nunca enviamos nome, e-mail, áudio ou transcrições ao Google.</p></div><div class="consent-actions"><button type="button" data-consent="essential">Somente essenciais</button><button type="button" data-consent="analytics">Aceitar métricas</button></div>`;
 
   const preferences = document.createElement('button');
   preferences.type = 'button';
   preferences.className = 'consent-preferences';
+  preferences.dataset.siteEnhancement = 'analytics-consent';
   preferences.textContent = 'Cookies';
   preferences.setAttribute('aria-label', 'Reabrir preferências de métricas');
   preferences.addEventListener('click', () => banner.hidden = false);
