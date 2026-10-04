@@ -1,9 +1,8 @@
-# Windows scaffold — Step 02
+# Resenha para Windows — estado de desenvolvimento
 
-Development scaffold only. The WPF executable exits without opening UI or
-starting a hook, microphone, inference process or clipboard operation. The
-broker exits without starting IPC or UI Automation. Managed cross-target checks
-have run on macOS, but no native Windows execution or usable release is asserted.
+O aplicativo WPF já compõe o fluxo local de atalho, WASAPI, whisper.cpp,
+clipboard, inserção, tray, HUD e ajustes. O build x64 e os testes portáteis rodam
+no Mac, mas nenhuma execução nativa do Windows nem release utilizável é afirmada.
 
 ## Boundaries
 
@@ -28,9 +27,11 @@ Run structural checks on the Mac from the repository root:
 ~/.local/bin/mac-gate node --test Windows/scaffold.test.mjs
 ```
 
-The current macOS arm64 host now has .NET SDK 10.0.401. It completed locked
-restore, cross-target compilation, 127 Core tests and 67 portable Platform tests
-on 2026-10-04.
+The current macOS arm64 host has .NET SDK 10.0.401. It completed locked restore,
+cross-target x64 compilation, 145 Core tests and the 43 explicitly categorized
+portable Platform tests on 2026-10-04. An additional 34 Platform tests completed
+in the broad run, while four native tests failed and four Media Foundation cases
+were inconclusive because this is not Windows; those are blockers, not skips.
 Those checks prove the managed dependency graph and portable code compile; they
 do not prove Win32 execution, WPF, hooks, WASAPI, UI Automation, signing or the
 installer. `toolchain-lock.json` therefore leaves the approved native Windows

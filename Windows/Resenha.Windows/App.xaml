@@ -2,5 +2,31 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              ShutdownMode="OnExplicitShutdown">
-    <Application.Resources />
+    <Application.Resources>
+        <SolidColorBrush x:Key="Ink" Color="#202522" />
+        <SolidColorBrush x:Key="MutedInk" Color="#59615D" />
+        <SolidColorBrush x:Key="Cream" Color="#F4F1E8" />
+        <SolidColorBrush x:Key="Paper" Color="#FFFDF7" />
+        <SolidColorBrush x:Key="Sage" Color="#527C70" />
+        <SolidColorBrush x:Key="SageSoft" Color="#DDE9E4" />
+        <SolidColorBrush x:Key="Rule" Color="#D7D7CF" />
+        <Style TargetType="Window">
+            <Setter Property="FontFamily" Value="Segoe UI Variable Text, Segoe UI" />
+            <Setter Property="Foreground" Value="{StaticResource Ink}" />
+            <Setter Property="Background" Value="{StaticResource Cream}" />
+        </Style>
+        <Style TargetType="Button">
+            <Setter Property="Padding" Value="18,9" />
+            <Setter Property="MinHeight" Value="38" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Background" Value="{StaticResource Ink}" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+        <Style TargetType="ComboBox">
+            <Setter Property="MinHeight" Value="38" />
+            <Setter Property="Padding" Value="10,5" />
+            <Setter Property="Background" Value="{StaticResource Paper}" />
+        </Style>
+    </Application.Resources>
 </Application>

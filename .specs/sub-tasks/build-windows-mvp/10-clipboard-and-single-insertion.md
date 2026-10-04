@@ -24,10 +24,10 @@ STA Unicode clipboard commit token and fail-closed original-target insertion ada
 
 #### Subtasks
 
-- [ ] Implement immediate CF_UNICODETEXT rendering/readback and ClipboardToken generation on STA context with bounded contention retries.
-- [ ] Implement target and sequence recheck, physical modifier wait and single four-event SendInput batch with synthetic-only cleanup.
-- [ ] Map blocked/elevated/password/protected/unknown targets and changed clipboard to manual/copy recovery; manual Copy again never pastes.
-- [ ] Write tests for locked/replaced clipboard, failed readback, target changes/return, PID reuse, partial dispatch and cancellation; run Windows boundary tests.
+- [x] Implement immediate CF_UNICODETEXT rendering/readback and ClipboardToken generation on STA context with bounded contention retries.
+- [x] Implement target and sequence recheck, physical modifier wait and single four-event SendInput batch with synthetic-only cleanup.
+- [x] Map blocked/elevated/password/protected/unknown targets and changed clipboard to manual/copy recovery; manual Copy again never pastes.
+- [x] Write tests for locked/replaced clipboard, failed readback, target changes/return, PID reuse, partial dispatch and cancellation; run Windows boundary tests.
 
 #### Blockers & Risks
 

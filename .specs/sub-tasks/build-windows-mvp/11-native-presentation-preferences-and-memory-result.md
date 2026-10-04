@@ -24,10 +24,10 @@ Native nonactivating status overlay, first-run settings, tray commands and atomi
 
 #### Subtasks
 
-- [ ] Build WPF view model and tray/settings/overlay bindings for real level and Ready/Recording/Transcribing/Inserting/ManualPaste/CopyRequired/error states.
-- [ ] Implement shortcut capture, explicit PT-BR/EN/ES/microphone/model setup and actionable permission/device messages.
-- [ ] Implement PreferencesStore atomic schema validation and RAM-only result clear/copy behavior; create icon from approved existing branding without editing existing assets.
-- [ ] Add PresentationTests.cs and PreferencesTests.cs for stale HUD dismissal, noactivation styles, malformed/restart settings and absence of transcript disk fields; run Windows tests.
+- [x] Build WPF view model and tray/settings/overlay bindings for Ready/Recording/Transcribing/Inserting/ManualPaste/CopyRequired/error states. Live audio level remains native-host validation work.
+- [x] Implement configurable safe shortcut choices, explicit PT-BR/EN/ES/microphone/model setup and actionable permission/device messages.
+- [x] Implement PreferencesStore atomic schema validation and RAM-only result clear/copy behavior; create icon from approved existing branding without editing existing assets.
+- [x] Add PresentationContractTests.cs and PreferencesTests.cs for noactivation styles, malformed/restart settings and absence of transcript disk fields; run portable Windows tests.
 
 #### Blockers & Risks
 

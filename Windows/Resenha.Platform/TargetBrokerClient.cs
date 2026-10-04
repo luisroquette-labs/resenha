@@ -12,7 +12,7 @@ internal interface IFocusBrokerTransport
     ValueTask<TargetBrokerResponse?> ProbeAsync(AttemptId attempt, CancellationToken cancellationToken);
 }
 
-public sealed class TargetBrokerClient : ITargetProbe
+public sealed class TargetBrokerClient : ITargetProbe, ITargetAttemptLifetime
 {
     public static readonly TimeSpan BrokerTimeout = TimeSpan.FromMilliseconds(300);
     private readonly TargetActivityTracker activity;

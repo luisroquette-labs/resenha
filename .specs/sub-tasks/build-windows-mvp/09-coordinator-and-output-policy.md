@@ -24,10 +24,10 @@ Finite Idle/Recording/Transcribing/Inserting/Failed coordinator and deterministi
 
 #### Subtasks
 
-- [ ] Implement serialized transitions, monotonic deadlines and attempt generations for all architecture limits; visible busy/cancel/recovery states.
-- [ ] Implement acknowledged resource disposal, no auto-retry and explicit fatal audio-stop outcome consumed by the shell.
-- [ ] Implement OutputPolicy using read-only Tests/Fixtures/output-corpus.json; no generative rewrite/translation/history.
-- [ ] Write race/fake-clock/state-table tests including stale callback deleting a newer attempt, release during start, double release, cancel during clipboard and all named errors; run Core checks through mac-gate.
+- [x] Implement serialized transitions, monotonic deadlines and attempt generations for all architecture limits; visible busy/cancel/recovery states.
+- [x] Implement acknowledged resource disposal, no auto-retry and explicit fatal audio-stop outcome consumed by the shell.
+- [x] Implement OutputPolicy using read-only Tests/Fixtures/output-corpus.json; no generative rewrite/translation/history.
+- [x] Write race/fake-clock/state-table tests including stale callback deleting a newer attempt, release during start, double release, cancel during clipboard and all named errors; run Core checks through mac-gate.
 
 #### Blockers & Risks
 

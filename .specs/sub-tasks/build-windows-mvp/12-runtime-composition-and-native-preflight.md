@@ -24,9 +24,9 @@ End-to-end development app plus serialized Windows compile/static/unit/integrati
 
 #### Subtasks
 
-- [ ] Compose real adapters and ProductViewModel; implement readiness, single-instance local IPC, startup cleanup and suspend/resume/shutdown ownership.
-- [ ] Implement fail-closed audio-stop fatal behavior and safe settings/cancel/copy dispatch without permanent extra keyboard shortcuts.
-- [ ] Implement preflight.ps1 with root/path resolution before Push-Location, finally Pop-Location, host mutex, bounded native workers and propagated failures.
+- [x] Compose real adapters and ProductViewModel; implement readiness, single-instance local IPC, startup cleanup and suspend/resume/shutdown ownership.
+- [x] Implement fail-closed audio-stop fatal behavior and safe settings/cancel/copy dispatch without permanent extra keyboard shortcuts.
+- [x] Implement preflight.ps1 with root/path resolution before Push-Location, finally Pop-Location, host mutex, bounded native workers and propagated failures.
 - [ ] Write end-to-end lifecycle/privacy regression tests and preflight failure tests for wrong SDK/cwd/missing CLI/model/skipped tests; execute full Windows source gate and record actual output.
 
 #### Blockers & Risks

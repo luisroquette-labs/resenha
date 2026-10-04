@@ -56,8 +56,16 @@ test('portable Core has no UI, native, network or project/package dependencies',
   }
 });
 
-test('app remains inert while the broker exposes only bounded local IPC', () => {
-  assert.match(read('Resenha.Windows/App.xaml.cs'), /Shutdown\(0\)/);
+test('app composition owns one instance, real adapters and bounded local IPC', () => {
+  const app = read('Resenha.Windows/App.xaml.cs');
+  for (const boundary of ['SingleInstanceCoordinator', 'KeyboardHook', 'WasapiRecorder', 'ModelStore',
+    'TargetBrokerClient', 'ClipboardService', 'TextInjector', 'WhisperCliTranscriber', 'DictationCoordinator']) {
+    assert.ok(app.includes(boundary), boundary);
+  }
+  assert.match(app, /PipeOptions\.Asynchronous \| PipeOptions\.CurrentUserOnly/);
+  assert.match(app, /shortcut\.Edge \+= ShortcutEdge/);
+  assert.match(app, /await coordinator\.DisposeAsync\(\)/);
+  assert.match(app, /await shortcut\.DisposeAsync\(\)/);
   assert.doesNotMatch(read('Resenha.Windows/App.xaml'), /StartupUri=/);
   const broker = read('Resenha.TargetBroker/Program.cs');
   const client = read('Resenha.Platform/TargetBrokerClient.cs');
@@ -75,8 +83,8 @@ test('cross-target evidence is recorded without claiming native Windows validati
   assert.equal(lock.approvedHostInventory, null);
   assert.match(lock.validation.lockedRestore, /^passed-on-macos-cross-target-/);
   assert.match(lock.validation.compile, /^passed-on-macos-cross-target-/);
-  assert.match(lock.validation.coreTests, /^passed-127-on-macos-/);
-  assert.match(lock.validation.platformTests, /^passed-67-portable-on-macos-.*native-not-run-/);
+  assert.match(lock.validation.coreTests, /^passed-145-on-macos-/);
+  assert.match(lock.validation.platformTests, /^passed-43-explicit-portable-plus-34-other-nonnative-on-macos-.*native-failed-or-inconclusive-as-required-/);
   assert.match(lock.validation.dependencyLocks, /^generated-with-sdk-10\.0\.401-/);
   for (const name of projects) assert.ok(existsSync(resolve(root, `${name}/packages.lock.json`)));
   assert.deepEqual(json('Resenha.Core/packages.lock.json').dependencies, { 'net10.0': {} });
