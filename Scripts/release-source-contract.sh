@@ -8,10 +8,17 @@ release_relevant_paths=(
   Frameworks
   Vendor/whisper.cpp
   Scripts
+  site
+  AppStore
+  ':(exclude)AppStore/release-state.json'
   project.yml
   WhisperKey.xcodeproj
   THIRD_PARTY_NOTICES.md
 )
+
+# Deliberately excluded from archive provenance: `.specs/**`, `docs/**`, README files
+# and `AppStore/release-state.json`. They may record evidence in descendant commits but
+# never alter the executable, release tooling, store metadata or conversion assets.
 
 release_source_fail() {
   print -u2 "FALHOU: $*"
@@ -29,11 +36,13 @@ validate_release_source_commit() {
   git -C "$project_root" cat-file -e "$source_commit^{commit}" 2>/dev/null \
     || { release_source_fail "source commit não existe no repositório: $source_commit"; return 1; }
   head_commit="$(git -C "$project_root" rev-parse HEAD)"
-  [[ "$source_commit" == "$head_commit" ]] \
-    || { release_source_fail "source commit $source_commit diverge do HEAD $head_commit"; return 1; }
-  git -C "$project_root" diff --quiet "$source_commit" -- $release_relevant_paths \
-    || { release_source_fail "fontes relevantes divergem do source commit"; return 1; }
-  git -C "$project_root" diff --cached --quiet "$source_commit" -- $release_relevant_paths \
+  git -C "$project_root" merge-base --is-ancestor "$source_commit" "$head_commit" \
+    || { release_source_fail "source commit não é ancestral do HEAD $head_commit"; return 1; }
+  git -C "$project_root" diff --quiet "$source_commit..$head_commit" -- $release_relevant_paths \
+    || { release_source_fail "descendentes alteraram fontes relevantes desde o source commit"; return 1; }
+  git -C "$project_root" diff --quiet "$head_commit" -- $release_relevant_paths \
+    || { release_source_fail "worktree alterou fontes relevantes desde o HEAD"; return 1; }
+  git -C "$project_root" diff --cached --quiet "$head_commit" -- $release_relevant_paths \
     || { release_source_fail "fontes relevantes staged divergem do source commit"; return 1; }
   untracked="$(git -C "$project_root" ls-files --others --exclude-standard -- $release_relevant_paths)"
   [[ -z "$untracked" ]] \

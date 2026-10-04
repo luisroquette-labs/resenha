@@ -2,7 +2,7 @@
 set -euo pipefail
 
 project_root="${0:A:h:h}"
-fixture_root="${1:-$HOME/Library/Containers/br.com.luisroquette.Resenha/Data/tmp/ResenhaTests/ui-fixtures}"
+fixture_root="${1:-${RESENHA_UI_FIXTURE_ROOT:-${TMPDIR:-/tmp}/ResenhaTests/ui-fixtures}}"
 output_root="$project_root/site/assets/product"
 social_root="$project_root/site/assets/social"
 work_root="$(mktemp -d "${TMPDIR:-/tmp}/resenha-site-media.XXXXXX")"

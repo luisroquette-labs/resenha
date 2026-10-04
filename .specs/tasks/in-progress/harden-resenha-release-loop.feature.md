@@ -85,7 +85,7 @@ avalia a fase antes da seguinte.
 | `02-runtime-bounds` [DONE] | Phase 2 | opus | developer | `01-p0-service-contract` | None | `.specs/sub-tasks/harden-resenha-release-loop/02-runtime-bounds.md` |
 | `03-local-integrity` [DONE] | Phase 3 | opus | developer | `02-runtime-bounds` | None | `.specs/sub-tasks/harden-resenha-release-loop/03-local-integrity.md` |
 | `04-accessibility-qa` [DONE] | Phase 4 | opus | developer | `03-local-integrity` | None | `.specs/sub-tasks/harden-resenha-release-loop/04-accessibility-qa.md` |
-| `05-product-release` [READY FOR SOURCE COMMIT] | Phase 5 | opus | developer | `04-accessibility-qa` | None | `.specs/sub-tasks/harden-resenha-release-loop/05-product-release.md` |
+| `05-product-release` [READY FOR NEW SOURCE COMMIT] | Phase 5 | opus | developer | `04-accessibility-qa` | None | `.specs/sub-tasks/harden-resenha-release-loop/05-product-release.md` |
 
 ### Phase Overview
 
