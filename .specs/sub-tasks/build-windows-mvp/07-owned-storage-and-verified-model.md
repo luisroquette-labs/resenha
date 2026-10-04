@@ -24,10 +24,11 @@ Owned session cleanup and model download/import with exact size/hash, atomic pro
 
 #### Subtasks
 
-- [ ] Implement private canonical local-app-data directories and attempt GUID ownership checks in SessionFiles.cs; preserve imported source files and user data.
-- [ ] Implement ModelStore download/import, byte/size/hash limits, lease locking, cancellation and atomic verified promotion.
-- [ ] Create pinned model-manifest.json using the existing trusted HTTPS source and exact descriptor; no remote inference or paid API.
-- [ ] Write model corruption/truncation/symlink-reparse/failed replacement/lease tampering/crash-remnant tests in StorageModelTests.cs, and run Windows filesystem checks.
+- [x] Implement private canonical local-app-data directories and attempt GUID ownership checks in SessionFiles.cs; preserve imported source files and user data.
+- [x] Implement ModelStore download/import, byte/size/hash limits, lease locking, cancellation and atomic verified promotion.
+- [x] Create pinned model-manifest.json using the existing trusted HTTPS source and exact descriptor; no remote inference or paid API.
+- [x] Write portable model corruption/truncation/failed replacement/lease/crash-remnant tests in StorageModelTests.cs.
+- [ ] Run NTFS reparse, deny-write lease and atomic replacement checks on Windows.
 
 #### Blockers & Risks
 

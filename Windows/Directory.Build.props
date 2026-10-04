@@ -15,8 +15,6 @@
     <PublishTrimmed>false</PublishTrimmed>
     <PublishSingleFile>false</PublishSingleFile>
     <PublishAot>false</PublishAot>
-    <RuntimeFrameworkVersion>10.0.12</RuntimeFrameworkVersion>
-    <TargetLatestRuntimePatch>false</TargetLatestRuntimePatch>
     <TestingExtensionsProfile>None</TestingExtensionsProfile>
     <MSTestVersion>4.4.0</MSTestVersion>
     <MicrosoftTestingPlatformVersion>2.4.0</MicrosoftTestingPlatformVersion>

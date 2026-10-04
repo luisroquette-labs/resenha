@@ -18,10 +18,13 @@ public sealed class ContractTests
     {
         var preferences = new ProductPreferences(1, new Shortcut(0x39, false, ShortcutModifiers.LeftControl | ShortcutModifiers.LeftAlt), "device-id", DictationLanguage.Pt);
         var json = JsonSerializer.Serialize(preferences);
-        Assert.AreEqual(preferences, JsonSerializer.Deserialize<ProductPreferences>(json));
+        var restored = JsonSerializer.Deserialize<ProductPreferences>(json);
+        Assert.IsNotNull(restored);
+        Assert.AreEqual(preferences, restored);
+        Assert.AreEqual(ShortcutModifiers.LeftControl | ShortcutModifiers.LeftAlt, restored.Shortcut.Modifiers);
+        Assert.IsFalse(restored.Shortcut.Modifiers.HasFlag(ShortcutModifiers.RightAlt));
         using var document = JsonDocument.Parse(json);
         CollectionAssert.AreEquivalent(new[] { "schemaVersion", "shortcut", "microphoneEndpointId", "language" }, document.RootElement.EnumerateObject().Select(property => property.Name).ToArray());
-        Assert.AreNotEqual(ShortcutModifiers.LeftAlt, ShortcutModifiers.RightAlt);
     }
 
     [TestMethod]

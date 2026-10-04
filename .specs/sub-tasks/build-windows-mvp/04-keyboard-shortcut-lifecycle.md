@@ -24,10 +24,11 @@ Dedicated input message loop, bounded keyboard callback, exact chord validation,
 
 #### Subtasks
 
-- [ ] Implement physical scan-code/exact left-right modifier ShortcutPolicy and brief RegisterHotKey conflict probe.
-- [ ] Implement WH_KEYBOARD_LL lifecycle on dedicated thread; bound callbacks and suppress only the accepted latched trigger down/up, including busy rejection.
-- [ ] Implement interruption/watchdog and cancellation-only Escape events during an active attempt, with no permanent Escape hotkey.
-- [ ] Write fake-clock/key tests for repetition, busy presses, late release, AltGr/ABNT2, callback ordering and shutdown; run portable tests via mac-gate and hook integration on Windows.
+- [x] Implement physical scan-code/exact left-right modifier ShortcutPolicy and brief RegisterHotKey conflict probe.
+- [x] Implement WH_KEYBOARD_LL lifecycle on dedicated thread; bound callbacks and suppress only the accepted latched trigger down/up, including busy rejection.
+- [x] Implement interruption/watchdog and cancellation-only Escape events during an active attempt, with no permanent Escape hotkey.
+- [x] Write fake-clock/key tests for repetition, busy presses, late release, AltGr/ABNT2, callback ordering and shutdown; run portable tests via mac-gate.
+- [ ] Run hook integration on an authorized physical Windows host.
 
 #### Blockers & Risks
 

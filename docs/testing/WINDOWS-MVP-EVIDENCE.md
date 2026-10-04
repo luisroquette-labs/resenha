@@ -4,6 +4,15 @@ Status: pending. No physical Windows run or host possession is established.
 Contract: [SPEC-023](../specs/23-windows-mvp.md).
 Release identity: [release evidence](WINDOWS-RELEASE-EVIDENCE.md).
 
+Development evidence on 2026-10-04: locked restore and the complete Windows/x64
+managed solution cross-compiled on macOS with zero warnings/errors; 127 portable
+Core tests, 67 portable Platform tests and 146 Node contract/site tests passed.
+Implemented boundaries cover the shortcut watchdog, WASAPI conversion policy,
+owned storage/model leases, kill-on-close Whisper process and isolated UIA
+target broker. These are compile/portable-test results only. Win32 execution,
+physical audio, real inference/WER, insertion and release acceptance remain
+pending in the tables below.
+
 Use one separate completed copy per physical OS run, retaining this blank template.
 VMs/mocks/cross-compiles supplement, never replace physical hardware. Every
 observed value, result and attachment starts pending; replace it only with actual

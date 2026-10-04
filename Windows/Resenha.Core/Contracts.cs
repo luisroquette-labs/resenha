@@ -32,7 +32,7 @@ public enum ErrorCode
 {
     None, Cancelled, TimedOut, NotReady, Busy, ShortcutInvalid, ShortcutOccupied,
     HookUnavailable, HoldInterrupted, MicrophoneDenied, MicrophoneUnavailable,
-    MicrophoneDisconnected, AudioFormatUnsupported, AudioTimestampInvalid,
+    MicrophoneDisconnected, AudioFormatUnsupported, MediaFoundationUnavailable, AudioTimestampInvalid,
     AudioShutdownFailed, AudioTooShort, ModelMissing, ModelCorrupt, ModelDownloadFailed,
     StorageUnsafe, CleanupFailed, CorruptInput, EngineFailure, OutputInvalid,
     TargetChanged, TargetUnsafe, TargetUnknown, ClipboardBusy, ClipboardChanged,
@@ -109,7 +109,7 @@ public sealed record ProductPreferences(
     [property: JsonPropertyName("microphoneEndpointId")] string MicrophoneEndpointId,
     [property: JsonPropertyName("language")] DictationLanguage Language);
 
-public enum RecoveryAction { None, Retry, OpenMicrophoneSettings, ChooseMicrophone, ReconnectMicrophone, DownloadOrImportModel, CopyAgain, PasteManually, ReopenApplication }
+public enum RecoveryAction { None, Retry, OpenMicrophoneSettings, ChooseMicrophone, ReconnectMicrophone, InstallMediaFeaturePack, DownloadOrImportModel, CopyAgain, PasteManually, ReopenApplication }
 
 // Action is a stable localization key. Completed text belongs only to RAM.
 public sealed record RecoveryStatus(AttemptId Attempt, ErrorCode Code, RecoveryAction Action, [property: JsonIgnore] string? CompletedText = null)

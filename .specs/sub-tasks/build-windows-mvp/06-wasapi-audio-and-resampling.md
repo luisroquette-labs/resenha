@@ -24,10 +24,11 @@ Microphone enumeration/selection, event-driven capture, exact interval conversio
 
 #### Subtasks
 
-- [ ] Implement selected-endpoint shared-mode WASAPI worker, packet release on owning thread and silent-buffer handling.
-- [ ] Implement Media Foundation conversion/drain and QPC interval trimming; reject unavailable Media Feature Pack or unsupported format.
-- [ ] Implement AudioPolicy minimum 300 ms capture and at least 200 ms energetic frames above -50 dBFS RMS, maximum 120-second hold contract.
-- [ ] Write conversion/packet/timing/silence/device-removal tests and physical capture protocol; verify denied permission links to ms-settings:privacy-microphone and subsequent retry works.
+- [x] Implement selected-endpoint shared-mode WASAPI worker, packet release on owning thread and silent-buffer handling.
+- [x] Implement Media Foundation conversion/drain and QPC interval trimming; reject unavailable Media Feature Pack or unsupported format.
+- [x] Implement AudioPolicy minimum 300 ms capture and at least 200 ms energetic frames above -50 dBFS RMS, maximum 120-second hold contract.
+- [x] Write conversion/packet/timing/silence/device-removal portable tests and physical capture protocol.
+- [ ] Verify permission denial/retry and native device behavior on physical Windows.
 
 #### Blockers & Risks
 

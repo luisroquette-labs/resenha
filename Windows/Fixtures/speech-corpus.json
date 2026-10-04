@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "corpusVersion": "1.0.0",
+  "status": "blocked-missing-owned-or-licensed-recordings",
+  "normalization": "NFC; lowercase invariant; preserve letters, digits and combining marks; replace other characters with spaces; collapse whitespace. No accent removal, translation, stemming, glossary replacement or word deletion.",
+  "measurement": null,
+  "requirements": { "sampleRate": 16000, "channels": 1, "bitsPerSample": 16, "minimumUtterancesPerLanguage": 5, "maximumWerPerLanguage": 0.2, "minimumAnglicismRetentionPerMixedLanguage": 0.9 },
+  "utterances": [
+    { "id": "pt-br-01", "language": "pt", "file": "audio/pt-br-01.wav", "reference": "João, envie o feedback do cliente antes da reunião de amanhã.", "anglicisms": ["feedback"], "sha256": null, "rights": null },
+    { "id": "pt-br-02", "language": "pt", "file": "audio/pt-br-02.wav", "reference": "O deadline do projeto mudou, mas o briefing continua aprovado.", "anglicisms": ["deadline", "briefing"], "sha256": null, "rights": null },
+    { "id": "pt-br-03", "language": "pt", "file": "audio/pt-br-03.wav", "reference": "Mariana revisou o dashboard e encontrou uma diferença no relatório.", "anglicisms": ["dashboard"], "sha256": null, "rights": null },
+    { "id": "pt-br-04", "language": "pt", "file": "audio/pt-br-04.wav", "reference": "Precisamos fazer o backup antes de atualizar o software da equipe.", "anglicisms": ["backup", "software"], "sha256": null, "rights": null },
+    { "id": "pt-br-05", "language": "pt", "file": "audio/pt-br-05.wav", "reference": "O onboarding começa na terça-feira com uma conversa sobre o roadmap.", "anglicisms": ["onboarding", "roadmap"], "sha256": null, "rights": null },
+    { "id": "en-01", "language": "en", "file": "audio/en-01.wav", "reference": "Please send the customer feedback before our meeting tomorrow.", "anglicisms": [], "sha256": null, "rights": null },
+    { "id": "en-02", "language": "en", "file": "audio/en-02.wav", "reference": "The project deadline changed, but the original plan is still approved.", "anglicisms": [], "sha256": null, "rights": null },
+    { "id": "en-03", "language": "en", "file": "audio/en-03.wav", "reference": "Sarah reviewed the dashboard and found a difference in the report.", "anglicisms": [], "sha256": null, "rights": null },
+    { "id": "en-04", "language": "en", "file": "audio/en-04.wav", "reference": "We need to back up the files before updating the team software.", "anglicisms": [], "sha256": null, "rights": null },
+    { "id": "en-05", "language": "en", "file": "audio/en-05.wav", "reference": "Our new colleague starts on Tuesday with a conversation about the roadmap.", "anglicisms": [], "sha256": null, "rights": null },
+    { "id": "es-01", "language": "es", "file": "audio/es-01.wav", "reference": "José, envía el feedback del cliente antes de la reunión de mañana.", "anglicisms": ["feedback"], "sha256": null, "rights": null },
+    { "id": "es-02", "language": "es", "file": "audio/es-02.wav", "reference": "El deadline del proyecto cambió, pero el briefing sigue aprobado.", "anglicisms": ["deadline", "briefing"], "sha256": null, "rights": null },
+    { "id": "es-03", "language": "es", "file": "audio/es-03.wav", "reference": "María revisó el dashboard y encontró una diferencia en el informe.", "anglicisms": ["dashboard"], "sha256": null, "rights": null },
+    { "id": "es-04", "language": "es", "file": "audio/es-04.wav", "reference": "Necesitamos hacer el backup antes de actualizar el software del equipo.", "anglicisms": ["backup", "software"], "sha256": null, "rights": null },
+    { "id": "es-05", "language": "es", "file": "audio/es-05.wav", "reference": "El onboarding comienza el martes con una conversación sobre el roadmap.", "anglicisms": ["onboarding", "roadmap"], "sha256": null, "rights": null },
+    { "id": "silence", "language": "pt", "file": "audio/silence.wav", "reference": "", "anglicisms": [], "sha256": null, "rights": null }
+  ]
+}

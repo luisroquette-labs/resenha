@@ -23,15 +23,15 @@
     "innoCompilerVersion", "innoCompilerSha256", "observedAtUtc"
   ],
   "validation": {
-    "lockedRestore": "not-run",
-    "compile": "not-run",
-    "coreTests": "not-run",
-    "platformTests": "not-run",
-    "dependencyLocks": "pending-sdk-generated-restore"
+    "lockedRestore": "passed-on-macos-cross-target-2026-10-04",
+    "compile": "passed-on-macos-cross-target-2026-10-04",
+    "coreTests": "passed-127-on-macos-net10-arm64-2026-10-04",
+    "platformTests": "passed-67-portable-on-macos-net10-arm64-native-not-run-2026-10-04",
+    "dependencyLocks": "generated-with-sdk-10.0.401-and-locked-restore-passed"
   },
   "blockers": [
     "No authorized Windows host or native toolchain inventory has been supplied.",
-    "The current macOS host has no dotnet SDK or PowerShell in PATH.",
-    "Generate and review all dependency locks with the exact SDK before locked restore; no dependency graph or successful restore is asserted."
+    "macOS cross-target compilation does not prove Win32 execution, WPF, hooks, WASAPI, UI Automation, signing or installer behavior.",
+    "PowerShell, MSVC, Windows SDK, CMake, Inno Setup and physical Windows execution remain unobserved."
   ]
 }

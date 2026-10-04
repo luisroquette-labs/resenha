@@ -24,10 +24,11 @@ MTA UIA broker using inherited anonymous pipe and passive mouse observer; typed 
 
 #### Subtasks
 
-- [ ] Implement bounded versioned attempt-scoped IPC, MTA FocusProbe and broker job lifetime without network listeners or transcript access.
-- [ ] Implement snapshot interval consistency and full identity recheck including HWND/PID reuse, browser field IDs and provider uncertainty.
-- [ ] Install passive WH_MOUSE_LL on the shared input thread through its owner API, ignore injected events, observe buttons only and unhook/rearm on suspend/resume/shutdown.
-- [ ] Write TargetIdentityTests.cs and broker IPC tests for hanging providers, malformed/oversized responses, stale attempts, same-HWND different fields and observer loss; run Windows tests.
+- [x] Implement bounded versioned attempt-scoped IPC, MTA FocusProbe and broker job lifetime without network listeners or transcript access.
+- [x] Implement snapshot interval consistency and full identity recheck including HWND/PID reuse, browser field IDs and provider uncertainty.
+- [x] Install passive WH_MOUSE_LL on the shared input thread through its owner API, ignore injected events, observe buttons only and unhook/rearm on suspend/resume/shutdown.
+- [x] Write portable target identity tests for stale attempts, same-HWND different fields and observer loss.
+- [ ] Run real broker timeout/malformed/oversized IPC and provider-hang tests on Windows.
 
 #### Blockers & Risks
 

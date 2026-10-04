@@ -2,8 +2,8 @@
 
 Development scaffold only. The WPF executable exits without opening UI or
 starting a hook, microphone, inference process or clipboard operation. The
-broker exits without starting IPC or UI Automation. No Windows build or test
-has been run and no usable application/release is asserted.
+broker exits without starting IPC or UI Automation. Managed cross-target checks
+have run on macOS, but no native Windows execution or usable release is asserted.
 
 ## Boundaries
 
@@ -28,28 +28,29 @@ Run structural checks on the Mac from the repository root:
 ~/.local/bin/mac-gate node --test Windows/scaffold.test.mjs
 ```
 
-The current host is macOS arm64 with no `dotnet` or `pwsh` in PATH. SDK
-installation and Windows execution are not authorized by this scaffold.
-`toolchain-lock.json` deliberately leaves the approved native host inventory
-null. Required SDK 10.0.401/runtime 10.0.12 and MSTest.Sdk 4.4.0 are pins, not
-observed host versions. NuGet's official MSTest.Sdk 4.4.0 package declares
-MSTest 4.4.0 and Microsoft.Testing.Platform 2.4.0. The `None` extension profile
-avoids optional coverage/reporting packages; it does not disable test execution.
+The current macOS arm64 host now has .NET SDK 10.0.401. It completed locked
+restore, cross-target compilation, 127 Core tests and 67 portable Platform tests
+on 2026-10-04.
+Those checks prove the managed dependency graph and portable code compile; they
+do not prove Win32 execution, WPF, hooks, WASAPI, UI Automation, signing or the
+installer. `toolchain-lock.json` therefore leaves the approved native Windows
+host inventory null. Required runtime 10.0.12 is pinned in the lock metadata and
+release evidence, but deliberately not set as a global MSBuild property because
+that collides with the Windows SDK reference pack. NuGet's official MSTest.Sdk
+4.4.0 package declares MSTest 4.4.0 and Microsoft.Testing.Platform 2.4.0. The
+`None` extension profile avoids optional coverage/reporting packages; it does
+not disable test execution.
 
-Only the dependency-free Core lock is represented. Remaining per-project
-`packages.lock.json` files must be generated and reviewed using the exact SDK
-on the approved Windows host, including implicit Windows SDK reference-pack
-and MSTest transitive dependencies. They are intentionally not invented.
-`RestoreLockedMode=true` keeps ordinary restore closed until that bootstrap is
-complete. The one-time lock generation is not a passing locked-restore gate.
+All six per-project `packages.lock.json` files were generated with SDK 10.0.401,
+reviewed and accepted by a subsequent locked restore. The approved Windows host
+must reproduce that locked graph; it must not update the locks implicitly.
 
-Before the first Windows build, inventory the exact approved Windows SDK,
-MSVC compiler/linker, CMake, PowerShell and Inno versions/hashes in
-`toolchain-lock.json`. Then generate/review dependency locks, run locked restore,
-compile/analyzers, format verification and both test projects from `Windows/`
-so `global.json` controls SDK selection. Preserve actual failures. The runtime
-and installer OS-floor checks belong to later steps; this TFM alone cannot
-establish the stricter product compatibility matrix.
+On the first approved Windows host, inventory the exact Windows SDK, MSVC
+compiler/linker, CMake, PowerShell and Inno versions/hashes in
+`toolchain-lock.json`. Then rerun locked restore, compile/analyzers, format
+verification and both test projects from `Windows/` so `global.json` controls
+SDK selection. Preserve actual failures. The runtime and installer OS-floor
+checks belong to later steps; this TFM alone cannot establish compatibility.
 
 ## Ownership handoff
 

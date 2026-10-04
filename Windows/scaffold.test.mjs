@@ -27,10 +27,13 @@ test('exact SDK/runtime/test pins and conservative publish configuration are exp
   assert.deepEqual(global.sdk, { version: '10.0.401', rollForward: 'disable', allowPrerelease: false });
   assert.equal(global['msbuild-sdks']['MSTest.Sdk'], '4.4.0');
   assert.equal(global.test.runner, 'Microsoft.Testing.Platform');
+  const toolchain = json('toolchain-lock.json');
   const props = read('Directory.Build.props');
   for (const name of ['TreatWarningsAsErrors', 'CodeAnalysisTreatWarningsAsErrors', 'RestorePackagesWithLockFile', 'RestoreLockedMode']) assert.ok(props.includes(`<${name}>true</${name}>`));
   for (const name of ['PublishTrimmed', 'PublishSingleFile', 'PublishAot']) assert.ok(props.includes(`<${name}>false</${name}>`));
-  assert.match(props, /<RuntimeFrameworkVersion>10\.0\.12<\/RuntimeFrameworkVersion>/);
+  assert.doesNotMatch(props, /<RuntimeFrameworkVersion>/,
+    'a global RuntimeFrameworkVersion creates conflicting Windows SDK reference packs');
+  assert.equal(toolchain.requirements.dotnetRuntime, '10.0.12');
   for (const name of ['Resenha.Windows', 'Resenha.TargetBroker']) {
     const project = read(`${name}/${name}.csproj`);
     assert.match(project, /<RuntimeIdentifier>win-x64<\/RuntimeIdentifier>/);
@@ -53,18 +56,28 @@ test('portable Core has no UI, native, network or project/package dependencies',
   }
 });
 
-test('entry points remain inert and normal integrity', () => {
+test('app remains inert while the broker exposes only bounded local IPC', () => {
   assert.match(read('Resenha.Windows/App.xaml.cs'), /Shutdown\(0\)/);
   assert.doesNotMatch(read('Resenha.Windows/App.xaml'), /StartupUri=/);
-  assert.match(read('Resenha.TargetBroker/Program.cs'), /Main\(\) => 0/);
+  const broker = read('Resenha.TargetBroker/Program.cs');
+  const client = read('Resenha.Platform/TargetBrokerClient.cs');
+  assert.match(broker, /arguments\.Length != 6/);
+  assert.match(broker, /NamedPipeClientStream\("\."/);
+  assert.match(broker, /payload\.Length > 64 \* 1024/);
+  assert.match(client, /PipeOptions\.Asynchronous \| PipeOptions\.CurrentUserOnly/);
+  assert.doesNotMatch(`${broker}\n${client}`, /TcpListener|HttpListener|Socket\(/);
   assert.match(read('Resenha.Windows/app.manifest'), /level="asInvoker" uiAccess="false"/);
 });
 
-test('unobserved native toolchain and unrun checks remain blocked', () => {
+test('cross-target evidence is recorded without claiming native Windows validation', () => {
   const lock = json('toolchain-lock.json');
   assert.equal(lock.status, 'blocked-awaiting-authorized-windows-host');
   assert.equal(lock.approvedHostInventory, null);
-  for (const name of ['lockedRestore', 'compile', 'coreTests', 'platformTests']) assert.equal(lock.validation[name], 'not-run');
-  assert.equal(lock.validation.dependencyLocks, 'pending-sdk-generated-restore');
+  assert.match(lock.validation.lockedRestore, /^passed-on-macos-cross-target-/);
+  assert.match(lock.validation.compile, /^passed-on-macos-cross-target-/);
+  assert.match(lock.validation.coreTests, /^passed-127-on-macos-/);
+  assert.match(lock.validation.platformTests, /^passed-67-portable-on-macos-.*native-not-run-/);
+  assert.match(lock.validation.dependencyLocks, /^generated-with-sdk-10\.0\.401-/);
+  for (const name of projects) assert.ok(existsSync(resolve(root, `${name}/packages.lock.json`)));
   assert.deepEqual(json('Resenha.Core/packages.lock.json').dependencies, { 'net10.0': {} });
 });

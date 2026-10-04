@@ -24,10 +24,11 @@ CPU-only bundled CLI adapter, kill-on-close job wrapper, licensed versioned corp
 
 #### Subtasks
 
-- [ ] Implement locked CMake preset and ChildProcessJob kill-on-close/2-second termination contract with at most two native build workers.
-- [ ] Implement WhisperCliTranscriber exact pinned CLI arguments, min(4, logical CPU count) threads, 120-second deadline and bounded 256 KiB/100000-character UTF-8 result validation.
-- [ ] Create owned/licensed audio fixtures, reference transcripts, WER normalization and anglicism annotations before running inference; preserve existing output-corpus.json read-only.
-- [ ] Write process crash/cancel/oversize/malformed output/argument-contract tests and real offline corpus tests; missing model/fixtures/CLI fails instead of skipping.
+- [x] Implement locked CMake preset and ChildProcessJob kill-on-close/2-second termination contract with at most two native build workers.
+- [x] Implement WhisperCliTranscriber exact pinned CLI arguments, min(4, logical CPU count) threads, 120-second deadline and bounded 256 KiB/100000-character UTF-8 result validation.
+- [x] Create the corpus manifest, reference transcripts, WER normalization and anglicism annotations with missing rights/audio represented as blockers.
+- [x] Write portable process crash/cancel/oversize/malformed output/argument-contract tests; missing model/fixtures/CLI fails instead of skipping.
+- [ ] Add rights-cleared audio and run the real offline corpus/native child-process tests on Windows.
 
 #### Blockers & Risks
 
