@@ -1,7 +1,5 @@
 # Resenha — Ditado por Voz
 
-> Arquivo histórico: a distribuição pela Mac App Store foi substituída pela distribuição direta em 03/10/2026.
-
 ## Subtítulo
 
 Fale. O Resenha escreve.

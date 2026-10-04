@@ -23,6 +23,11 @@ enum DictationPhase: Equatable {
     }
 }
 
+enum TranscriptDeliveryMode: Equatable {
+    case accessibility
+    case appKitService
+}
+
 struct DictationErrorPresentation: Equatable {
     let title: String
     let diagnostic: String?
@@ -33,6 +38,12 @@ struct DictationErrorPresentation: Equatable {
         Self(title: snapshot.missingPermissionMessage, diagnostic: nil,
              recovery: "Ative a permissão ausente pelo menu do Resenha.", isPermissionFailure: true)
     }
+
+    static let modelUnavailable = Self(
+        title: "Modelo de voz ainda não está pronto",
+        diagnostic: nil,
+        recovery: "Aguarde a verificação ou baixe novamente o modelo local."
+    )
 
     init(title: String, diagnostic: String?, recovery: String, isPermissionFailure: Bool = false) {
         self.title = title
@@ -85,9 +96,11 @@ final class DictationCoordinator {
         didSet { if oldValue != phase { onPhaseChange?(phase) } }
     }
     var onPhaseChange: (@MainActor (DictationPhase) -> Void)?
+    var onRecordingDeadline: (@MainActor () -> Void)?
     private(set) var currentError: DictationErrorPresentation?
     private var targetApplication: NSRunningApplication?
     private var task: Task<Void, Never>?
+    private var transcriptionCancellation: WhisperCancellationToken?
     private var attemptID = UUID()
     private let showsHUD: () -> Bool
     private let soundsEnabled: () -> Bool
@@ -95,7 +108,10 @@ final class DictationCoordinator {
     private let onFailure: (DictationErrorPresentation) -> Void
     private let language: () -> TranscriptionLanguage
     private let glossaryText: () -> String
+    private let verifiedModelURL: @MainActor () -> URL?
+    private let deliveryMode: TranscriptDeliveryMode
     private var sessionLanguage = TranscriptionLanguage.portuguese
+    private var sessionModelURL: URL?
     private var panelTarget: PanelTarget { .session(targetApplication?.processIdentifier) }
 
     init(
@@ -105,6 +121,8 @@ final class DictationCoordinator {
         soundsEnabled: @escaping () -> Bool = { true },
         language: @escaping () -> TranscriptionLanguage = { .portuguese },
         glossaryText: @escaping () -> String = { TranscriptionGlossary.defaultText },
+        verifiedModelURL: @escaping @MainActor () -> URL? = { WhisperModelManager.shared.verifiedModelURL },
+        deliveryMode: TranscriptDeliveryMode = .accessibility,
         onRecordingLevel: @escaping (Float) -> Void = { _ in },
         onTranscript: @escaping (String) -> Void = { _ in },
         onFailure: @escaping (DictationErrorPresentation) -> Void = { _ in }
@@ -115,11 +133,21 @@ final class DictationCoordinator {
         self.soundsEnabled = soundsEnabled
         self.language = language
         self.glossaryText = glossaryText
+        self.verifiedModelURL = verifiedModelURL
+        self.deliveryMode = deliveryMode
         self.onTranscript = onTranscript
         self.onFailure = onFailure
         recorder.onLevel = { [weak panel] level in
             panel?.updateRecordingLevel(level)
             onRecordingLevel(level)
+        }
+        recorder.onMaximumDuration = { [weak self] in
+            guard let self else { return }
+            if let onRecordingDeadline = self.onRecordingDeadline {
+                onRecordingDeadline()
+            } else {
+                self.recordingDeadlineReached()
+            }
         }
     }
 
@@ -135,6 +163,11 @@ final class DictationCoordinator {
             fail(.permission(snapshot))
             return
         }
+        guard let modelURL = verifiedModelURL() else {
+            fail(.modelUnavailable)
+            return
+        }
+        sessionModelURL = modelURL
 
         do {
             try recorder.start()
@@ -148,6 +181,10 @@ final class DictationCoordinator {
 
     func hotkeyReleased() {
         guard phase == .recording else { return }
+        guard let modelURL = sessionModelURL else {
+            fail(.modelUnavailable)
+            return
+        }
         do {
             let audioURL = try recorder.stop()
             transition(to: .transcribing)
@@ -156,6 +193,10 @@ final class DictationCoordinator {
             let attemptID = attemptID
             let sessionLanguage = sessionLanguage
             let glossaryText = glossaryText()
+            let cancellation = WhisperCancellationToken(
+                maximumRuntime: ResenhaRuntimeLimits.maximumInferenceDuration
+            )
+            transcriptionCancellation = cancellation
 
             task = Task {
                 defer { try? FileManager.default.removeItem(at: audioURL) }
@@ -163,13 +204,16 @@ final class DictationCoordinator {
                     let transcriptionTask = Task.detached(priority: .userInitiated) {
                         try self.transcriber.transcribe(
                             audioURL: audioURL,
+                            modelURL: modelURL,
                             language: sessionLanguage,
-                            glossaryText: glossaryText
+                            glossaryText: glossaryText,
+                            cancellationToken: cancellation
                         )
                     }
                     let transcript = try await withTaskCancellationHandler {
                         try await transcriptionTask.value
                     } onCancel: {
+                        cancellation.cancel()
                         transcriptionTask.cancel()
                     }
                     try Task.checkCancellation()
@@ -178,7 +222,9 @@ final class DictationCoordinator {
                     self.onTranscript(transcript)
                     self.transition(to: .inserting)
                     if self.showsHUD() { self.panel.show(.inserting, target: self.panelTarget) }
-                    try await self.injector.insertStaged(into: self.targetApplication, changeCount: changeCount)
+                    if self.deliveryMode == .accessibility {
+                        try await self.injector.insertStaged(into: self.targetApplication, changeCount: changeCount)
+                    }
                     self.transition(to: .idle)
                     self.reset()
                 } catch is CancellationError {
@@ -195,10 +241,27 @@ final class DictationCoordinator {
     }
 
     func cancel() {
+        attemptID = UUID()
+        transcriptionCancellation?.cancel()
+        transcriptionCancellation = nil
         task?.cancel()
         task = nil
         recorder.cancel()
         reset()
+    }
+
+    func interruptRuntime(message: String = "Ditado interrompido pelo sistema") {
+        guard phase == .recording || phase == .transcribing else { return }
+        fail(DictationErrorPresentation(
+            title: message,
+            diagnostic: nil,
+            recovery: "Acorde o Mac ou reative o atalho e tente novamente."
+        ))
+    }
+
+    func recordingDeadlineReached() {
+        guard phase == .recording else { return }
+        hotkeyReleased()
     }
 
     func permissionLost(_ snapshot: PermissionSnapshot) {
@@ -216,6 +279,11 @@ final class DictationCoordinator {
     }
 
     func fail(_ error: DictationErrorPresentation) {
+        attemptID = UUID()
+        transcriptionCancellation?.cancel()
+        transcriptionCancellation = nil
+        task?.cancel()
+        task = nil
         currentError = error
         onFailure(error)
         recorder.cancel()
@@ -233,8 +301,10 @@ final class DictationCoordinator {
 
     private func reset(clearError: Bool = true) {
         attemptID = UUID()
+        transcriptionCancellation = nil
         task = nil
         targetApplication = nil
+        sessionModelURL = nil
         panel.hide()
         if clearError { currentError = nil }
         phase = .idle

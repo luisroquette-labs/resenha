@@ -7,6 +7,10 @@ settings:
   base:
     SWIFT_VERSION: "5.0"
     MACOSX_DEPLOYMENT_TARGET: "14.0"
+configs:
+  Debug: debug
+  Release: release
+  AppStore: release
 targets:
   WhisperKey:
     type: application
@@ -15,20 +19,22 @@ targets:
       - path: Sources/WhisperKey
       - path: Config/PrivacyInfo.xcprivacy
         buildPhase: resources
+      - path: THIRD_PARTY_NOTICES.md
+        buildPhase: resources
+      - path: Resources/Licenses/LICENSE-whisper.cpp.txt
+        buildPhase: resources
+      - path: Resources/Licenses/LICENSE-OpenAI-Whisper.txt
+        buildPhase: resources
     dependencies:
       - framework: Frameworks/whisper.xcframework
         embed: false
       - sdk: Accelerate.framework
       - sdk: Metal.framework
       - sdk: libc++.tbd
-    entitlements:
-      path: Config/Resenha.entitlements
-      properties: {}
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: br.com.luisroquette.Resenha
-        PRODUCT_NAME: Resenha
         PRODUCT_MODULE_NAME: WhisperKey
+        PRODUCT_DISPLAY_NAME: Resenha
         DEVELOPMENT_TEAM: S3YCFYY8SC
         CODE_SIGN_STYLE: Automatic
         GENERATE_INFOPLIST_FILE: NO
@@ -36,8 +42,26 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ENABLE_HARDENED_RUNTIME: YES
         ARCHS: arm64
-        CURRENT_PROJECT_VERSION: 1
+        CURRENT_PROJECT_VERSION: 2
         MARKETING_VERSION: 1.0.0
+        RESENHA_SOURCE_COMMIT: DEVELOPMENT
+        CODE_SIGN_ENTITLEMENTS: Config/Resenha.entitlements
+      configs:
+        Debug:
+          PRODUCT_BUNDLE_IDENTIFIER: br.com.luisroquette.Resenha.Debug
+          PRODUCT_NAME: Resenha Dev
+          PRODUCT_DISPLAY_NAME: Resenha Dev
+        Release:
+          PRODUCT_BUNDLE_IDENTIFIER: br.com.luisroquette.Resenha
+          PRODUCT_NAME: Resenha
+          PRODUCT_DISPLAY_NAME: Resenha
+        AppStore:
+          PRODUCT_BUNDLE_IDENTIFIER: br.com.luisroquette.Resenha
+          PRODUCT_NAME: Resenha
+          PRODUCT_DISPLAY_NAME: Resenha
+          INFOPLIST_FILE: Config/ResenhaStore-Info.plist
+          CODE_SIGN_ENTITLEMENTS: Config/ResenhaStore.entitlements
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) RESENHA_APP_STORE"
   WhisperKeyTests:
     type: bundle.unit-test
     platform: macOS
@@ -52,7 +76,7 @@ targets:
         DEVELOPMENT_TEAM: S3YCFYY8SC
         CODE_SIGN_STYLE: Automatic
         GENERATE_INFOPLIST_FILE: YES
-        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Resenha.app/Contents/MacOS/Resenha"
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Resenha Dev.app/Contents/MacOS/Resenha Dev"
         BUNDLE_LOADER: "$(TEST_HOST)"
 schemes:
   WhisperKey:
@@ -63,3 +87,9 @@ schemes:
     test:
       targets:
         - WhisperKeyTests
+  ResenhaAppStore:
+    build:
+      targets:
+        WhisperKey: all
+    archive:
+      config: AppStore

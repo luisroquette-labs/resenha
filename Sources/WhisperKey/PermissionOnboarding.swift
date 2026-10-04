@@ -51,84 +51,137 @@ private struct PermissionOnboardingView: View {
     private var setupReady: Bool { snapshot.isReady && modelReady }
 
     private var introText: String {
-        "Três permissões conectam voz, atalho e inserção automática. O áudio nunca sai deste Mac."
+        let count = snapshot.requiresAccessibility ? "Três permissões" : "Duas permissões"
+        return "\(count) conectam voz, atalho e inserção automática. O áudio nunca sai deste Mac."
     }
     var body: some View {
         ZStack {
             ResenhaBackdrop().ignoresSafeArea()
-            VStack(alignment: .leading, spacing: 22) {
-                HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Image("ResenhaLockup")
-                            .resizable()
-                            .renderingMode(.template)
-                            .scaledToFit()
-                            .frame(width: 164, height: 42, alignment: .leading)
-                            .foregroundStyle(.primary)
-                            .accessibilityHidden(true)
-                        Text("Sua voz, em qualquer campo.")
-                            .font(.system(size: 30, weight: .semibold, design: .serif))
-                        Text(introText)
-                            .font(.body)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    Spacer()
-                    ResenhaStatusPill(title: "100% local", symbol: "lock.fill", active: true)
-                }
+            VStack(spacing: 0) {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 22) {
+                        ViewThatFits(in: .horizontal) {
+                            HStack(alignment: .top, spacing: 20) {
+                                introduction
+                                Spacer(minLength: 16)
+                                ResenhaStatusPill(title: "100% local", symbol: "lock.fill", active: true)
+                            }
+                            VStack(alignment: .leading, spacing: 12) {
+                                introduction
+                                ResenhaStatusPill(title: "100% local", symbol: "lock.fill", active: true)
+                            }
+                        }
 
-                VStack(spacing: 0) {
-                    Divider()
-                    ForEach(Array(snapshot.presentations.enumerated()), id: \.element.permission) { index, presentation in
-                        permissionRow(presentation, index: index)
-                        if index < snapshot.presentations.count - 1 {
-                            Divider().padding(.leading, 52)
+                        VStack(spacing: 0) {
+                            Divider()
+                            ForEach(Array(snapshot.presentations.enumerated()), id: \.element.permission) { index, presentation in
+                                permissionRow(presentation, index: index)
+                                if index < snapshot.presentations.count - 1 {
+                                    Divider().padding(.leading, 52)
+                                }
+                            }
+                            Divider()
+                        }
+
+                        ViewThatFits(in: .horizontal) {
+                            modelRow
+                            VStack(alignment: .leading, spacing: 12) {
+                                modelDescriptionView
+                                modelAction
+                            }
                         }
                     }
-                    Divider()
+                    .padding(30)
                 }
 
-                HStack(spacing: 14) {
-                    Text("AI")
-                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                        .foregroundStyle(modelReady ? ResenhaTheme.success : ResenhaTheme.accent)
-                        .frame(width: 34, alignment: .leading)
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("Modelo de voz local").fontWeight(.semibold)
-                        Text(modelDescription).font(.callout).foregroundStyle(.secondary)
+                Divider()
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 12) {
+                        setupStatus
+                        Spacer()
+                        footerActions
                     }
-                    Spacer(minLength: 12)
-                    modelAction
-                }
-                .padding(.horizontal, 4)
-
-                Spacer(minLength: 0)
-
-                HStack {
-                    ResenhaStatusPill(
-                        title: setupReady ? "Pronto para usar" : "Configuração pendente",
-                        symbol: setupReady ? "checkmark.circle.fill" : "circle.dotted",
-                        active: setupReady
-                    )
-                    Spacer()
-                    Button(setupReady ? "Começar a usar" : "Agora não", action: close)
-                    if !snapshot.isReady {
-                        Button(isRequesting ? "Solicitando…" : "Ativar permissões", action: requestPermissions)
-                            .buttonStyle(.borderedProminent)
-                            .tint(ResenhaTheme.signal)
-                            .disabled(isRequesting)
+                    VStack(alignment: .leading, spacing: 12) {
+                        setupStatus
+                        footerActions
                     }
                 }
+                .padding(.horizontal, 30)
+                .padding(.vertical, 18)
             }
-            .padding(30)
         }
-        .frame(width: 680, height: 570)
-        .tint(ResenhaTheme.signal)
+        .frame(minWidth: 620, minHeight: 480)
+        .tint(ResenhaTheme.controlTint)
+    }
+
+    private var introduction: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Image("ResenhaLockup")
+                .resizable()
+                .renderingMode(.template)
+                .scaledToFit()
+                .frame(width: 164, height: 42, alignment: .leading)
+                .foregroundStyle(.primary)
+                .accessibilityLabel("Resenha")
+            Text("Sua voz, em qualquer campo.")
+                .font(.system(.title, design: .serif).weight(.semibold))
+                .accessibilityAddTraits(.isHeader)
+            Text(introText)
+                .font(.body)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var modelDescriptionView: some View {
+        HStack(alignment: .top, spacing: 14) {
+            Text("AI")
+                .font(.caption.weight(.semibold).monospaced())
+                .foregroundStyle(modelReady ? ResenhaTheme.success : ResenhaTheme.accent)
+                .frame(width: 34, alignment: .leading)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Modelo de voz local").fontWeight(.semibold)
+                Text(modelDescription).font(.callout).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var modelRow: some View {
+        HStack(alignment: .center, spacing: 14) {
+            modelDescriptionView
+            Spacer(minLength: 12)
+            modelAction
+        }
+    }
+
+    private var setupStatus: some View {
+        ResenhaStatusPill(
+            title: setupReady ? "Pronto para usar" : "Configuração pendente",
+            symbol: setupReady ? "checkmark.circle.fill" : "circle.dotted",
+            active: setupReady
+        )
+    }
+
+    private var footerActions: some View {
+        HStack(spacing: 10) {
+            Button(setupReady ? "Começar a usar" : "Agora não", action: close)
+            if !snapshot.isReady {
+                Button(isRequesting ? "Solicitando…" : "Ativar permissões", action: requestPermissions)
+                    .buttonStyle(.borderedProminent)
+                    .foregroundStyle(ResenhaTheme.onControl)
+                    .disabled(isRequesting)
+                    .accessibilityHint("Solicita Microfone e abre os Ajustes para Monitoramento de Entrada")
+            }
+        }
     }
 
     private var modelDescription: String {
         switch modelManager.state {
-        case .missing: "Download único de 181 MB, verificado antes de instalar."
+        case .missing:
+            modelManager.hasResumableDownload
+                ? "Download pausado. Retome sem perder o progresso disponível."
+                : "Download único de 181 MB, verificado antes de instalar."
         case .downloading(let progress): "Baixando… \(progress.formatted(.percent.precision(.fractionLength(0))))"
         case .verifying: "Verificando a integridade do arquivo…"
         case .ready: "Instalado, verificado e pronto para transcrever."
@@ -140,9 +193,12 @@ private struct PermissionOnboardingView: View {
     private var modelAction: some View {
         switch modelManager.state {
         case .missing:
-            Button("Baixar") { modelManager.download() }
+            Button(modelManager.hasResumableDownload ? "Retomar" : "Baixar") { modelManager.download() }
         case .downloading(let progress):
-            ProgressView(value: progress).frame(width: 110)
+            HStack(spacing: 8) {
+                ProgressView(value: progress).frame(width: 82)
+                Button("Pausar") { modelManager.cancelDownload() }
+            }
         case .verifying:
             ProgressView().controlSize(.small)
         case .ready:
@@ -156,9 +212,10 @@ private struct PermissionOnboardingView: View {
     private func permissionRow(_ presentation: PermissionPresentation, index: Int) -> some View {
         HStack(spacing: 14) {
             Text(String(format: "%02d", index + 1))
-                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                .font(.caption.weight(.medium).monospaced())
                 .foregroundStyle(presentation.isGranted ? ResenhaTheme.success : ResenhaTheme.accent)
                 .frame(width: 34, alignment: .leading)
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 3) {
                 Text(presentation.permission.onboardingTitle).fontWeight(.semibold)
                 Text(presentation.permission.onboardingPurpose)
@@ -176,6 +233,7 @@ private struct PermissionOnboardingView: View {
         }
         .padding(.horizontal, 4)
         .frame(minHeight: 76)
+        .accessibilityElement(children: .contain)
     }
 }
 
@@ -211,12 +269,13 @@ final class PermissionOnboardingController: NSObject, NSWindowDelegate {
 
     private func makeWindow() -> NSWindow {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 680, height: 570),
-            styleMask: [.titled, .closable],
+            contentRect: NSRect(x: 0, y: 0, width: 720, height: 620),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false
         )
         window.title = "Configurar Resenha"
+        window.contentMinSize = NSSize(width: 620, height: 480)
         window.isReleasedWhenClosed = false
         window.center()
         window.delegate = self
@@ -232,5 +291,6 @@ final class PermissionOnboardingController: NSObject, NSWindowDelegate {
             openSettings: openSettings,
             close: { [weak self] in self?.close() }
         ))
+        window?.contentMinSize = NSSize(width: 620, height: 480)
     }
 }

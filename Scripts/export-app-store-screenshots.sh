@@ -2,7 +2,7 @@
 set -euo pipefail
 
 project_root="${0:A:h:h}"
-fixture_root="${1:-$HOME/Library/Containers/br.com.luisroquette.Resenha/Data/tmp/ResenhaTests/ui-fixtures}"
+fixture_root="${1:-${RESENHA_UI_FIXTURE_ROOT:-${TMPDIR:-/tmp}/ResenhaTests/ui-fixtures}}"
 output_root="$project_root/AppStore/screenshots/pt-BR"
 work_root="$(mktemp -d "${TMPDIR:-/tmp}/resenha-app-store.XXXXXX")"
 trap 'mv "$work_root" "$HOME/.Trash/resenha-app-store-$(date +%Y%m%d-%H%M%S)" 2>/dev/null || true' EXIT
@@ -133,10 +133,10 @@ magick "$work_root/flow-title.png" \
 
 settings_shot '03' 'Seu atalho. Seu ritmo.' 'Configure a combinação global e segure para falar.' 'settings-shortcut-light.png' 'atalho-global'
 settings_shot '04' 'Português sem medo do inglês.' 'PT-BR, English e Español com vocabulário pessoal.' 'settings-transcription-light.png' 'idiomas-anglicismos'
-settings_shot '05' 'Um som que você reconhece.' 'Escolha sinais curtos — discretos, suaves ou engraçados.' 'settings-sounds-light.png' 'sons'
+settings_shot '05' 'Seu texto continua com você.' 'Cada transcrição vai ao clipboard; o histórico local é opcional.' 'settings-general-light.png' 'clipboard-local'
 settings_shot '06' 'Sua voz não sai deste Mac.' 'Whisper local, sem conta, nuvem ou backend.' 'settings-about-light.png' 'privacidade-local'
 settings_shot '07' 'O microfone certo, sempre.' 'Escolha a entrada e confirme o nível antes de ditar.' 'settings-audio-light.png' 'audio'
-settings_shot '08' 'Nada do que você falou se perde.' 'O texto fica no clipboard e os 10 últimos podem ser guardados localmente.' 'settings-general-light.png' 'clipboard-historico'
+settings_shot '08' 'Grátis. Aberto. Sem conta.' 'SwiftUI e whisper.cpp: o essencial, auditável e local.' 'settings-about-light.png' 'codigo-aberto'
 
 # 09 — truthful recovery state, rendered by the native HUD.
 canvas "$work_root/failure-base.png"

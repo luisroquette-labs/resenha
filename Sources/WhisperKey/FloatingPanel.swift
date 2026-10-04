@@ -158,7 +158,11 @@ final class FloatingPanelController: NSObject {
     }
 
     private func focusedWindowFrame(pid: pid_t?) -> CGRect? {
-        nil
+        guard let pid else { return nil }
+        let primaryTop = NSScreen.screens
+            .first(where: { screenID($0) == CGMainDisplayID() })?
+            .frame.maxY ?? NSScreen.main?.frame.maxY ?? 0
+        return TargetWindowResolver.currentFrame(for: pid, primaryScreenTop: primaryTop)
     }
 
     @objc private func screensChanged() {

@@ -20,9 +20,11 @@ final class AudioRecorder {
     private var recorder: AVAudioRecorder?
     private var outputURL: URL?
     private var meterTimer: Timer?
+    private var durationTimer: Timer?
     var onLevel: (@MainActor (Float) -> Void)?
+    var onMaximumDuration: (@MainActor () -> Void)?
 
-    func start() throws {
+    func start(maximumDuration: TimeInterval = ResenhaRuntimeLimits.maximumRecordingDuration) throws {
         guard recorder == nil else { throw AudioRecorderError.alreadyRecording }
 
         let directory = Self.recordingDirectory()
@@ -42,7 +44,9 @@ final class AudioRecorder {
             recorder.isMeteringEnabled = true
             recorder.prepareToRecord()
             try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: outputURL.path)
-            guard recorder.record() else { throw AudioRecorderError.failedToStart }
+            guard recorder.record(forDuration: max(0, maximumDuration)) else {
+                throw AudioRecorderError.failedToStart
+            }
         } catch {
             try? FileManager.default.removeItem(at: outputURL)
             throw error
@@ -54,6 +58,11 @@ final class AudioRecorder {
         }
         meterTimer = timer
         RunLoop.main.add(timer, forMode: .common)
+        let durationTimer = Timer(timeInterval: max(0, maximumDuration), repeats: false) { [weak self] _ in
+            MainActor.assumeIsolated { self?.maximumDurationReached() }
+        }
+        self.durationTimer = durationTimer
+        RunLoop.main.add(durationTimer, forMode: .common)
     }
 
     func stop() throws -> URL {
@@ -82,6 +91,15 @@ final class AudioRecorder {
     private func stopMetering() {
         meterTimer?.invalidate()
         meterTimer = nil
+        durationTimer?.invalidate()
+        durationTimer = nil
+    }
+
+    private func maximumDurationReached() {
+        durationTimer?.invalidate()
+        durationTimer = nil
+        guard recorder != nil else { return }
+        onMaximumDuration?()
     }
 
     nonisolated static func cleanupStaleRecordings(

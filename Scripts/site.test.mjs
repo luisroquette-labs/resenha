@@ -197,6 +197,38 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
       await assert.rejects(createPreviewServer({ root, port: -1 }));
     } finally { await rm(fixtureRoot, { recursive: true, force: true }); }
   });
+  test('CK-9: product demos have continuous motion, exact dimensions and no audio', async () => {
+    const expectations = [
+      ['resenha-flow.mp4', 8, 32],
+      ['resenha-settings.mp4', 8, 32],
+    ];
+    for (const [name, expectedDuration, minimumUniqueSamples] of expectations) {
+      const path = resolve('site/assets/product', name);
+      const probe = JSON.parse(execFileSync('ffprobe', ['-v', 'error', '-show_streams', '-show_format', '-of', 'json', path], { encoding: 'utf8' }));
+      const video = probe.streams.find(stream => stream.codec_type === 'video');
+      assert.equal(video?.width, 1440);
+      assert.equal(video?.height, 900);
+      assert.equal(video?.avg_frame_rate, '30/1');
+      assert.ok(Math.abs(Number(probe.format.duration) - expectedDuration) < 0.05);
+      assert.equal(probe.streams.some(stream => stream.codec_type === 'audio'), false);
+      const frameMD5 = execFileSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-i', path, '-vf', 'fps=4', '-f', 'framemd5', '-'], { encoding: 'utf8' });
+      const hashes = new Set(frameMD5.split('\n').filter(line => line && !line.startsWith('#')).map(line => line.split(',').at(-1)?.trim()));
+      assert.ok(hashes.size >= minimumUniqueSamples, `${name} has frozen sampled frames`);
+    }
+    const manifest = JSON.parse(await readFile('site/assets/product/resenha-settings-scenes.json', 'utf8'));
+    assert.deepEqual(manifest.scenes.map(scene => scene.name), [
+      'general', 'shortcut', 'sounds-angelic', 'sounds-query', 'sounds-favorite', 'sounds-favorites-only',
+    ]);
+    assert.equal(new Set(manifest.scenes.map(scene => scene.fixtureSHA256)).size, manifest.scenes.length,
+      'Every declared interaction state must come from changed native UI content');
+    assert.ok(manifest.scenes.every(scene => /^[0-9a-f]{64}$/u.test(scene.fixtureSHA256)));
+    const sampledStates = new Set(manifest.scenes.map(scene => execFileSync('ffmpeg', [
+      '-hide_banner', '-loglevel', 'error', '-ss', String(scene.sampleTime),
+      '-i', 'site/assets/product/resenha-settings.mp4', '-frames:v', '1', '-f', 'md5', '-',
+    ], { encoding: 'utf8' }).trim()));
+    assert.equal(sampledStates.size, manifest.scenes.length,
+      'Navigation, search and favorite states must visibly differ in the encoded video');
+  });
   test('CK-5/11/15/19: actual document is usable at root/subpath with truthful static slots', async () => {
     let rootBody;
     for (const prefix of ['/', '/resenha/']) {
@@ -225,8 +257,16 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
         assert.equal((html.match(/data-release-channel="macos"/gu) ?? []).length, 1);
         assert.ok((html.match(/data-release-channel="source"/gu) ?? []).length >= 1);
         assert.doesNotMatch(html, /href="(?:|#|https?:\/\/(?:github\.com|apps\.apple\.com)[^"]*)"/u);
-        assert.match(html, /rel="canonical"/u);
-        assert.match(html, /application\/ld\+json/u);
+        assert.match(html, /<link rel="canonical" href="https:\/\/luisroquette\.github\.io\/resenha\/">/u);
+        assert.match(html, /property="og:image" content="https:\/\/luisroquette\.github\.io\/resenha\/assets\/social\/resenha-og\.png"/u);
+        assert.match(html, /name="twitter:card" content="summary_large_image"/u);
+        const schemaMatch = html.match(/<script type="application\/ld\+json">\s*([\s\S]*?)\s*<\/script>/u);
+        const schema = JSON.parse(schemaMatch?.[1] ?? 'null');
+        assert.equal(schema['@type'], 'SoftwareApplication');
+        assert.equal(schema.name, 'Resenha');
+        assert.equal(schema.isAccessibleForFree, true);
+        assert.equal(schema.url, 'https://luisroquette.github.io/resenha/');
+        assert.ok(!('aggregateRating' in schema));
         assert.equal((await get(preview.origin, prefix + 'googleb0847bf7435d170c.html')).body.trim(), 'google-site-verification: googleb0847bf7435d170c.html');
         assert.match(html, /analytics\.mjs\?v=20261004-1/u);
         assert.doesNotMatch(html, /aggregateRating/u);
@@ -238,12 +278,14 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
           'assets/product/settings-sounds.webp', 'assets/product/settings-audio.webp',
           'assets/product/settings-transcription.webp', 'assets/product/settings-about.webp',
           'assets/product/resenha-flow.mp4', 'assets/product/resenha-settings.mp4',
-          'assets/product/resenha-flow-poster.webp']) {
+          'assets/product/resenha-flow-poster.webp', 'assets/social/resenha-og.png']) {
           assert.ok(html.includes(name));
           assert.equal((await get(preview.origin, prefix + name)).status, 200);
         }
         assert.equal((html.match(/Interface real do app/gu) ?? []).length, 1);
         assert.equal((html.match(/<video\b/gu) ?? []).length, 2);
+        const gallery = html.match(/<div class="screen-gallery"[\s\S]*?<\/div>\s*<p class="gallery-note">/u)?.[0] ?? '';
+        assert.equal((gallery.match(/loading="lazy"/gu) ?? []).length, 6);
         assert.doesNotMatch(html, /OpenAI|chave API/u);
         assert.match(html, /atalho é gravado dentro do Resenha/u);
         assert.match(html, /Option direita isolada/u);

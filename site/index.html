@@ -10,13 +10,36 @@
   <meta property="og:locale" content="pt_BR">
   <meta property="og:title" content="Resenha — alternativa open source ao Wispr Flow">
   <meta property="og:description" content="Ditado gratuito para Mac, processado localmente e sem limite semanal de palavras.">
+  <meta property="og:url" content="https://luisroquette.github.io/resenha/">
+  <meta property="og:image" content="https://luisroquette.github.io/resenha/assets/social/resenha-og.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Resenha, ditado local para macOS">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Resenha — alternativa open source ao Wispr Flow">
+  <meta name="twitter:description" content="Ditado gratuito para Mac, processado localmente e sem limite semanal de palavras.">
+  <meta name="twitter:image" content="https://luisroquette.github.io/resenha/assets/social/resenha-og.png">
   <meta name="theme-color" content="#f1eee4">
   <link rel="icon" href="assets/brand/resenha-app-icon.png">
   <link rel="stylesheet" href="styles.css?v=20261004-3">
   <script type="module" src="analytics.mjs?v=20261004-1"></script>
   <script type="module" src="release.mjs?v=20261004-3"></script>
   <script type="module" src="media.mjs?v=20261003-2"></script>
-  <script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Resenha","applicationCategory":"UtilitiesApplication","operatingSystem":"macOS 14 ou posterior","isAccessibleForFree":true,"license":"https://opensource.org/license/mit","description":"Alternativa gratuita e open source ao Wispr Flow para ditado local no Mac."}</script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Resenha",
+    "description": "Alternativa gratuita e open source ao Wispr Flow para ditado local no Mac.",
+    "applicationCategory": "UtilitiesApplication",
+    "operatingSystem": "macOS 14 ou posterior",
+    "softwareVersion": "1.0.0",
+    "isAccessibleForFree": true,
+    "license": "https://opensource.org/license/mit",
+    "codeRepository": "https://github.com/luisroquette/resenha",
+    "url": "https://luisroquette.github.io/resenha/"
+  }
+  </script>
 </head>
 <body>
   <a class="skip-link" href="#conteudo">Pular para o conteúdo</a>
@@ -122,21 +145,21 @@
               <source src="assets/product/resenha-flow.mp4" type="video/mp4">
             </video>
           </div>
-          <figcaption><span>01 / FLUXO COMPLETO</span><h3>Da voz ao cursor em oito segundos.</h3><p>Demonstração do HUD nativo nos estados Ouvindo, Transcrevendo e Inserindo.</p></figcaption>
+          <figcaption><span>01 / FLUXO COMPLETO</span><h3>Da voz ao cursor em oito segundos.</h3><p>Demonstração fiel produzida localmente com renders nativos: cursor, atalho, HUD responsivo e texto inserido.</p></figcaption>
         </figure>
 
         <figure class="product-film settings-film" data-reveal>
           <div class="film-frame"><video muted loop playsinline controls preload="metadata" poster="assets/product/settings-general.webp" aria-label="Tour em vídeo dos ajustes do Resenha"><source src="assets/product/resenha-settings.mp4" type="video/mp4"></video></div>
-          <figcaption><span>02 / TOUR DOS AJUSTES</span><h3>Seis áreas. Nenhuma bagunça.</h3><p>Geral, atalho, sons, áudio, transcrição e informações do aplicativo.</p></figcaption>
+          <figcaption><span>02 / TOUR DOS AJUSTES</span><h3>Seis áreas. Nenhuma bagunça.</h3><p>Tour local animado dos componentes SwiftUI reais, com cursor e seleção visíveis.</p></figcaption>
         </figure>
 
         <div class="screen-gallery" id="telas" aria-label="Galeria das telas do Resenha">
-          <figure><div><img src="assets/product/settings-general.webp" alt="Tela Geral dos ajustes do Resenha"></div><figcaption><b>01</b> Geral</figcaption></figure>
-          <figure><div><img src="assets/product/settings-shortcut.webp" alt="Tela de personalização do atalho do Resenha"></div><figcaption><b>02</b> Atalho</figcaption></figure>
-          <figure><div><img src="assets/product/settings-sounds.webp" alt="Biblioteca de sons rápidos do Resenha"></div><figcaption><b>03</b> Sons</figcaption></figure>
-          <figure><div><img src="assets/product/settings-audio.webp" alt="Tela de configuração de áudio do Resenha"></div><figcaption><b>04</b> Áudio</figcaption></figure>
-          <figure><div><img src="assets/product/settings-transcription.webp" alt="Tela de idioma, modelo local e vocabulário pessoal"></div><figcaption><b>05</b> Transcrição</figcaption></figure>
-          <figure><div><img src="assets/product/settings-about.webp" alt="Tela Sobre do Resenha"></div><figcaption><b>06</b> Sobre</figcaption></figure>
+          <figure><div><img src="assets/product/settings-general.webp" alt="Tela Geral dos ajustes do Resenha" loading="lazy" decoding="async"></div><figcaption><b>01</b> Geral</figcaption></figure>
+          <figure><div><img src="assets/product/settings-shortcut.webp" alt="Tela de personalização do atalho do Resenha" loading="lazy" decoding="async"></div><figcaption><b>02</b> Atalho</figcaption></figure>
+          <figure><div><img src="assets/product/settings-sounds.webp" alt="Biblioteca de sons rápidos do Resenha" loading="lazy" decoding="async"></div><figcaption><b>03</b> Sons</figcaption></figure>
+          <figure><div><img src="assets/product/settings-audio.webp" alt="Tela de configuração de áudio do Resenha" loading="lazy" decoding="async"></div><figcaption><b>04</b> Áudio</figcaption></figure>
+          <figure><div><img src="assets/product/settings-transcription.webp" alt="Tela de idioma, modelo local e vocabulário pessoal" loading="lazy" decoding="async"></div><figcaption><b>05</b> Transcrição</figcaption></figure>
+          <figure><div><img src="assets/product/settings-about.webp" alt="Tela Sobre do Resenha" loading="lazy" decoding="async"></div><figcaption><b>06</b> Sobre</figcaption></figure>
         </div>
         <p class="gallery-note">Arraste para explorar · proporção nativa preservada · nenhum corte</p>
       </div>

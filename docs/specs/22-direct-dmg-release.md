@@ -4,8 +4,9 @@ Status: autorizado em 2026-10-03
 
 ## Decisão
 
-O único Resenha para macOS será distribuído diretamente em um `.dmg`, como o
-Willow Voice no Mac. Não haverá uma variante reduzida para a Mac App Store.
+O Resenha será distribuído diretamente em um `.dmg`, como o Willow Voice no
+Mac, sem reduzir o canal da Mac App Store. Os dois artefatos saem da mesma fonte,
+com fronteiras de permissão e inserção específicas de cada canal.
 
 ## Contrato do artefato
 

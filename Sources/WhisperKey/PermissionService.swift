@@ -7,8 +7,10 @@ enum RequiredPermission: Hashable {
     case inputMonitoring
     case accessibility
 
-    static var requiredCases: [RequiredPermission] {
-        [.microphone, .inputMonitoring, .accessibility]
+    static func requiredCases(for channel: ResenhaDistributionChannel) -> [RequiredPermission] {
+        channel.requiresAccessibility
+            ? [.microphone, .inputMonitoring, .accessibility]
+            : [.microphone, .inputMonitoring]
     }
 
     var name: String {
@@ -55,17 +57,24 @@ struct PermissionSnapshot: Equatable {
     let microphone: Bool
     let inputMonitoring: Bool
     let accessibility: Bool
+    let requiresAccessibility: Bool
 
-    init(microphone: Bool, inputMonitoring: Bool, accessibility: Bool = true) {
+    init(
+        microphone: Bool,
+        inputMonitoring: Bool,
+        accessibility: Bool = true,
+        requiresAccessibility: Bool = ResenhaDistributionChannel.current.requiresAccessibility
+    ) {
         self.microphone = microphone
         self.inputMonitoring = inputMonitoring
         self.accessibility = accessibility
+        self.requiresAccessibility = requiresAccessibility
     }
 
-    var isReady: Bool { microphone && inputMonitoring && accessibility }
+    var isReady: Bool { microphone && inputMonitoring && (!requiresAccessibility || accessibility) }
 
     var presentations: [PermissionPresentation] {
-        RequiredPermission.requiredCases.map { permission in
+        RequiredPermission.requiredCases(for: requiresAccessibility ? .direct : .appStore).map { permission in
             let granted: Bool
             switch permission {
             case .microphone: granted = microphone
@@ -83,7 +92,7 @@ struct PermissionSnapshot: Equatable {
     var missingPermissionMessage: String {
         if !microphone { return "Acesso ao Microfone necessário" }
         if !inputMonitoring { return "Acesso ao Monitoramento de Entrada necessário" }
-        if !accessibility { return "Acesso à Acessibilidade necessário" }
+        if requiresAccessibility && !accessibility { return "Acesso à Acessibilidade necessário" }
         return "Permissões prontas"
     }
 }
@@ -102,14 +111,27 @@ enum PermissionGate {
 struct PermissionService {
     var isMicrophoneGranted: Bool { AVCaptureDevice.authorizationStatus(for: .audio) == .authorized }
     var isInputMonitoringGranted: Bool { CGPreflightListenEventAccess() }
+
+    #if !RESENHA_APP_STORE
     var isAccessibilityGranted: Bool { AXIsProcessTrusted() }
+    #endif
 
     var snapshot: PermissionSnapshot {
+        #if RESENHA_APP_STORE
         PermissionSnapshot(
             microphone: isMicrophoneGranted,
             inputMonitoring: isInputMonitoringGranted,
-            accessibility: isAccessibilityGranted
+            accessibility: true,
+            requiresAccessibility: false
         )
+        #else
+        PermissionSnapshot(
+            microphone: isMicrophoneGranted,
+            inputMonitoring: isInputMonitoringGranted,
+            accessibility: isAccessibilityGranted,
+            requiresAccessibility: true
+        )
+        #endif
     }
 
     var missingPermissionMessage: String { snapshot.missingPermissionMessage }
@@ -129,8 +151,10 @@ struct PermissionService {
         CGRequestListenEventAccess()
     }
 
+    #if !RESENHA_APP_STORE
     func requestAccessibility() {
         let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
         AXIsProcessTrustedWithOptions(options)
     }
+    #endif
 }

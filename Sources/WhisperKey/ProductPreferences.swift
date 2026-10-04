@@ -91,7 +91,6 @@ struct HotkeyShortcut: RawRepresentable, CaseIterable, Identifiable, Hashable {
         return parts.joined(separator: " + ")
     }
 }
-
 @MainActor
 final class ProductPreferences: ObservableObject {
     static let maximumGlossaryCharacters = 20_000
@@ -103,8 +102,11 @@ final class ProductPreferences: ObservableObject {
         static let transcriptionLanguage = "resenha.transcriptionLanguage"
         static let transcriptionGlossary = "resenha.transcriptionGlossary"
         static let readySoundID = "resenha.readySoundID"
+        static let favoriteSoundIDs = "resenha.favoriteSoundIDs"
+        static let legacyHistoryPrivacyMigrationCompleted = "resenha.legacyHistoryPrivacyMigrationCompleted.v1"
     }
     private let defaults: UserDefaults
+    private(set) var needsLegacyHistoryPrivacyMigration: Bool
     var onShortcutChange: ((HotkeyShortcut) -> Void)?
     var onHUDChange: ((Bool) -> Void)?
     var onHistoryChange: ((Bool) -> Void)?
@@ -116,6 +118,7 @@ final class ProductPreferences: ObservableObject {
             if oldValue != shortcut { onShortcutChange?(shortcut) }
         }
     }
+
     @Published var showsHUD: Bool {
         didSet {
             defaults.set(showsHUD, forKey: Key.showsHUD)
@@ -148,17 +151,22 @@ final class ProductPreferences: ObservableObject {
     @Published var readySoundID: Int {
         didSet { defaults.set(readySoundID, forKey: Key.readySoundID) }
     }
+    @Published private(set) var favoriteSoundIDs: Set<Int> {
+        didSet { defaults.set(favoriteSoundIDs.sorted(), forKey: Key.favoriteSoundIDs) }
+    }
     var readySound: ResenhaSound {
         ResenhaSoundCatalog.sound(id: readySoundID) ?? ResenhaSoundCatalog.defaultSound
     }
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        needsLegacyHistoryPrivacyMigration = defaults.object(forKey: Key.keepsHistory) == nil
+            && !defaults.bool(forKey: Key.legacyHistoryPrivacyMigrationCompleted)
         let defaultShortcut = HotkeyShortcut.rightOption
         shortcut = HotkeyShortcut(rawValue: defaults.string(forKey: Key.shortcut) ?? "") ?? defaultShortcut
         showsHUD = defaults.object(forKey: Key.showsHUD) as? Bool ?? true
         soundsEnabled = defaults.object(forKey: Key.soundsEnabled) as? Bool ?? true
-        keepsHistory = defaults.object(forKey: Key.keepsHistory) as? Bool ?? true
+        keepsHistory = defaults.object(forKey: Key.keepsHistory) as? Bool ?? false
         transcriptionLanguage = TranscriptionLanguage(
             rawValue: defaults.string(forKey: Key.transcriptionLanguage) ?? ""
         ) ?? .portuguese
@@ -168,16 +176,54 @@ final class ProductPreferences: ObservableObject {
         )
         let storedSoundID = defaults.integer(forKey: Key.readySoundID)
         readySoundID = ResenhaSoundCatalog.sound(id: storedSoundID)?.id ?? ResenhaSoundCatalog.defaultSoundID
+        let validSoundIDs = Set(ResenhaSoundCatalog.all.map(\.id))
+        favoriteSoundIDs = Set(defaults.array(forKey: Key.favoriteSoundIDs) as? [Int] ?? [])
+            .intersection(validSoundIDs)
     }
+
+    /// Removes pre-opt-in history before recording that the privacy migration ran.
+    /// A failed removal remains pending and is retried on the next launch.
+    @discardableResult
+    func migrateLegacyHistoryIfNeeded(clearHistory: () -> Bool) -> Bool {
+        guard needsLegacyHistoryPrivacyMigration else { return true }
+        guard clearHistory() else { return false }
+        defaults.set(true, forKey: Key.legacyHistoryPrivacyMigrationCompleted)
+        needsLegacyHistoryPrivacyMigration = false
+        return true
+    }
+
+    func isFavorite(soundID: Int) -> Bool {
+        favoriteSoundIDs.contains(soundID)
+    }
+
+    func toggleFavorite(soundID: Int) {
+        guard ResenhaSoundCatalog.sound(id: soundID) != nil else { return }
+        if favoriteSoundIDs.contains(soundID) {
+            favoriteSoundIDs.remove(soundID)
+        } else {
+            favoriteSoundIDs.insert(soundID)
+        }
+    }
+}
+
+struct SoundLibraryPresentation: Equatable {
+    var searchText = ""
+    var showsFavoritesOnly = false
 }
 
 struct ProductSettingsView: View {
     @ObservedObject var preferences: ProductPreferences
     @State private var selection = ProductSettingsSection.general
+    private let soundPresentation: SoundLibraryPresentation
 
-    init(preferences: ProductPreferences, initialSection: ProductSettingsSection = .general) {
+    init(
+        preferences: ProductPreferences,
+        initialSection: ProductSettingsSection = .general,
+        soundPresentation: SoundLibraryPresentation = .init()
+    ) {
         self.preferences = preferences
         _selection = State(initialValue: initialSection)
+        self.soundPresentation = soundPresentation
     }
 
     var body: some View {
@@ -191,7 +237,7 @@ struct ProductSettingsView: View {
                     .frame(width: 116, height: 34, alignment: .leading)
                 Spacer()
                 Label("local neste Mac", systemImage: "lock.fill")
-                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .font(.caption.weight(.medium).monospaced())
                     .foregroundStyle(.secondary)
             }
             .padding(.horizontal, 24)
@@ -200,53 +246,61 @@ struct ProductSettingsView: View {
             Divider()
 
             HStack(spacing: 0) {
-                ForEach(ProductSettingsSection.allCases) { section in
-                    Button {
-                        selection = section
-                    } label: {
-                        VStack(spacing: 3) {
-                            Text(section.index)
-                                .font(.system(size: 9, weight: .medium, design: .monospaced))
-                                .foregroundStyle(.secondary)
-                            Text(section.title)
-                                .font(.system(size: 12, weight: selection == section ? .semibold : .regular))
+                ScrollView {
+                    VStack(spacing: 4) {
+                        ForEach(ProductSettingsSection.allCases) { section in
+                            Button {
+                                selection = section
+                            } label: {
+                                HStack(spacing: 10) {
+                                    Image(systemName: section.symbol)
+                                        .frame(width: 20)
+                                        .accessibilityHidden(true)
+                                    Text(section.title)
+                                        .font(.body.weight(selection == section ? .semibold : .regular))
+                                    Spacer(minLength: 4)
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 9)
+                                .contentShape(Rectangle())
+                                .background(selection == section ? ResenhaTheme.accent.opacity(0.13) : .clear,
+                                            in: RoundedRectangle(cornerRadius: 9))
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Ajustes de \(section.title)")
+                            .accessibilityValue(selection == section ? "Selecionado" : "")
+                            .accessibilityHint(selection == section ? "Seção atual" : "Abre esta seção")
+                            .foregroundStyle(selection == section ? ResenhaTheme.accent : Color.primary)
+                            .accessibilityAddTraits(selection == section ? .isSelected : [])
                         }
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 9)
-                            .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Abrir ajustes de \(section.title)")
-                    .accessibilityHint(selection == section ? "Seção atual" : "Troca a seção exibida")
-                    .foregroundStyle(selection == section ? ResenhaTheme.accent : Color.primary)
-                    .overlay(alignment: .bottom) {
-                        if selection == section {
-                            Rectangle().fill(ResenhaTheme.accent).frame(height: 2)
-                        }
+                    .padding(12)
+                }
+                .frame(minWidth: 168, idealWidth: 184, maxWidth: 210)
+
+                Divider()
+
+                Group {
+                    switch selection {
+                    case .general: GeneralSettingsPane(preferences: preferences)
+                    case .shortcut: ShortcutSettingsPane(preferences: preferences)
+                    case .sounds: SoundLibrarySettingsPane(
+                        preferences: preferences,
+                        initialPresentation: soundPresentation
+                    )
+                    case .audio: AudioSettingsPane()
+                    case .transcription: TranscriptionSettingsPane(preferences: preferences)
+                    case .about: AboutSettingsPane()
                     }
-                    .accessibilityAddTraits(selection == section ? .isSelected : [])
                 }
+                .padding(.horizontal, 28)
+                .padding(.vertical, 22)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-
-            Divider()
-
-            Group {
-                switch selection {
-                case .general: GeneralSettingsPane(preferences: preferences)
-                case .shortcut: ShortcutSettingsPane(preferences: preferences)
-                case .sounds: SoundLibrarySettingsPane(preferences: preferences)
-                case .audio: AudioSettingsPane()
-                case .transcription: TranscriptionSettingsPane(preferences: preferences)
-                case .about: AboutSettingsPane()
-                }
-            }
-            .padding(.horizontal, 28)
-            .padding(.vertical, 22)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(minWidth: 700, minHeight: 500)
+        .frame(minWidth: 720, minHeight: 500)
         .background(ResenhaBackdrop())
-        .tint(ResenhaTheme.accent)
+        .tint(ResenhaTheme.controlTint)
     }
 }
 
@@ -285,6 +339,14 @@ private final class SoundPreviewModel: ObservableObject {
 private struct SoundLibrarySettingsPane: View {
     @ObservedObject var preferences: ProductPreferences
     @StateObject private var preview = SoundPreviewModel()
+    @State private var searchText: String
+    @State private var showsFavoritesOnly: Bool
+
+    init(preferences: ProductPreferences, initialPresentation: SoundLibraryPresentation = .init()) {
+        self.preferences = preferences
+        _searchText = State(initialValue: initialPresentation.searchText)
+        _showsFavoritesOnly = State(initialValue: initialPresentation.showsFavoritesOnly)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -301,7 +363,7 @@ private struct SoundLibrarySettingsPane: View {
                         .background(ResenhaTheme.accent.opacity(0.12), in: Circle())
                     VStack(alignment: .leading, spacing: 3) {
                         Text("FALE AGORA")
-                            .font(.system(size: 10, weight: .bold, design: .rounded))
+                            .font(.caption.weight(.bold))
                             .tracking(1.2)
                             .foregroundStyle(ResenhaTheme.accent)
                         Text(preferences.readySound.numberedName).fontWeight(.semibold)
@@ -312,11 +374,24 @@ private struct SoundLibrarySettingsPane: View {
             .padding(.vertical, 4)
             Divider()
 
+            HStack(spacing: 10) {
+                TextField("Buscar por nome ou categoria", text: $searchText)
+                    .textFieldStyle(.roundedBorder)
+                    .accessibilityLabel("Buscar sons")
+                Button {
+                    showsFavoritesOnly.toggle()
+                } label: {
+                    Label("Favoritos", systemImage: showsFavoritesOnly ? "star.fill" : "star")
+                }
+                .buttonStyle(.bordered)
+                .accessibilityValue(showsFavoritesOnly ? "Somente favoritos" : "Todos os sons")
+            }
+
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
-                    ForEach(ResenhaSoundCategory.allCases) { category in
+                    ForEach(visibleCategories) { category in
                         Section {
-                            ForEach(ResenhaSoundCatalog.sounds(in: category)) { sound in
+                            ForEach(filteredSounds(in: category)) { sound in
                                 soundRow(sound)
                                 Divider().opacity(0.7)
                             }
@@ -326,14 +401,22 @@ private struct SoundLibrarySettingsPane: View {
                                 Text(category.title.uppercased())
                                     .tracking(1.2)
                                 Spacer()
-                                Text("10 TOQUES")
+                                Text("\(filteredSounds(in: category).count) TOQUES")
                                     .foregroundStyle(.secondary)
                             }
-                            .font(.system(size: 10, weight: .medium, design: .monospaced))
+                            .font(.caption.weight(.medium).monospaced())
                             .foregroundStyle(ResenhaTheme.accent)
                             .padding(.vertical, 9)
                             .background(.background.opacity(0.94))
                         }
+                    }
+                    if visibleCategories.isEmpty {
+                        ContentUnavailableView(
+                            showsFavoritesOnly ? "Nenhum favorito encontrado" : "Nenhum som encontrado",
+                            systemImage: showsFavoritesOnly ? "star" : "magnifyingglass",
+                            description: Text("Ajuste a busca ou mostre todos os sons.")
+                        )
+                        .frame(maxWidth: .infinity, minHeight: 180)
                     }
                 }
             }
@@ -345,35 +428,59 @@ private struct SoundLibrarySettingsPane: View {
         }
     }
 
+    private var visibleCategories: [ResenhaSoundCategory] {
+        ResenhaSoundCategory.allCases.filter { !filteredSounds(in: $0).isEmpty }
+    }
+
+    private func filteredSounds(in category: ResenhaSoundCategory) -> [ResenhaSound] {
+        ResenhaSoundCatalog.search(searchText, in: category).filter {
+            !showsFavoritesOnly || preferences.isFavorite(soundID: $0.id)
+        }
+    }
+
     private func soundRow(_ sound: ResenhaSound) -> some View {
-        Button {
-            preferences.readySoundID = sound.id
-            preview.play(sound)
-        } label: {
-            HStack(spacing: 12) {
+        HStack(spacing: 4) {
+            Button {
+                preferences.readySoundID = sound.id
+                preview.play(sound)
+            } label: {
+                HStack(spacing: 12) {
                 Text(String(format: "%02d", sound.id))
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(.caption.monospaced())
                     .foregroundStyle(.secondary)
                     .frame(width: 24, alignment: .trailing)
                 Text(sound.name)
                 Spacer()
                 if preferences.readySoundID == sound.id {
                     Text("EM USO")
-                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                        .font(.caption2.weight(.semibold).monospaced())
                         .tracking(0.8)
                         .foregroundStyle(ResenhaTheme.accent)
                 }
                 Image(systemName: "speaker.wave.2")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 8)
+                .contentShape(Rectangle())
             }
-            .padding(.vertical, 8)
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+            .accessibilityLabel("Ouvir e selecionar \(sound.numberedName)")
+            .accessibilityValue(preferences.readySoundID == sound.id ? "Selecionado" : "Não selecionado")
+            .accessibilityAddTraits(preferences.readySoundID == sound.id ? .isSelected : [])
+
+            Button {
+                preferences.toggleFavorite(soundID: sound.id)
+            } label: {
+                Image(systemName: preferences.isFavorite(soundID: sound.id) ? "star.fill" : "star")
+                    .foregroundStyle(preferences.isFavorite(soundID: sound.id) ? ResenhaTheme.accent : .secondary)
+                    .frame(width: 32, height: 32)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(preferences.isFavorite(soundID: sound.id)
+                ? "Remover \(sound.name) dos favoritos"
+                : "Adicionar \(sound.name) aos favoritos")
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Ouvir e selecionar \(sound.numberedName)")
-        .accessibilityValue(preferences.readySoundID == sound.id ? "Selecionado" : "Não selecionado")
-        .accessibilityAddTraits(preferences.readySoundID == sound.id ? .isSelected : [])
     }
 }
 
@@ -425,11 +532,16 @@ private struct TranscriptionSettingsPane: View {
         switch modelManager.state {
         case .missing:
             VStack(alignment: .leading, spacing: 10) {
-                LabeledContent("Modelo", value: "Ainda não instalado")
-                Text("Download único de 181 MB. O modelo fica neste Mac e a voz nunca é enviada.")
+                LabeledContent("Modelo", value: modelManager.hasResumableDownload ? "Download pausado" : "Ainda não instalado")
+                Text(modelManager.hasResumableDownload
+                    ? "O progresso disponível pode ser retomado. Nenhum áudio foi enviado."
+                    : "Download único de 181 MB. O modelo fica neste Mac e a voz nunca é enviada.")
                     .font(.callout).foregroundStyle(.secondary)
-                Button("Baixar modelo local") { modelManager.download() }
+                Button(modelManager.hasResumableDownload ? "Retomar download" : "Baixar modelo local") {
+                    modelManager.download()
+                }
                     .buttonStyle(.borderedProminent)
+                    .foregroundStyle(ResenhaTheme.onControl)
             }
         case .downloading(let progress):
             VStack(alignment: .leading, spacing: 8) {
@@ -437,6 +549,7 @@ private struct TranscriptionSettingsPane: View {
                 ProgressView(value: progress)
                 Text("Pode continuar usando o Mac. O download será verificado antes da instalação.")
                     .font(.callout).foregroundStyle(.secondary)
+                Button("Pausar download") { modelManager.cancelDownload() }
             }
         case .verifying:
             VStack(alignment: .leading, spacing: 8) {
@@ -481,7 +594,7 @@ final class ProductSettingsWindowController {
             defer: false
         )
         window.title = "Ajustes do Resenha"
-        window.minSize = NSSize(width: 700, height: 500)
+        window.minSize = NSSize(width: 720, height: 500)
         window.isReleasedWhenClosed = false
         window.contentView = NSHostingView(rootView: ProductSettingsView(preferences: preferences))
         window.center()
@@ -532,34 +645,45 @@ private struct GeneralSettingsPane: View {
 private struct ShortcutSettingsPane: View {
     @ObservedObject var preferences: ProductPreferences
     @StateObject private var recorder = ShortcutCaptureController()
-
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
             ResenhaPageHeader(eyebrow: "Push to talk", title: "Atalho", subtitle: "Uma combinação global, disponível em qualquer aplicativo.")
                 ResenhaRuleSection("Pressione e segure para falar") {
-                    LabeledContent("Atalho atual", value: preferences.shortcut.displayName)
-                    Text("Escolha uma tecla ou combinação. A mudança vale imediatamente em qualquer aplicativo.")
-                        .font(.callout).foregroundStyle(.secondary)
-                    HStack(spacing: 10) {
-                        Button(recorder.isRecording ? "Pressione o novo atalho…" : "Gravar novo atalho") {
-                            recorder.begin { preferences.shortcut = $0 }
+                    if ResenhaDistributionChannel.current.usesSandboxedTextService {
+                        LabeledContent("Atalho do Serviço", value: ResenhaServiceShortcut.displayName)
+                        Text("Na versão da App Store, o macOS controla o atalho do Serviço Resenha.")
+                            .font(.callout).foregroundStyle(.secondary)
+                        Button("Personalizar nos Ajustes do Sistema") {
+                            if let url = URL(string: "x-apple.systempreferences:com.apple.Keyboard-Settings.extension") {
+                                NSWorkspace.shared.open(url)
+                            }
                         }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(recorder.isRecording)
-                        Button("Usar Option direita") { preferences.shortcut = .rightOption }
-                            .disabled(recorder.isRecording || preferences.shortcut == .rightOption)
-                    }
-                    if recorder.isRecording {
-                        Text("Pressione a combinação completa e solte. Esc cancela.")
-                            .font(.callout.weight(.medium)).foregroundStyle(ResenhaTheme.accent)
+                    } else {
+                        LabeledContent("Atalho atual", value: preferences.shortcut.displayName)
+                        Text("Escolha uma tecla ou combinação. A mudança vale imediatamente em qualquer aplicativo.")
+                            .font(.callout).foregroundStyle(.secondary)
+                        HStack(spacing: 10) {
+                            Button(recorder.isRecording ? "Pressione o novo atalho…" : "Gravar novo atalho") {
+                                recorder.begin { preferences.shortcut = $0 }
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .disabled(recorder.isRecording)
+                            Button("Usar Option direita") { preferences.shortcut = .rightOption }
+                                .disabled(recorder.isRecording || preferences.shortcut == .rightOption)
+                        }
+                        if recorder.isRecording {
+                            Text("Pressione a combinação completa e solte. Esc cancela.")
+                                .font(.callout.weight(.medium)).foregroundStyle(ResenhaTheme.accent)
+                        }
                     }
                 }
                 Spacer(minLength: 24)
                 HStack(spacing: 14) {
                     Image(systemName: "keyboard.fill").font(.system(size: 28)).foregroundStyle(ResenhaTheme.accent)
-                    Text(preferences.shortcut.displayName)
-                        .font(.system(size: 26, weight: .medium, design: .serif))
+                    Text(ResenhaDistributionChannel.current.usesSandboxedTextService
+                        ? ResenhaServiceShortcut.displayName : preferences.shortcut.displayName)
+                        .font(.system(.title2, design: .serif).weight(.medium))
                 }
             }
         }
@@ -602,7 +726,8 @@ private struct AboutSettingsPane: View {
                 .foregroundStyle(.primary)
                 .frame(width: 220, height: 56)
             Text("Fale. O Resenha escreve.")
-                .font(.system(size: 26, weight: .semibold, design: .serif))
+                .font(.system(.title2, design: .serif).weight(.semibold))
+                .accessibilityAddTraits(.isHeader)
             VStack(spacing: 10) {
                     Label("Áudio e texto processados neste Mac", systemImage: "lock.shield.fill")
                     Label("Software livre e sem conta", systemImage: "chevron.left.forwardslash.chevron.right")

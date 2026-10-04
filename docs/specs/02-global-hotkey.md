@@ -1,28 +1,28 @@
 # SPEC-002 — Global hotkey
 
-Status: implemented for direct distribution
+Status: implemented by distribution channel
 
-## Decision
+## App Store contract
 
-The user records the push-to-talk shortcut in Resenha. New installations default to **right Option**; existing legacy presets migrate automatically. A listen-only event tap observes the exact chosen press and release anywhere on macOS.
+The App Store build uses the macOS Service **Ditar com Resenha**. Uppercase `E` is a valid `NSKeyEquivalent` and maps to **Command + Shift + E**. A listen-only event tap correlates the real Service request with the most recent still-held non-modifier key and stops only on that matching key-up. Text returns through AppKit; Accessibility is not requested.
 
-## Requirements
+Users may change the Service shortcut in macOS Keyboard Shortcuts. The app retains one numeric keycode for at most one second, never stores text events and rejects ambiguous admission.
 
-- Accept an ordinary key, a modified key chord, or one left/right modifier key.
-- Persist key code, normalized modifiers, side-specific label and modifier-only behavior.
-- Apply a changed shortcut immediately without restarting the app.
-- Match the exact modifier set and ignore auto-repeat or duplicate edges.
-- Suppress no global keyboard event and store no unrelated keystrokes.
-- Stop monitoring when permission is lost or the app terminates.
-- Re-enable a tap disabled by macOS timeout.
+## Developer ID contract
 
-## Permissions
+The direct build defaults to **right Option** and lets the user record a key, modified chord or side-specific modifier inside Resenha. It persists keycode, normalized flags, label and modifier-only behavior, then applies changes immediately. Accessibility is required only for guarded insertion into the captured target application.
 
-Input Monitoring is required for the global listen-only tap. Accessibility is separately required for insertion; the hotkey remains stopped until all required permissions are ready.
+## Shared requirements
+
+- One physical press starts at most one recording and one matching release stops it once.
+- Reject starts from Resenha itself, during an active attempt or without a verified model.
+- Ignore auto-repeat, duplicate edges, unrelated releases and extra modifiers.
+- Suppress no keyboard input and log no typed content.
+- Stop on permission loss or termination; recover a tap disabled by macOS.
+- A recording deadline, sleep or session lock clears every latch.
 
 ## Acceptance
 
-- Right Option produces exactly one press and one release.
-- An arbitrary chord survives app restart and rejects extra modifiers.
-- Changing the shortcut in Settings restarts monitoring with the new value.
-- No System Settings keyboard-shortcut configuration is part of the product flow.
+- App Store: a real Service request inserts through TextEdit, Chromium and Terminal without Accessibility.
+- Direct: a custom shortcut survives restart and inserts into the captured target with Accessibility.
+- Both: another key release cannot end an armed recording; test execution remains isolated from `/Applications/Resenha.app`.
