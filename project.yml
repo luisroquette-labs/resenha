@@ -41,7 +41,10 @@ targets:
   WhisperKeyTests:
     type: bundle.unit-test
     platform: macOS
-    sources: Tests/WhisperKeyTests
+    sources:
+      - path: Tests/WhisperKeyTests
+      - path: Vendor/whisper.cpp/samples/jfk.wav
+        buildPhase: resources
     dependencies:
       - target: WhisperKey
     settings:

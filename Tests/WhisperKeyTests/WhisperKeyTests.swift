@@ -920,12 +920,9 @@ final class WhisperKeyTests: XCTestCase {
             throw XCTSkip("Local Whisper model is not installed")
         }
 
-        let repository = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        let fixture = repository.appendingPathComponent("Vendor/whisper.cpp/samples/jfk.wav")
-        XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.path))
+        let fixture = try XCTUnwrap(
+            Bundle(for: WhisperKeyTests.self).url(forResource: "jfk", withExtension: "wav")
+        )
 
         let transcript = try WhisperTranscriber().transcribe(
             audioURL: fixture,

@@ -1,11 +1,18 @@
 const copy = Object.freeze({
   macos: { label: 'Download em preparação', ready: 'Baixar para macOS', reason: 'Ainda não há um instalador público verificado.' },
   source: { label: 'Código público em preparação', ready: 'Ver código no GitHub', reason: 'O repositório público ainda não foi publicado.' },
-  store: { label: 'Mac App Store planejada', ready: 'Ver na Mac App Store', reason: 'Ainda não há uma página publicada na Mac App Store.' },
+  store: { label: 'Mac App Store não utilizada', ready: 'Ver na Mac App Store', reason: 'O Resenha para Mac é distribuído diretamente em DMG.' },
 });
 
 export const releaseState = Object.freeze({
-  macos: Object.freeze({ state: 'unavailable', url: null, evidence: null }),
+  macos: Object.freeze({ state: 'published', platform: 'macos', version: '1.0.0',
+    architecture: 'Apple Silicon (arm64)', minimumOS: 'macOS 14+',
+    url: 'https://github.com/luisroquette/resenha/releases/download/v1.0.0/Resenha-1.0.0-arm64.dmg',
+    evidence: Object.freeze({ channel: 'macos',
+      url: 'https://github.com/luisroquette/resenha/releases/download/v1.0.0/Resenha-1.0.0-arm64.dmg',
+      verifiedAt: '2026-10-04T00:35:16Z', artifact: Object.freeze({ platform: 'macos', version: '1.0.0',
+        sha256: '9fc0728419c8c2ca4feb0631667a4ce8cdf88cfd894c821b3f82b98533056985',
+        notarizationId: 'e3471859-6fe0-4166-8c6e-bcb723afdab3', notarizationStatus: 'Accepted' }) }) }),
   source: Object.freeze({ state: 'published', url: 'https://github.com/luisroquette/resenha',
     evidence: Object.freeze({ channel: 'source', url: 'https://github.com/luisroquette/resenha',
       verifiedAt: '2026-10-03T02:30:00Z' }) }),
@@ -38,7 +45,10 @@ export function resolveDestination(channel, record) {
   if (evidence?.channel !== channel || evidence.url !== raw || !nonempty(evidence.verifiedAt) || !Number.isFinite(Date.parse(evidence.verifiedAt))) return inactive();
   if (channel === 'macos' && (record.platform !== 'macos' || !nonempty(record.version)
     || !nonempty(record.architecture) || !nonempty(record.minimumOS)
-    || evidence.artifact?.platform !== 'macos' || evidence.artifact.version !== record.version)) return inactive();
+    || evidence.artifact?.platform !== 'macos' || evidence.artifact.version !== record.version
+    || !/^[a-f0-9]{64}$/u.test(evidence.artifact.sha256 ?? '')
+    || !/^[a-f0-9-]{36}$/u.test(evidence.artifact.notarizationId ?? '')
+    || evidence.artifact.notarizationStatus !== 'Accepted')) return inactive();
   return Object.freeze({ active: true, href: raw, label: wording.ready,
     reason: channel === 'macos' ? `${record.version} · ${record.architecture} · ${record.minimumOS}` : 'Destino publicado e verificado.' });
 }
