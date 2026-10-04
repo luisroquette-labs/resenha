@@ -32,10 +32,10 @@
 - [x] Criar demos reais localmente, sem API paga.
 - [x] Corrigir site e assets da loja com Frontend Design.
 - [x] Tornar tooling de release dinâmico e consolidar SDD/evidências.
-- [ ] Criar o novo commit-fonte, gerar o archive com o SHA embutido e validar o pacote exato via `mac-gate`.
+- [x] Criar o novo commit-fonte, gerar o archive com o SHA embutido e validar o pacote exato via `mac-gate`.
 
 #### Blockers & Risks
 
-- READY FOR NEW SOURCE COMMIT. O contrato ancestral, regeneração sem argumento e
-  negativos de versão/build/SHA passaram; nenhum archive novo foi criado nesta revisão.
-  Upload/submissão e mudança de auto-release requerem autorização explícita.
+- Archive `1.0.0 (2)` vinculado ao commit `86503e1b8987d17f4eb94fcc3309b6e763237047`;
+  contrato ancestral, positivos e negativos de versão/build/SHA passaram. Upload,
+  submissão e mudança de auto-release requerem autorização explícita.

@@ -1,7 +1,6 @@
 # Resenha 1.0 release-hardening evidence
 
-Status: READY FOR NEW SOURCE COMMIT. The previous provenance-bound archive is retained
-as historical evidence but is superseded by release-contract/script changes. Physical
+Status: provenance-bound local candidate validated after review iteration 2. Physical
 target-app gates and remote App Store actions remain explicitly blocked.
 
 ## Candidate identity
@@ -10,20 +9,20 @@ target-app gates and remote App Store actions remain explicitly blocked.
 |---|---|
 | Source branch | `fix/release-hardening-loop` |
 | Source baseline | `ae34e157eca5c9df51555dcc5a84916562ddd338` |
-| Final commit | PENDING — new commit required after provenance review iteration 2 |
+| Final commit | `86503e1b8987d17f4eb94fcc3309b6e763237047` |
 | Version / build | `1.0.0 (2)` derived from `project.yml` and archive Info.plist |
-| Archive | SUPERSEDED — rebuild `1.0.0 (2)` after the new source commit |
-| Archive tree SHA-256 | `0bcd1aa641c041ff170a70e486d7a093ac2a9c15b322a0ee8c132607cd3dee17` over 15 sorted file hashes and relative paths |
-| Executable SHA-256 | `f183195d35d1ec05a580e65b4e10a773aa68ffc68409382b1b631455025c229e` |
-| App Info.plist SHA-256 | `1938616959de23e1fd213d38d64bd3fd3d740d18a79d0d8e0f22015f86c23cd8` |
-| Archive Info.plist SHA-256 | `4ad63f8bef12f18d310281ffffaa55b510d30e67b3e93866d59186082793ae5e` |
+| Archive | `build/archive/Resenha-1.0.0-b2.xcarchive` (9.5 MB) |
+| Archive tree SHA-256 | `eb589e73b5a515442a5b1b5fd4f1b5fe0ddd8e056d6d44d89abe63e0af97320c` over 15 sorted file hashes and relative paths |
+| Executable SHA-256 | `292ed3d47d0d75eabb62d543ab7b6d3a3a9f6b35a69699da45fe80f80dbde78c` |
+| App Info.plist SHA-256 | `1d20e958268a28dfba775ec41dfef8872b0eaa9de03f51d7cffd8e93183fac69` |
+| Archive Info.plist SHA-256 | `4e5d70141d8c97491a0fd13dacca72c7fb02961203d0ba4f76385d9f96a276c4` |
 | Signing | Apple Development, team `S3YCFYY8SC`; strict verification passed; distribution export not performed |
 
-The historical archive embeds `ResenhaSourceCommit =
-9dc4aa1b3877c06569bb8b2635c5107c41dc1c15`. The package validator requires that same
-real commit in Git, release state and archive Info.plist, with release sources unchanged
-from it. Review iteration 2 expanded the audited relevant paths, so a new source commit
-and archive are required; neither historical archive is an upload candidate.
+The fresh archive embeds `ResenhaSourceCommit =
+86503e1b8987d17f4eb94fcc3309b6e763237047`. The package validator requires that same
+real commit in Git, release state and archive Info.plist, with no later changes across
+the explicit audited release paths. The superseded `9dc4aa1b…` archive was moved
+recoverably to Trash and is not an upload candidate.
 
 ## Automated gates — 2026-10-03 BRT
 
@@ -60,8 +59,8 @@ and archive are required; neither historical archive is an upload candidate.
    all ten 2880×1800 screenshots from that same deterministic fixture output.
 3. `mac-gate node Scripts/site.test.mjs` passed 38/38. Swift passed 96/96 at
    `/tmp/resenha-phase5-review2-derived/Logs/Test/Test-WhisperKey-2026.10.03_22-18-19--0300.xcresult`.
-4. Automated negative-validator mode executed and rejected version `99.99.99`, build
-   `3` and a zero source commit. Positive package validation waits for the new archive.
+4. Automated validators accepted the exact `86503e1b…` archive and rejected version
+   `99.99.99`, build `3` and a zero source commit.
 
 ## Product and media
 

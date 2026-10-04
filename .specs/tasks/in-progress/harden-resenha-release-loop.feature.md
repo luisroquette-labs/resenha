@@ -54,11 +54,11 @@ achados P0, P1 e P2 do audit de publicação sem alterar o escopo local-first do
 
 **Definition of Done:**
 
-- [ ] Todas as fases estão [REVIEWED] e seus testes estão verdes.
-- [ ] Nenhum P0/P1/P2 permanece sem correção ou bloqueio externo explícito.
-- [ ] O app Debug/testes coexistem com a cópia em `/Applications`.
-- [ ] O archive Release final passa pelo validador dinâmico e análise estática.
-- [ ] Site e assets finais passam seus gates automatizados e visuais.
+- [X] Todas as fases estão [REVIEWED] e seus testes estão verdes.
+- [X] Nenhum P0/P1/P2 permanece sem correção ou bloqueio externo explícito.
+- [X] O app Debug/testes coexistem com a cópia em `/Applications`.
+- [X] O archive Release final passa pelo validador dinâmico e análise estática.
+- [X] Site e assets finais passam seus gates automatizados e visuais.
 - [ ] Specs e evidências referenciam o SHA e build finais, sem afirmações históricas falsas.
 - [ ] Branch contém commits coesos e um único PR para `main`.
 
@@ -85,7 +85,7 @@ avalia a fase antes da seguinte.
 | `02-runtime-bounds` [DONE] | Phase 2 | opus | developer | `01-p0-service-contract` | None | `.specs/sub-tasks/harden-resenha-release-loop/02-runtime-bounds.md` |
 | `03-local-integrity` [DONE] | Phase 3 | opus | developer | `02-runtime-bounds` | None | `.specs/sub-tasks/harden-resenha-release-loop/03-local-integrity.md` |
 | `04-accessibility-qa` [DONE] | Phase 4 | opus | developer | `03-local-integrity` | None | `.specs/sub-tasks/harden-resenha-release-loop/04-accessibility-qa.md` |
-| `05-product-release` [READY FOR NEW SOURCE COMMIT] | Phase 5 | opus | developer | `04-accessibility-qa` | None | `.specs/sub-tasks/harden-resenha-release-loop/05-product-release.md` |
+| `05-product-release` [DONE] | Phase 5 | opus | developer | `04-accessibility-qa` | None | `.specs/sub-tasks/harden-resenha-release-loop/05-product-release.md` |
 
 ### Phase Overview
 
@@ -117,7 +117,7 @@ Reviewer model: `opus`
 Checklist items: CK-1, CK-6, CK-7
 Rubrics: acessibilidade, UX nativa, isolamento de testes
 
-#### Phase 5: Produto e release
+#### Phase 5: Produto e release [REVIEWED]
 
 Steps: `05-product-release`
 Reviewer model: `opus`

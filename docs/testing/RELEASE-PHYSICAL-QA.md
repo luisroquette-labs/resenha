@@ -8,12 +8,21 @@ commit and binary hash fields are filled. Historical passes never carry forward.
 | Field | Value |
 |---|---|
 | Version / build | `1.0.0 (2)` |
-| Commit | `PENDING — final branch commit; archive built from working tree based on ae34e157eca5c9df51555dcc5a84916562ddd338` |
-| Binary SHA-256 | `d6226404b5b2ccee0024be20bfd0d58519df16053488549353644bf0ca458b4c` |
+| Archive source commit | `86503e1b8987d17f4eb94fcc3309b6e763237047` |
+| Binary SHA-256 | `292ed3d47d0d75eabb62d543ab7b6d3a3a9f6b35a69699da45fe80f80dbde78c` |
+| Archive tree SHA-256 | `eb589e73b5a515442a5b1b5fd4f1b5fe0ddd8e056d6d44d89abe63e0af97320c` |
+| App Info.plist SHA-256 | `1d20e958268a28dfba775ec41dfef8872b0eaa9de03f51d7cffd8e93183fac69` |
+| Archive Info.plist SHA-256 | `4e5d70141d8c97491a0fd13dacca72c7fb02961203d0ba4f76385d9f96a276c4` |
 | Hardware / OS | `Apple M5 / macOS 26.1` |
 | Minimum macOS 14 hardware | `NOT RUN — unavailable in this session` |
 
 ## Physical matrix
+
+The archive source commit above identifies the exact release-relevant inputs embedded
+in the binary. A later commit containing only `docs/**`, `.specs/**`, README files or
+`AppStore/release-state.json` is evidence metadata, not a new binary source commit. The
+source validator accepts such a descendant only when every audited release path remains
+byte-identical to `86503e1b…`.
 
 | Gate | Exact observation required | Status |
 |---|---|---|
@@ -68,13 +77,15 @@ Retain failures; a new build requires a new observation.
 
 ## Phase 5 automated archive
 
-- Archive: `/private/tmp/Resenha-1.0.0-b2.xcarchive` (9.5 MB), arm64,
+- Archive: `build/archive/Resenha-1.0.0-b2.xcarchive` (9.5 MB), arm64,
   `Apple Development: luis roquette (K74FG72F9W)`. This is a validated local
   archive, not an exported/uploaded App Store package.
-- Final Debug gate: **91 tests, 0 failures, 0 skips** with the production app still
-  open and a SHA-256-verified model copied only into the isolated Debug container.
-  Result: `/tmp/resenha-phase5-final-derived/Logs/Test/Test-WhisperKey-2026.10.03_21-06-27--0300.xcresult`.
-- Release static analysis: PASS. Derived data: `/private/tmp/resenha-phase5-analyze`.
-- Package validation: exact candidate accepted; a synthetic `99.99.99` candidate
-  mismatch was rejected. The validator also requires exactly Sandbox, microphone
-  input and network-client entitlements.
+- Final Debug gate: **96 tests, 0 failures, 0 skips**, including the real local Whisper
+  fixture. Result:
+  `/tmp/resenha-phase5-review2-derived/Logs/Test/Test-WhisperKey-2026.10.03_22-18-19--0300.xcresult`.
+- Release static analysis: PASS. Derived data: `/tmp/resenha-phase5-review1-analyze`.
+- Package/source/release validators accepted the exact `86503e1b…` candidate and
+  rejected synthetic version `99.99.99`, build `3` and zero-source-commit mismatches.
+  Strict codesign passed; the archive contains exactly Sandbox, microphone-input and
+  network-client entitlements, the privacy manifest and all three license/notice files.
+  `WHISPER_MODEL_PATH` is absent from the Release binary.
