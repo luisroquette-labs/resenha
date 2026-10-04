@@ -37,7 +37,7 @@ Debug uses `br.com.luisroquette.Resenha.Debug` and product `Resenha Dev`, isolat
 
 ## Validation boundary
 
-Unit tests cover both delivery policies, hotkey latches, permissions, model integrity, runtime bounds and test identity. Release validation is channel-specific. The exact App Store archive still requires physical Service insertion in TextEdit, Chromium and Terminal plus VoiceOver/macOS 14 evidence before upload. The notarized DMG requires physical direct insertion in the same app matrix.
+Unit tests cover both delivery policies, hotkey latches, permissions, model integrity, runtime bounds and test identity. Release validation is channel-specific. Upload may stage an exact validated candidate in App Store Connect, but submission still requires physical Service insertion in TextEdit, Chromium and Terminal plus VoiceOver/macOS 14 evidence. The notarized DMG requires physical direct insertion in the same app matrix.
 
 ## Deferred
 

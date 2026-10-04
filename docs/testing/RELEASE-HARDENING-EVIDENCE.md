@@ -131,5 +131,11 @@ none of the ten App Store screenshots foreground bodily/humor sounds.
 - Owner approval is required before withdrawing/replacing build 1 or changing release
   mode. Impact: withdrawal stops the active review; replacement uploads a new binary;
   manual release prevents automatic publication after approval.
-- No upload, submit, withdrawal, auto-release change, GitHub publication or paid media
-  API call occurred in this phase.
+- Owner authorized the build upload on 2026-10-04. Xcode exported the exact archive
+  with Cloud Managed Apple Distribution and a 3rd Party Mac Developer Installer
+  certificate, then uploaded package SHA-256
+  `dc72f52695893053d0bf6326fe0ef4fad887392c833e30682548515884339df4`.
+  Delivery `0dfd8664-8693-4a51-b44e-24548a3b8b9d` reached `PROCESSING` at
+  12:26:13 BRT without upload errors.
+- No submission, withdrawal, build replacement/selection, auto-release change or paid
+  media API call occurred. Those remain separate owner-approved mutations.
