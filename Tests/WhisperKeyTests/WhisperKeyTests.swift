@@ -513,6 +513,10 @@ final class WhisperKeyTests: XCTestCase {
         XCTAssertEqual(keyEquivalent, keyEquivalent.uppercased(), "Uppercase adds Shift to AppKit's required Command modifier")
         XCTAssertNotEqual(ResenhaServiceShortcut.displayName, "Control + Option + Espaço")
         XCTAssertEqual(ResenhaDistributionChannel.appStore.rawValue, "appStore")
+        XCTAssertFalse(ResenhaDistributionChannel.appStore.requiresAccessibility)
+        XCTAssertTrue(ResenhaDistributionChannel.appStore.usesSandboxedTextService)
+        XCTAssertTrue(ResenhaDistributionChannel.direct.requiresAccessibility)
+        XCTAssertFalse(ResenhaDistributionChannel.direct.usesSandboxedTextService)
     }
 
     func testServiceReleaseLatchCompletesOnlyForItsArmedKey() {
@@ -913,6 +917,20 @@ final class WhisperKeyTests: XCTestCase {
                 }
                 }
         }
+    }
+
+    func testAppStorePermissionSnapshotExcludesAccessibilityEvenWhenDenied() {
+        let snapshot = PermissionSnapshot(
+            microphone: true,
+            inputMonitoring: true,
+            accessibility: false,
+            requiresAccessibility: false
+        )
+
+        XCTAssertTrue(snapshot.isReady)
+        XCTAssertEqual(snapshot.presentations.map(\.permission), [.microphone, .inputMonitoring])
+        XCTAssertFalse(snapshot.missingPermissions.contains(.accessibility))
+        XCTAssertEqual(snapshot.missingPermissionMessage, "Permissões prontas")
     }
 
     func testPermissionSnapshotsDetectPartialRestorationAndRevocation() {

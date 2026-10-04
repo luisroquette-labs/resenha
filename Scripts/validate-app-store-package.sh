@@ -70,6 +70,7 @@ validate_release_source_commit "$project_root" "$archive_commit" \
 (( archive_build > submitted_build )) || fail "build $archive_build não supera o submetido $submitted_build"
 [[ "$(plutil -extract ITSAppUsesNonExemptEncryption raw "$archive_info" 2>/dev/null || true)" == false ]] || fail "archive precisa ser refeito com export compliance"
 file "$app/Contents/MacOS/Resenha" | grep -q 'arm64' || fail "binário não é arm64"
+"$project_root/Scripts/validate-app-store-binary-boundary.sh" "$app/Contents/MacOS/Resenha"
 codesign --verify --deep --strict "$app" || fail "assinatura inválida"
 codesign -d --entitlements :- "$app" >"$entitlements" 2>/dev/null
 [[ "$(/usr/libexec/PlistBuddy -c 'Print :com.apple.security.app-sandbox' "$entitlements")" == true ]] || fail "App Sandbox ausente"

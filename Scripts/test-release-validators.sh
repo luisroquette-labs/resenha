@@ -4,6 +4,7 @@ set -euo pipefail
 project_root="${0:A:h:h}"
 archive="${1:?uso: Scripts/test-release-validators.sh <archive.xcarchive>}"
 validator="$project_root/Scripts/validate-app-store-package.sh"
+binary_boundary_validator="$project_root/Scripts/validate-app-store-binary-boundary.sh"
 state="$project_root/AppStore/release-state.json"
 work_root="$(mktemp -d "${TMPDIR:-/tmp}/resenha-validator-test.XXXXXX")"
 trap 'mv "$work_root" "$HOME/.Trash/resenha-validator-test-$(date +%Y%m%d-%H%M%S)" 2>/dev/null || true' EXIT
@@ -44,7 +45,20 @@ grep -q 'build do archive (3) diverge da fonte (2)' "$work_root/build-mismatch.l
   exit 1
 }
 if [[ "$negative_only" == 1 ]]; then
-  print "PASS: versão, source commit e build divergentes rejeitados"
+  fixture_source="$work_root/forbidden-ax.c"
+  fixture_binary="$work_root/forbidden-ax"
+  print '#include <ApplicationServices/ApplicationServices.h>' > "$fixture_source"
+  print 'int main(void) { return AXIsProcessTrusted() ? 0 : 1; }' >> "$fixture_source"
+  xcrun clang "$fixture_source" -framework ApplicationServices -o "$fixture_binary"
+  if "$binary_boundary_validator" "$fixture_binary" >"$work_root/forbidden-ax.log" 2>&1; then
+    print -u2 "FALHOU: validador aceitou símbolo Accessibility"
+    exit 1
+  fi
+  grep -q 'API proibida no binário App Store: _AXIsProcessTrusted' "$work_root/forbidden-ax.log" || {
+    print -u2 "FALHOU: símbolo Accessibility não acionou o diagnóstico esperado"
+    exit 1
+  }
+  print "PASS: versão, source commit, build e símbolo Accessibility divergentes rejeitados"
 else
   print "PASS: pacote exato aceito; versão, source commit e build divergentes rejeitados"
 fi

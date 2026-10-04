@@ -111,15 +111,27 @@ enum PermissionGate {
 struct PermissionService {
     var isMicrophoneGranted: Bool { AVCaptureDevice.authorizationStatus(for: .audio) == .authorized }
     var isInputMonitoringGranted: Bool { CGPreflightListenEventAccess() }
+
+    #if !RESENHA_APP_STORE
     var isAccessibilityGranted: Bool { AXIsProcessTrusted() }
+    #endif
 
     var snapshot: PermissionSnapshot {
+        #if RESENHA_APP_STORE
+        PermissionSnapshot(
+            microphone: isMicrophoneGranted,
+            inputMonitoring: isInputMonitoringGranted,
+            accessibility: true,
+            requiresAccessibility: false
+        )
+        #else
         PermissionSnapshot(
             microphone: isMicrophoneGranted,
             inputMonitoring: isInputMonitoringGranted,
             accessibility: isAccessibilityGranted,
-            requiresAccessibility: ResenhaDistributionChannel.current.requiresAccessibility
+            requiresAccessibility: true
         )
+        #endif
     }
 
     var missingPermissionMessage: String { snapshot.missingPermissionMessage }
@@ -139,8 +151,10 @@ struct PermissionService {
         CGRequestListenEventAccess()
     }
 
+    #if !RESENHA_APP_STORE
     func requestAccessibility() {
         let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
         AXIsProcessTrustedWithOptions(options)
     }
+    #endif
 }

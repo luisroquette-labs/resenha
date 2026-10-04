@@ -42,4 +42,7 @@ system uptime; wall-clock corrections cannot shorten or extend a request.
 - `SERVICE-002`: holding the shortcut produces exactly one start and release pair.
 - `SERVICE-003`: timeout, cancellation and empty transcript return no placeholder text and leave the next invocation usable.
 - `SERVICE-004`: Store target contains no Accessibility symbols or post-event path.
+- The release validator inspects undefined binary symbols and rejects
+  `AXIsProcessTrusted`, `AXIsProcessTrustedWithOptions`, `AXUIElement` creation,
+  or `CGEventPost` in the App Store executable.
 - `SERVICE-005`: physical cross-app matrix passes from a Release sandbox build.

@@ -36,6 +36,12 @@ struct TextInjector {
     }
 
     func insertStaged(into target: NSRunningApplication?, changeCount: Int) async throws {
+        #if RESENHA_APP_STORE
+        // Store delivery is completed by AppKit's Service pasteboard. Keeping
+        // this branch explicit prevents Accessibility and event-posting symbols
+        // from entering the sandboxed executable if routing regresses.
+        throw TextInjectionError.accessibilityUnavailable
+        #else
         guard AXIsProcessTrusted() else { throw TextInjectionError.accessibilityUnavailable }
         guard let target, !target.isTerminated else { throw TextInjectionError.targetUnavailable }
         guard target.activate() else { throw TextInjectionError.targetUnavailable }
@@ -62,6 +68,7 @@ struct TextInjector {
         up.flags = .maskCommand
         down.post(tap: .cghidEventTap)
         up.post(tap: .cghidEventTap)
+        #endif
     }
 }
 

@@ -252,9 +252,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         interaction.isRequestingPermission = true
         updateStatusItem()
         permissions.requestInputMonitoring()
-        if ResenhaDistributionChannel.current.requiresAccessibility {
-            permissions.requestAccessibility()
-        }
+        #if !RESENHA_APP_STORE
+        permissions.requestAccessibility()
+        #endif
         Task {
             defer {
                 interaction.isRequestingPermission = false
