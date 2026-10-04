@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { request } from 'node:http';
-import { mkdtemp, writeFile, symlink, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile, symlink, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -104,7 +104,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
       for (const record of [null, undefined, {}, '', [], { state: 'published' }]) assert.equal(resolveDestination(channel, record).active, false);
     assert.equal(resolveDestination('__proto__', macos).active, false);
   });
-  test('download gate accepts only the exact CF Gauss iframe and form', () => {
+  test('download gate accepts only the exact CF Gauss iframe and form', async () => {
     const iframeWindow = {};
     const valid = { origin: EMBED_ORIGIN, source: iframeWindow, data: { source: 'cfgauss-embed-form', formId: FORM_ID, event: 'success' } };
     assert.equal(isFormMessage(valid, iframeWindow), true);
@@ -113,6 +113,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
     assert.equal(isFormMessage({ ...valid, data: { ...valid.data, formId: 'outro-form' } }, iframeWindow), false);
     assert.match(FORM_URL, /^https:\/\/cfgauss\.com\.br\/t\/formembed-/u);
     assert.match(DOWNLOAD_URL, /^https:\/\/cfgauss\.com\.br\/t\/formredirect-/u);
+    assert.match(await readFile(new URL('../site/download-gate.mjs', import.meta.url), 'utf8'), /Informe nome, e-mail e WhatsApp\./u);
     assert.match(execFileSync(process.execPath, ['--input-type=module', '-e',
       `import(${JSON.stringify(new URL('../site/download-gate.mjs', import.meta.url).href)}).then(() => process.stdout.write('ok'))`],
     { encoding: 'utf8', timeout: 5000 }), /^ok$/u);
@@ -251,7 +252,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
         assert.ok((html.match(/data-reveal/gu) ?? []).length >= 8);
         assert.match(html, /type="module"/u);
         assert.match(html, /styles\.css\?v=20261004-3/u);
-        assert.match(html, /release\.mjs\?v=20261004-2/u);
+        assert.match(html, /release\.mjs\?v=20261004-3/u);
         assert.match(html, /media\.mjs\?v=20261003-2/u);
         const media = await get(preview.origin, prefix + 'media.mjs');
         assert.equal(media.status, 200);
@@ -259,6 +260,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
         assert.match(media.body, /prefers-reduced-motion/u);
         const gate = await get(preview.origin, prefix + 'download-gate.mjs');
         assert.match(gate.body, /analytics\.mjs\?v=20261004-1/u);
+        assert.match(gate.body, /Informe nome, e-mail e WhatsApp\./u);
         const privacy = await get(preview.origin, prefix + 'privacy/');
         assert.equal(privacy.status, 200);
         assert.match(privacy.body, /Sua voz fica no seu Mac/u);
@@ -275,7 +277,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
         assert.match(comparison.body, /wisprflow\.ai\/pricing/u);
         assert.match(comparison.body, /application\/ld\+json/u);
         assert.match(comparison.body, /src="\.\.\/media\.mjs\?v=20261003-2"/u);
-        assert.match(comparison.body, /src="\.\.\/release\.mjs\?v=20261004-2"/u);
+        assert.match(comparison.body, /src="\.\.\/release\.mjs\?v=20261004-3"/u);
         assert.match(comparison.body, /src="\.\.\/analytics\.mjs\?v=20261004-1"/u);
         assert.ok((comparison.body.match(/data-reveal/gu) ?? []).length >= 5);
         const robots = await get(preview.origin, prefix + 'robots.txt');
