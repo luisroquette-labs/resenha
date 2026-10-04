@@ -60,7 +60,7 @@ achados P0, P1 e P2 do audit de publicação sem alterar o escopo local-first do
 - [X] O archive Release final passa pelo validador dinâmico e análise estática.
 - [X] Site e assets finais passam seus gates automatizados e visuais.
 - [X] Specs e evidências referenciam o SHA e build finais, sem afirmações históricas falsas.
-- [ ] Branch contém commits coesos e um único PR para `main`.
+- [X] Branch contém commits coesos e um único PR para `main` (`#9`).
 
 ## Architecture Overview
 

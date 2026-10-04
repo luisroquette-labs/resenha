@@ -1,6 +1,6 @@
 # Step 05: Produto, site, mídia e release reproduzível
 
-**Task File:** `.specs/tasks/in-progress/harden-resenha-release-loop.feature.md`
+**Task File:** `.specs/tasks/done/harden-resenha-release-loop.feature.md`
 **Phase:** Phase 5
 **Model:** opus
 **Agent:** developer
