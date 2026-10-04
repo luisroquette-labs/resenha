@@ -80,6 +80,21 @@ recoverably to Trash and is not an upload candidate.
    for Apple Development validation and contains no Developer ID Application identity;
    the separate Developer ID channel was neither built nor modified.
 
+## Final clean-checkout gate — 2026-10-03 BRT
+
+1. Detached checkout at `deb96dada0235a651c5c3c1fcc3c71f307d937fb`, with the
+   pinned `whisper.cpp` submodule at `4979e04f5dcaccb36057e059bbaed8a2f5288315`,
+   passed **104/104** Swift tests with `/Applications/Resenha.app` still running.
+   XCResult: `/private/tmp/resenha-final-gate-deb96da/Logs/Test/`
+   `Test-WhisperKey-2026.10.03_23-33-50--0300.xcresult`.
+2. Release and AppStore static analyses passed through `mac-gate`. The warnings are
+   limited to unused cross-platform headers exposed by the upstream whisper framework.
+3. Site passed **40/40** tests. Release-state, source-contract, package and negative
+   validator suites all passed against the exact archive identified above.
+4. The first detached-worktree test attempt correctly failed because Git worktrees do
+   not initialize submodules. Initializing the pinned submodule fixed the checkout;
+   no source or test relaxation was required.
+
 ## Product and media
 
 | Asset | Properties | SHA-256 |

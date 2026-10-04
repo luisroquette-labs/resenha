@@ -1,6 +1,6 @@
 # Step 05: Produto, site, mídia e release reproduzível
 
-**Task File:** `.specs/tasks/todo/harden-resenha-release-loop.feature.md`
+**Task File:** `.specs/tasks/in-progress/harden-resenha-release-loop.feature.md`
 **Phase:** Phase 5
 **Model:** opus
 **Agent:** developer
@@ -36,6 +36,10 @@
 
 #### Blockers & Risks
 
-- Archive `1.0.0 (2)` vinculado ao commit `86503e1b8987d17f4eb94fcc3309b6e763237047`;
-  contrato ancestral, positivos e negativos de versão/build/SHA passaram. Upload,
-  submissão e mudança de auto-release requerem autorização explícita.
+- Archive `1.0.0 (2)` vinculado ao commit
+  `c822e2def90ad973c3d284745bda19ea6f5472a6`; contrato ancestral, fronteira binária,
+  positivos e negativos de versão/build/SHA passaram em checkout limpo no HEAD
+  `deb96dada0235a651c5c3c1fcc3c71f307d937fb`.
+- TextEdit, Chromium, Terminal, VoiceOver, múltiplos monitores/Spaces e macOS 14 são
+  gates físicos externos ainda `NOT RUN`; não são promovidos por testes automatizados.
+- Upload, submissão e mudança de auto-release requerem autorização explícita.
