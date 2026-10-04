@@ -67,7 +67,7 @@ archive_commit="$(plutil -extract ResenhaSourceCommit raw "$archive_info" 2>/dev
 validate_release_source_commit "$project_root" "$archive_commit" \
   || fail "source commit do archive não reproduz as fontes relevantes"
 (( archive_build >= minimum_build )) || fail "build $archive_build abaixo do mínimo $minimum_build"
-(( archive_build > submitted_build )) || fail "build $archive_build não supera o submetido $submitted_build"
+(( archive_build >= submitted_build )) || fail "build $archive_build está abaixo do submetido $submitted_build"
 [[ "$(plutil -extract ITSAppUsesNonExemptEncryption raw "$archive_info" 2>/dev/null || true)" == false ]] || fail "archive precisa ser refeito com export compliance"
 file "$app/Contents/MacOS/Resenha" | grep -q 'arm64' || fail "binário não é arm64"
 "$project_root/Scripts/validate-app-store-binary-boundary.sh" "$app/Contents/MacOS/Resenha"

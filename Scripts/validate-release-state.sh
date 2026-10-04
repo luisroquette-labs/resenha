@@ -28,13 +28,21 @@ source_version="$(awk '/MARKETING_VERSION:/{print $2; exit}' "$project_root/proj
 candidate_version="$(plutil -extract candidate.version raw "$release_state")"
 candidate_commit="$(plutil -extract candidate.sourceCommit raw "$release_state" 2>/dev/null || true)"
 
-[[ "$eligible" == false ]] || fail "build submetido $submitted_build precisa permanecer inelegível"
-(( source_build >= minimum_build && source_build > submitted_build )) || fail "build fonte não supera o submetido"
+[[ "$eligible" == true ]] || fail "build submetido $submitted_build precisa estar elegível"
+(( source_build >= minimum_build && source_build >= submitted_build )) || fail "build fonte está abaixo do submetido"
 [[ "$source_version" == "$candidate_version" ]] || fail "versão fonte e candidato divergiram"
 [[ "$candidate_commit" =~ ^[0-9a-f]{40}$ ]] || fail "candidato ainda não possui source commit real"
 git -C "$project_root" cat-file -e "$candidate_commit^{commit}" 2>/dev/null \
     || fail "source commit do candidato não existe no repositório"
 [[ "$approval_required" == true ]] || fail "mutação remota precisa exigir aprovação"
+[[ "$(plutil -extract submitted.releaseModeObserved raw "$release_state")" == MANUAL ]] \
+    || fail "submissão precisa permanecer em lançamento manual"
+[[ "$(plutil -extract submitted.statusObserved raw "$release_state")" == WAITING_FOR_REVIEW ]] \
+    || fail "estado remoto esperado é WAITING_FOR_REVIEW"
+[[ "$(plutil -extract previousSubmission.build raw "$release_state")" == 1 ]] \
+    || fail "histórico do build 1 ausente"
+[[ "$(plutil -extract previousSubmission.statusObserved raw "$release_state")" == REMOVED ]] \
+    || fail "build 1 histórico precisa permanecer removido"
 rg -q 'Lançamento: manual após aprovação' "$project_root/AppStore/metadata/submission-pt-BR.md" \
     || fail "ficha não exige lançamento manual"
-pass "build $submitted_build bloqueado; candidato mínimo $minimum_build; release manual"
+pass "build $submitted_build aguardando revisão; build 1 removido; release manual"
