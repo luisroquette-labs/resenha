@@ -8,11 +8,12 @@ commit and binary hash fields are filled. Historical passes never carry forward.
 | Field | Value |
 |---|---|
 | Version / build | `1.0.0 (2)` |
-| Archive source commit | `86503e1b8987d17f4eb94fcc3309b6e763237047` |
-| Binary SHA-256 | `292ed3d47d0d75eabb62d543ab7b6d3a3a9f6b35a69699da45fe80f80dbde78c` |
-| Archive tree SHA-256 | `eb589e73b5a515442a5b1b5fd4f1b5fe0ddd8e056d6d44d89abe63e0af97320c` |
-| App Info.plist SHA-256 | `1d20e958268a28dfba775ec41dfef8872b0eaa9de03f51d7cffd8e93183fac69` |
-| Archive Info.plist SHA-256 | `4e5d70141d8c97491a0fd13dacca72c7fb02961203d0ba4f76385d9f96a276c4` |
+| Archive source commit | `c822e2def90ad973c3d284745bda19ea6f5472a6` |
+| Scheme / configuration | `ResenhaAppStore` / `AppStore` |
+| Binary SHA-256 | `17e1d6bc8c0d2e45a206fa9edd846dfc15a32c7bdac414bfb238016614d1fea9` |
+| Archive tree SHA-256 | `fcab3d5406e3901766663169ae233c713ec4c577bb05232f6580d236a0ff5735` |
+| App Info.plist SHA-256 | `efd7f9338f64d5be925679e19bd0b73e0a2d3412d0f4a09b3ef4abbbe5817d9b` |
+| Archive Info.plist SHA-256 | `c03594c21d99c10e8523158ef04dc4a7b6e8e30fe8916cac0b70c6d2a6c8ee61` |
 | Hardware / OS | `Apple M5 / macOS 26.1` |
 | Minimum macOS 14 hardware | `NOT RUN — unavailable in this session` |
 
@@ -22,7 +23,7 @@ The archive source commit above identifies the exact release-relevant inputs emb
 in the binary. A later commit containing only `docs/**`, `.specs/**`, README files or
 `AppStore/release-state.json` is evidence metadata, not a new binary source commit. The
 source validator accepts such a descendant only when every audited release path remains
-byte-identical to `86503e1b…`.
+byte-identical to `c822e2de…`.
 
 | Gate | Exact observation required | Status |
 |---|---|---|
@@ -77,15 +78,19 @@ Retain failures; a new build requires a new observation.
 
 ## Phase 5 automated archive
 
-- Archive: `build/archive/Resenha-1.0.0-b2.xcarchive` (9.5 MB), arm64,
+- Archive: `build/archive/Resenha-1.0.0-b2.xcarchive` (9.7 MB), arm64, generated with
+  the `ResenhaAppStore` scheme and `AppStore` configuration,
   `Apple Development: luis roquette (K74FG72F9W)`. This is a validated local
   archive, not an exported/uploaded App Store package.
 - Final Debug gate: **96 tests, 0 failures, 0 skips**, including the real local Whisper
   fixture. Result:
   `/tmp/resenha-phase5-review2-derived/Logs/Test/Test-WhisperKey-2026.10.03_22-18-19--0300.xcresult`.
 - Release static analysis: PASS. Derived data: `/tmp/resenha-phase5-review1-analyze`.
-- Package/source/release validators accepted the exact `86503e1b…` candidate and
-  rejected synthetic version `99.99.99`, build `3` and zero-source-commit mismatches.
+- Package/source/release validators accepted the exact `c822e2de…` candidate and
+  rejected synthetic version `99.99.99`, build `3`, zero-source-commit, generic
+  Accessibility-symbol and `_CGEventPost` fixtures; a clean fixture was accepted.
   Strict codesign passed; the archive contains exactly Sandbox, microphone-input and
   network-client entitlements, the privacy manifest and all three license/notice files.
-  `WHISPER_MODEL_PATH` is absent from the Release binary.
+  `WHISPER_MODEL_PATH`, `AXIsProcessTrusted`, `AXIsProcessTrustedWithOptions`,
+  `AXUIElement` and `CGEventPost` are absent from the App Store executable. Developer ID
+  artifacts are outside this archive and were not built or modified.

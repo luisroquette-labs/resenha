@@ -9,17 +9,18 @@ target-app gates and remote App Store actions remain explicitly blocked.
 |---|---|
 | Source branch | `fix/release-hardening-loop` |
 | Source baseline | `ae34e157eca5c9df51555dcc5a84916562ddd338` |
-| Final commit | `86503e1b8987d17f4eb94fcc3309b6e763237047` |
+| Final archive source commit | `c822e2def90ad973c3d284745bda19ea6f5472a6` |
 | Version / build | `1.0.0 (2)` derived from `project.yml` and archive Info.plist |
-| Archive | `build/archive/Resenha-1.0.0-b2.xcarchive` (9.5 MB) |
-| Archive tree SHA-256 | `eb589e73b5a515442a5b1b5fd4f1b5fe0ddd8e056d6d44d89abe63e0af97320c` over 15 sorted file hashes and relative paths |
-| Executable SHA-256 | `292ed3d47d0d75eabb62d543ab7b6d3a3a9f6b35a69699da45fe80f80dbde78c` |
-| App Info.plist SHA-256 | `1d20e958268a28dfba775ec41dfef8872b0eaa9de03f51d7cffd8e93183fac69` |
-| Archive Info.plist SHA-256 | `4e5d70141d8c97491a0fd13dacca72c7fb02961203d0ba4f76385d9f96a276c4` |
+| Scheme / configuration | `ResenhaAppStore` / `AppStore` |
+| Archive | `build/archive/Resenha-1.0.0-b2.xcarchive` (9.7 MB) |
+| Archive tree SHA-256 | `fcab3d5406e3901766663169ae233c713ec4c577bb05232f6580d236a0ff5735` over 15 sorted file hashes and relative paths |
+| Executable SHA-256 | `17e1d6bc8c0d2e45a206fa9edd846dfc15a32c7bdac414bfb238016614d1fea9` |
+| App Info.plist SHA-256 | `efd7f9338f64d5be925679e19bd0b73e0a2d3412d0f4a09b3ef4abbbe5817d9b` |
+| Archive Info.plist SHA-256 | `c03594c21d99c10e8523158ef04dc4a7b6e8e30fe8916cac0b70c6d2a6c8ee61` |
 | Signing | Apple Development, team `S3YCFYY8SC`; strict verification passed; distribution export not performed |
 
-The fresh archive embeds `ResenhaSourceCommit =
-86503e1b8987d17f4eb94fcc3309b6e763237047`. The package validator requires that same
+The fresh App Store archive embeds `ResenhaSourceCommit =
+c822e2def90ad973c3d284745bda19ea6f5472a6`. The package validator requires that same
 real commit in Git, release state and archive Info.plist, with no later changes across
 the explicit audited release paths. The superseded `9dc4aa1b…` archive was moved
 recoverably to Trash and is not an upload candidate.
@@ -59,8 +60,25 @@ recoverably to Trash and is not an upload candidate.
    all ten 2880×1800 screenshots from that same deterministic fixture output.
 3. `mac-gate node Scripts/site.test.mjs` passed 38/38. Swift passed 96/96 at
    `/tmp/resenha-phase5-review2-derived/Logs/Test/Test-WhisperKey-2026.10.03_22-18-19--0300.xcresult`.
-4. Automated validators accepted the exact `86503e1b…` archive and rejected version
-   `99.99.99`, build `3` and a zero source commit.
+4. Automated validators accepted the exact earlier `86503e1b…` archive and rejected
+   version `99.99.99`, build `3` and a zero source commit. The final archive gate below
+   supersedes that binary while retaining these regression results.
+
+## Final App Store channel gate — 2026-10-03 BRT
+
+1. `ResenhaAppStore` / `AppStore` archived successfully as `1.0.0 (2)` with embedded
+   source commit `c822e2def90ad973c3d284745bda19ea6f5472a6`.
+2. Positive source, release-state and package validators passed. Negative fixtures
+   rejected version `99.99.99`, build `3`, zero source commit, generic
+   `AXUIElementCopyAttributeValue` / `AXObserverCreate` fixtures and a real
+   `_CGEventPost` fixture; a clean fixture was accepted.
+3. The arm64 executable passed strict codesign and has exactly App Sandbox,
+   microphone-input and network-client entitlements. `NSServices` declares `dictate`
+   with Command-Shift-E; privacy manifest and all three notice/license files exist.
+4. `nm` and `strings` found no `AXIsProcessTrusted`, `AXIsProcessTrustedWithOptions`,
+   `AXUIElement` or `CGEventPost`; `WHISPER_MODEL_PATH` is absent. The archive is signed
+   for Apple Development validation and contains no Developer ID Application identity;
+   the separate Developer ID channel was neither built nor modified.
 
 ## Product and media
 
