@@ -82,14 +82,14 @@ jobs:
 
       - name: Build pinned whisper.cpp CLI
         if: ${{ always() }}
-        working-directory: Windows
+        working-directory: Windows/native
         shell: pwsh
         run: |
-          cmake --preset windows-x64-cpu -S native
+          cmake --preset windows-x64-cpu
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           cmake --build --preset windows-x64-cpu
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          if (-not (Test-Path -LiteralPath 'native/build/windows-x64-cpu/bin/Release/whisper-cli.exe' -PathType Leaf)) {
+          if (-not (Test-Path -LiteralPath 'build/windows-x64-cpu/bin/Release/whisper-cli.exe' -PathType Leaf)) {
             throw 'whisper-cli.exe was not produced.'
           }
 

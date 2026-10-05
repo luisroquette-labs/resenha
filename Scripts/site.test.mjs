@@ -11,7 +11,7 @@ import { consentState, GA4_ID, GTM_ID } from '../site/analytics.mjs';
 import { DOWNLOAD_URL, EMBED_ORIGIN, FORM_ID, FORM_URL, isFormMessage } from '../site/download-gate.mjs';
 import { DOWNLOAD_PLATFORMS, platformConfig } from '../site/download-platforms.mjs';
 import { projectWindowsRelease } from './windows/promote-release.mjs';
-import { createPreviewServer } from './site.mjs';
+import { createPreviewServer, isConfinedPath } from './site.mjs';
 
 // Synthetic destinations are never fetched; browser audits must intercept them.
 const macos = { state: 'published', platform: 'macos', version: 'v0.0.0-test', architecture: 'arm64', minimumOS: 'macOS 14+',
@@ -207,6 +207,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
     assert.equal(stdout, '');
   });
   test('CK-13/16: preview confinement and lifecycle at root and subpath', async () => {
+    assert.equal(isConfinedPath('../outside.txt'), false);
+    assert.equal(isConfinedPath('..\\outside.txt'), false);
+    assert.equal(isConfinedPath('media/demo.mp4'), true);
     const fixtureRoot = await mkdtemp(join(tmpdir(), 'resenha-site-'));
     const { mkdir } = await import('node:fs/promises');
     const root = join(fixtureRoot, 'site'); await mkdir(root);

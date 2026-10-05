@@ -105,6 +105,8 @@ test('cloud Windows validation is manual, bounded, pinned and cannot claim physi
   assert.match(workflow, /TestCategory=WindowsIntegration/);
   assert.match(workflow, /TestCategory=WindowsNativeAudio/);
   assert.doesNotMatch(workflow, /TestCategory=PhysicalAcceptance/);
+  assert.match(workflow, /working-directory: Windows\/native/);
+  assert.doesNotMatch(workflow, /cmake --preset windows-x64-cpu -S native/);
   assert.match(workflow, /cmake --build --preset windows-x64-cpu/);
   assert.doesNotMatch(workflow, /upload-artifact|gh release|approvedHostInventory|physical-windows/u);
 });

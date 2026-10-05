@@ -79,10 +79,16 @@ try {
         & $dotnet test 'Resenha.Platform.Tests/Resenha.Platform.Tests.csproj' --configuration Release --no-build --no-restore
         if ($LASTEXITCODE) { throw 'Platform tests failed.' }
 
-        & $cmake --preset windows-x64-cpu -S native
-        if ($LASTEXITCODE) { throw 'Pinned whisper.cpp configuration failed.' }
-        & $cmake --build --preset windows-x64-cpu
-        if ($LASTEXITCODE) { throw 'Pinned whisper.cpp build failed.' }
+        Push-Location 'native'
+        try {
+            & $cmake --preset windows-x64-cpu
+            if ($LASTEXITCODE) { throw 'Pinned whisper.cpp configuration failed.' }
+            & $cmake --build --preset windows-x64-cpu
+            if ($LASTEXITCODE) { throw 'Pinned whisper.cpp build failed.' }
+        }
+        finally {
+            Pop-Location
+        }
         $cli = Join-Path $windowsRoot 'native/build/windows-x64-cpu/bin/Release/whisper-cli.exe'
         if (-not (Test-Path -LiteralPath $cli -PathType Leaf)) { throw 'whisper-cli.exe was not produced.' }
 
