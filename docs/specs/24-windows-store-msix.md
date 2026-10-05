@@ -30,6 +30,8 @@ owner-authorized physical-test channel and is never represented as the final app
    separately label synthetic CI packages as never submit/install.
 5. Keep direct EXE and Store evidence independent so one channel cannot promote
    the other accidentally.
+6. Prepare complete pt-BR, en-US and es-ES listing copy, five real screenshot
+   scenarios, certification notes and the restricted capability justification.
 
 ## Non-goals
 
@@ -88,4 +90,7 @@ acceptance.
 - `MSIX-006`: production website remains explicit Beta until Store certification.
 - `MSIX-007`: a clean physical Windows Store install completes dictation and
   uninstall without SmartScreen or orphaned owned session data.
-
+- `MSIX-008`: the candidate workflow requires all exact Partner Center fields,
+  retains the package privately for one day and never creates a GitHub Release.
+- `MSIX-009`: localized Store copy respects Microsoft field limits and screenshots
+  remain pending until captured from the physical Windows build.

@@ -154,7 +154,7 @@ test('Store MSIX spec keeps trusted consumer distribution separate from test EXE
     /exact package identity and publisher values copied from Partner Center/u,
     /SYNTHETIC-NOT-FOR-SUBMISSION/u, /never represented as the final app/u,
     /Windows\.FullTrustApplication/u, /runFullTrust/u, /microphone/u,
-    /MSIX-001/u, /MSIX-007/u, /Store\s+acknowledgement is not certification/u,
+    /MSIX-001/u, /MSIX-009/u, /Store\s+acknowledgement is not certification/u,
   ]);
   requires(storeEvidence, [
     /Partner Center identity/u, /exact candidate SHA-256/u,

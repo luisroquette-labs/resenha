@@ -125,6 +125,11 @@ test('cloud Windows validation is manual, bounded, pinned and cannot claim physi
   assert.match(workflow, /build-msix\.ps1.*synthetic-smoke/u);
   assert.match(workflow, /SYNTHETIC-NOT-FOR-SUBMISSION\.msix/u);
   assert.match(workflow, /Synthetic MSIX must remain ephemeral/u);
+  assert.match(workflow, /Build Partner Center-bound Microsoft Store candidate/u);
+  assert.match(workflow, /inputs\.build_store_candidate == true/u);
+  assert.match(workflow, /STORE_IDENTITY_NAME: \$\{\{ inputs\.store_identity_name \}\}/u);
+  assert.match(workflow, /Retain Partner Center-bound Store candidate for transfer/u);
+  assert.match(workflow, /retention-days: 1/u);
   assert.match(workflow, /publish_beta:/u);
   assert.match(workflow, /owner-authorized-unsigned-beta/u);
   assert.match(workflow, /actions\/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02/u);
@@ -135,6 +140,7 @@ test('cloud Windows validation is manual, bounded, pinned and cannot claim physi
 test('MSIX Store package is full-trust, identity-gated and never promotes synthetic smoke', () => {
   const manifest = read('Store/AppxManifest.xml.template');
   const script = read('../Scripts/windows/build-msix.ps1');
+  const listing = json('Store/listing.json');
   assert.match(manifest, /Windows\.FullTrustApplication/u);
   assert.match(manifest, /TargetDeviceFamily Name="Windows\.Desktop" MinVersion="10\.0\.19045\.0" MaxVersionTested="10\.0\.26200\.0"/u);
   assert.match(manifest, /DeviceCapability Name="microphone"/u);
@@ -157,6 +163,17 @@ test('MSIX Store package is full-trust, identity-gated and never promotes synthe
     ['Square150x150Logo.png', 150], ['Square150x150Logo.scale-200.png', 300],
     ['StoreLogo.png', 50], ['StoreLogo.scale-200.png', 100],
   ]) assert.deepEqual(pngSize(`Store/Assets/${file}`), [size, size], file);
+  assert.equal(listing.pricing, 'free');
+  assert.equal(listing.screenshots.requiredCount, 5);
+  assert.equal(listing.screenshots.captureState, 'pending-physical-windows');
+  assert.match(listing.restrictedCapabilityJustification, /runFullTrust/u);
+  for (const language of ['pt-BR', 'en-US', 'es-ES']) {
+    const localized = listing.localizations[language];
+    assert.ok(localized.shortDescription.length <= 270, `${language} short description`);
+    assert.ok(localized.description.length <= 10_000, `${language} description`);
+    assert.ok(localized.features.length <= 20 && localized.features.every(value => value.length <= 200), `${language} features`);
+    assert.ok(localized.searchTerms.length <= 7 && localized.searchTerms.every(value => value.length <= 40), `${language} search terms`);
+  }
 });
 
 test('installer separates ephemeral unsigned smoke from the signed release contract', () => {

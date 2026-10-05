@@ -13,6 +13,32 @@ on:
         required: true
         default: '0.1.0'
         type: string
+      build_store_candidate:
+        description: 'Retain a Partner Center-bound MSIX candidate for 1 day'
+        required: true
+        default: false
+        type: boolean
+      store_version:
+        description: 'Four-component Store version ending in .0'
+        required: true
+        default: '0.1.0.0'
+        type: string
+      store_identity_name:
+        description: 'Exact Partner Center Package/Identity/Name'
+        required: false
+        type: string
+      store_publisher:
+        description: 'Exact Partner Center Package/Identity/Publisher'
+        required: false
+        type: string
+      store_publisher_display_name:
+        description: 'Exact Partner Center PublisherDisplayName'
+        required: false
+        type: string
+      store_authorization_reference:
+        description: 'Partner Center product or reservation reference'
+        required: false
+        type: string
   pull_request:
     types: [labeled]
 
@@ -213,6 +239,23 @@ jobs:
           if (-not (Test-Path -LiteralPath $package -PathType Leaf)) { throw 'Synthetic MSIX was not produced.' }
           if (Test-Path -LiteralPath 'artifacts/windows-msix') { throw 'Synthetic MSIX must remain ephemeral.' }
 
+      - name: Build Partner Center-bound Microsoft Store candidate
+        if: ${{ success() && github.event_name == 'workflow_dispatch' && inputs.build_store_candidate == true }}
+        shell: pwsh
+        env:
+          STORE_VERSION: ${{ inputs.store_version }}
+          STORE_IDENTITY_NAME: ${{ inputs.store_identity_name }}
+          STORE_PUBLISHER: ${{ inputs.store_publisher }}
+          STORE_PUBLISHER_DISPLAY_NAME: ${{ inputs.store_publisher_display_name }}
+          STORE_AUTHORIZATION_REFERENCE: ${{ inputs.store_authorization_reference }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $payload = Join-Path $env:RUNNER_TEMP 'resenha-msix-smoke-payload'
+          $output = 'artifacts/windows-store-candidate'
+          & 'Scripts/windows/build-msix.ps1' -Mode store-candidate -Version $env:STORE_VERSION -PayloadDir $payload -OutputDir $output -IdentityName $env:STORE_IDENTITY_NAME -Publisher $env:STORE_PUBLISHER -PublisherDisplayName $env:STORE_PUBLISHER_DISPLAY_NAME -AuthorizationReference $env:STORE_AUTHORIZATION_REFERENCE
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          if ((Get-ChildItem -LiteralPath $output -Filter '*.msix' -File).Count -ne 1) { throw 'Exactly one Store candidate is required.' }
+
       - name: Run portable release and site contracts
         if: ${{ always() }}
         run: node --test Scripts/windows-docs.test.mjs Scripts/windows-release.test.mjs Scripts/site.test.mjs Windows/scaffold.test.mjs
@@ -223,6 +266,16 @@ jobs:
         with:
           name: Resenha-Windows-Beta-${{ inputs.beta_version }}-${{ github.sha }}
           path: artifacts/windows-beta/*
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
+      - name: Retain Partner Center-bound Store candidate for transfer
+        if: ${{ success() && github.event_name == 'workflow_dispatch' && inputs.build_store_candidate == true }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: Resenha-Windows-Store-${{ inputs.store_version }}-${{ github.sha }}
+          path: artifacts/windows-store-candidate/*
           if-no-files-found: error
           retention-days: 1
           compression-level: 0
