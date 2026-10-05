@@ -144,6 +144,7 @@ test('MSIX Store package is full-trust, identity-gated and never promotes synthe
   assert.match(script, /ValidateSet\('synthetic-smoke', 'store-candidate'\)/u);
   assert.match(script, /Store candidate authorization reference is required/u);
   assert.match(script, /Partner Center .* is missing or non-production/u);
+  assert.match(script, /\(\[ordered\]@\{[^}]+\}\)\.GetEnumerator\(\)/u);
   assert.match(script, /MakeAppx pack failed/u);
   assert.match(script, /MakeAppx unpack validation failed/u);
   assert.match(script, /synthetic-never-submit/u);

@@ -55,7 +55,7 @@ if ($Mode -eq 'synthetic-smoke') {
     $PublisherDisplayName = 'SYNTHETIC TEST ONLY'
 } else {
     if ([string]::IsNullOrWhiteSpace($AuthorizationReference)) { throw 'Store candidate authorization reference is required.' }
-    foreach ($entry in [ordered]@{ IdentityName = $IdentityName; Publisher = $Publisher; PublisherDisplayName = $PublisherDisplayName }.GetEnumerator()) {
+    foreach ($entry in ([ordered]@{ IdentityName = $IdentityName; Publisher = $Publisher; PublisherDisplayName = $PublisherDisplayName }).GetEnumerator()) {
         if ([string]::IsNullOrWhiteSpace($entry.Value) -or $entry.Value -match '(?i)synthetic|example|placeholder|test only') {
             throw "Partner Center $($entry.Key) is missing or non-production."
         }
