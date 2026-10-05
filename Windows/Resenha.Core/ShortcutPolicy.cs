@@ -40,6 +40,7 @@ public sealed class ShortcutPolicy
 
     public Shortcut Shortcut { get; }
     public bool IsHolding => holding;
+    public bool TriggerDown => keys[TriggerIndex];
     public bool IsArmed => armed && enabled && !stopped;
     public bool AllChordKeysUp => !keys[TriggerIndex] && (Modifiers & Shortcut.Modifiers) == 0;
     private int TriggerIndex => Index(new(Shortcut.ScanCode, Shortcut.IsExtended));

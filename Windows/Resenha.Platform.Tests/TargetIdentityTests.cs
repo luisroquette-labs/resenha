@@ -121,6 +121,27 @@ public sealed class TargetIdentityTests
         Assert.IsFalse(KeyboardHook.IsChordComponent(shortcut, new(0x38, true)), "AltGr is never a chord component.");
     }
 
+    [TestMethod]
+    public void SuppressedTriggerRemainsDownForWatchdogUntilHookSeesRelease()
+    {
+        var shortcut = new Shortcut(0x13, false,
+            ShortcutModifiers.LeftControl | ShortcutModifiers.LeftAlt);
+        var policy = new ShortcutPolicy(shortcut);
+        policy.Watchdog(new(false, ShortcutModifiers.None), new(0));
+        policy.Process(new(new(0x1d), true), new(1));
+        policy.Process(new(new(0x38), true), new(2));
+        Assert.AreEqual(ShortcutEdgeKind.Pressed,
+            policy.Process(new(new(0x13), true), new(3)).Edge?.Kind);
+
+        Assert.IsTrue(KeyboardHook.ResolveTriggerDown(policy, asynchronousState: false),
+            "GetAsyncKeyState stays false when the low-level hook suppresses the trigger.");
+        Assert.IsNull(policy.Watchdog(new(true,
+            ShortcutModifiers.LeftControl | ShortcutModifiers.LeftAlt), new(4)));
+        Assert.AreEqual(ShortcutEdgeKind.Released,
+            policy.Process(new(new(0x13), false), new(5)).Edge?.Kind);
+        Assert.IsFalse(KeyboardHook.ResolveTriggerDown(policy, asynchronousState: false));
+    }
+
     private static TargetBrokerResponse Response(AttemptId attempt) => new(1, new string('a', 64), attempt.Value, 10,
         100, 100, 101, 200, 123456789, 1, "Default", TargetIntegrity.Medium,
         ImmutableArray.Create(1, 2, 3), 50004, false, true, false, new string('c', 64), true, false, "ok");

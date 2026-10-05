@@ -43,7 +43,7 @@ Opening settings, Escape, tray Cancel, lock, suspend and shutdown cancel.
 | Deadline | Contract |
 | --- | --- |
 | Hold/audio | Maximum 120 seconds; under 300 ms produces no inference. Start within 2 seconds; stop acknowledgment within 1 second. Late asynchronous start after release is canceled. |
-| Lost release | Independent physical-key watchdog every 100 ms; lost release/max duration cancels and discards instead of transcribing. |
+| Lost release | Independent physical-key watchdog every 100 ms; lost release/max duration cancels and discards instead of transcribing. While the trigger is intentionally suppressed, its down state comes from the low-level hook latch because Windows does not expose suppressed input through asynchronous key state. |
 | Inference | 120 seconds from process start; kill child job and wait at most 2 seconds before owned-file cleanup. |
 | Target/modifiers | Target broker request 300 ms; all shortcut modifiers up within 2 seconds before any insertion. |
 | Clipboard | Five attempts within a total 500 ms budget; write/readback must succeed before paste. |
