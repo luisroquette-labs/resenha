@@ -89,3 +89,20 @@ test('cross-target evidence is recorded without claiming native Windows validati
   for (const name of projects) assert.ok(existsSync(resolve(root, `${name}/packages.lock.json`)));
   assert.deepEqual(json('Resenha.Core/packages.lock.json').dependencies, { 'net10.0': {} });
 });
+
+test('cloud Windows validation is manual, bounded, pinned and cannot claim physical acceptance', () => {
+  const workflow = read('../.github/workflows/windows-release-validation.yml');
+  assert.match(workflow, /workflow_dispatch:/);
+  assert.match(workflow, /pull_request:\n\s+types: \[labeled\]/);
+  assert.match(workflow, /github\.event\.label\.name == 'windows-release-validation'/);
+  assert.doesNotMatch(workflow, /\n\s+push:|\n\s+schedule:/);
+  assert.match(workflow, /permissions:\n\s+contents: read/);
+  assert.match(workflow, /runs-on: windows-2025/);
+  assert.match(workflow, /timeout-minutes: 35/);
+  for (const sha of ['11d5960a326750d5838078e36cf38b85af677262', '26b0ec14cb23fa6904739307f278c14f94c95bf1',
+    '49933ea5288caeca8642d1e84afbd3f7d6820020']) assert.ok(workflow.includes(sha));
+  assert.match(workflow, /TestCategory=WindowsIntegration/);
+  assert.match(workflow, /TestCategory=WindowsNativeAudio/);
+  assert.match(workflow, /cmake --build --preset windows-x64-cpu/);
+  assert.doesNotMatch(workflow, /upload-artifact|gh release|approvedHostInventory|physical-windows/u);
+});

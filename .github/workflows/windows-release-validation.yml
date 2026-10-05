@@ -1,0 +1,98 @@
+name: Windows release validation
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [labeled]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-release-validation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  native-validation:
+    if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'windows-release-validation'
+    runs-on: windows-2025
+    timeout-minutes: 35
+    steps:
+      - name: Checkout exact source and pinned whisper.cpp
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          submodules: recursive
+          persist-credentials: false
+
+      - name: Install pinned .NET SDK
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        with:
+          dotnet-version: 10.0.401
+
+      - name: Install Node.js for portable contracts
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+
+      - name: Record ephemeral host inventory
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Get-ComputerInfo | Select-Object WindowsProductName, WindowsVersion, OsBuildNumber, OsArchitecture
+          dotnet --info
+          node --version
+          cmake --version
+          git -C Vendor/whisper.cpp rev-parse HEAD
+
+      - name: Restore locked managed graph
+        working-directory: Windows
+        run: dotnet restore Resenha.Windows.sln --locked-mode
+
+      - name: Verify managed formatting
+        working-directory: Windows
+        run: dotnet format Resenha.Windows.sln --verify-no-changes --no-restore
+
+      - name: Build managed Windows solution
+        working-directory: Windows
+        run: dotnet build Resenha.Windows.sln --configuration Release --no-restore --no-incremental -warnaserror
+
+      - name: Run portable Core tests
+        working-directory: Windows
+        run: dotnet test Resenha.Core.Tests/Resenha.Core.Tests.csproj --configuration Release --no-build --no-restore
+
+      - name: Run portable Platform tests on Windows
+        working-directory: Windows
+        run: dotnet test Resenha.Platform.Tests/Resenha.Platform.Tests.csproj --configuration Release --no-build --no-restore --filter "TestCategory=Portable|TestCategory=PortableAudio"
+
+      - name: Run Windows integration tests
+        if: ${{ always() }}
+        working-directory: Windows
+        run: dotnet test Resenha.Platform.Tests/Resenha.Platform.Tests.csproj --configuration Release --no-build --no-restore --filter "TestCategory=WindowsIntegration"
+
+      - name: Run Windows native audio conversion tests
+        if: ${{ always() }}
+        working-directory: Windows
+        run: dotnet test Resenha.Platform.Tests/Resenha.Platform.Tests.csproj --configuration Release --no-build --no-restore --filter "TestCategory=WindowsNativeAudio"
+
+      - name: Publish unsigned self-contained smoke payload
+        if: ${{ always() }}
+        working-directory: Windows
+        run: dotnet publish Resenha.Windows/Resenha.Windows.csproj --configuration Release --no-restore --no-build --runtime win-x64 --self-contained true --output ../artifacts/cloud-smoke
+
+      - name: Build pinned whisper.cpp CLI
+        if: ${{ always() }}
+        working-directory: Windows
+        shell: pwsh
+        run: |
+          cmake --preset windows-x64-cpu -S native
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cmake --build --preset windows-x64-cpu
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          if (-not (Test-Path -LiteralPath 'native/build/windows-x64-cpu/bin/Release/whisper-cli.exe' -PathType Leaf)) {
+            throw 'whisper-cli.exe was not produced.'
+          }
+
+      - name: Run portable release and site contracts
+        if: ${{ always() }}
+        run: node --test Scripts/windows-docs.test.mjs Scripts/windows-release.test.mjs Scripts/site.test.mjs Windows/scaffold.test.mjs
+
