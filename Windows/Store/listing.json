@@ -64,7 +64,7 @@
   },
   "screenshots": {
     "requiredCount": 5,
-    "captureState": "pending-physical-windows",
+    "captureState": "store-composites-generated-physical-e2e-pending",
     "shots": [
       "Hotkey pressed with live listening HUD over a real text editor",
       "Completed transcript inserted at the original cursor",

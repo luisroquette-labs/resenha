@@ -187,7 +187,14 @@ test('MSIX Store package is full-trust, identity-gated and never promotes synthe
   });
   assert.equal(listing.publisherDisplayName, identity.publisherDisplayName);
   assert.equal(listing.screenshots.requiredCount, 5);
-  assert.equal(listing.screenshots.captureState, 'pending-physical-windows');
+  assert.equal(listing.screenshots.captureState, 'store-composites-generated-physical-e2e-pending');
+  for (const screenshot of [
+    '01-fale-solte-continue.png',
+    '02-atalho-e-idiomas.png',
+    '03-clipboard-seguro.png',
+    '04-privacidade-local.png',
+    '05-portugues-com-anglicismos.png',
+  ]) assert.deepEqual(pngSize(`Store/Screenshots/pt-BR/${screenshot}`), [1920, 1080], screenshot);
   assert.match(listing.restrictedCapabilityJustification, /runFullTrust/u);
   for (const language of ['pt-BR', 'en-US', 'es-ES']) {
     const localized = listing.localizations[language];
