@@ -95,4 +95,3 @@ jobs:
       - name: Run portable release and site contracts
         if: ${{ always() }}
         run: node --test Scripts/windows-docs.test.mjs Scripts/windows-release.test.mjs Scripts/site.test.mjs Windows/scaffold.test.mjs
-
