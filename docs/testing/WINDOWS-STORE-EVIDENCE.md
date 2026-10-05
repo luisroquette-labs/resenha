@@ -1,14 +1,14 @@
 # Windows Store — submission and physical evidence
 
-Status: pending. This blank dossier must describe the exact certified MSIX and
-its real Store installation; synthetic CI packages cannot fill any row.
+Status: product reserved; candidate, submission, certification and physical Store
+installation remain pending. Synthetic CI packages cannot fill evidence rows.
 
 ## Product identity
 
 | Evidence | Observed value |
 | --- | --- |
-| Partner Center identity name / publisher / display publisher | pending |
-| Reserved product name / authorization reference / UTC | pending |
+| Partner Center identity name / publisher / display publisher | `CFGaussServiosLtda.Resenha` / `CN=423DACA4-6A0B-4E80-BFA4-9BF1E35E6AC1` / `CF Gauss` |
+| Reserved product name / authorization reference / UTC | `Resenha` / Store ID `9P4M40MZH627` / observed 2026-10-05 |
 | Source commit / version / exact candidate SHA-256 / byte length | pending |
 | MakeAppx version / package validation log SHA-256 | pending |
 
@@ -19,7 +19,7 @@ its real Store installation; synthetic CI packages cannot fill any row.
 | Partner Center submission ID / package SHA-256 / UTC | pending |
 | Restricted-capability declaration and privacy URL review | pending |
 | Certification result / report / terminal UTC | pending |
-| Public Microsoft Store product ID and immutable listing URL | pending |
+| Public Microsoft Store product ID and immutable listing URL | reserved: `9P4M40MZH627` / `https://apps.microsoft.com/detail/9P4M40MZH627`; public resolution pending certification |
 
 A successful upload acknowledgement is not certification. Certification is not
 proof that dictation works on a physical machine.

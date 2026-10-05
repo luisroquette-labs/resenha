@@ -141,6 +141,7 @@ test('MSIX Store package is full-trust, identity-gated and never promotes synthe
   const manifest = read('Store/AppxManifest.xml.template');
   const script = read('../Scripts/windows/build-msix.ps1');
   const listing = json('Store/listing.json');
+  const identity = json('Store/identity.json');
   assert.match(manifest, /Windows\.FullTrustApplication/u);
   assert.match(manifest, /TargetDeviceFamily Name="Windows\.Desktop" MinVersion="10\.0\.19045\.0" MaxVersionTested="10\.0\.26200\.0"/u);
   assert.match(manifest, /DeviceCapability Name="microphone"/u);
@@ -166,8 +167,21 @@ test('MSIX Store package is full-trust, identity-gated and never promotes synthe
   assert.equal(listing.pricing, 'free');
   assert.equal(listing.publisherAccountType, 'company');
   assert.equal(listing.publisherLegalName, 'CF GAUSS SERVICOS LTDA');
-  assert.equal(listing.publisherDisplayName, 'pending-exact-partner-center-value');
+  assert.equal(listing.publisherDisplayName, 'CF Gauss');
   assert.equal(listing.developedBy, 'CF Gauss Serviços Ltda.');
+  assert.deepEqual(identity, {
+    schemaVersion: 1,
+    productName: 'Resenha',
+    storeId: '9P4M40MZH627',
+    identityName: 'CFGaussServiosLtda.Resenha',
+    publisher: 'CN=423DACA4-6A0B-4E80-BFA4-9BF1E35E6AC1',
+    publisherDisplayName: 'CF Gauss',
+    productUrl: 'https://apps.microsoft.com/detail/9P4M40MZH627',
+    reservationDate: '2026-10-05',
+    accountType: 'company',
+    legalEntity: 'CF GAUSS SERVICOS LTDA',
+  });
+  assert.equal(listing.publisherDisplayName, identity.publisherDisplayName);
   assert.equal(listing.screenshots.requiredCount, 5);
   assert.equal(listing.screenshots.captureState, 'pending-physical-windows');
   assert.match(listing.restrictedCapabilityJustification, /runFullTrust/u);

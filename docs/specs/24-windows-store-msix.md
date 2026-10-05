@@ -1,11 +1,16 @@
 # SPEC-024 — Windows Store MSIX distribution
 
-Status: implementation in progress. Partner Center identity and Store submission
-remain external gates.
+Status: implementation in progress. Partner Center company verification and
+product reservation passed; exact candidate build and Store submission remain.
 
 Owner decision (2026-10-05): publish from a Company developer account whose
 verified legal entity is `CF GAUSS SERVICOS LTDA`. The manifest publisher and
-publisher display name still come verbatim from Partner Center after verification.
+publisher display name come verbatim from the verified Partner Center product.
+
+Reserved product (2026-10-05): Store ID `9P4M40MZH627`, identity
+`CFGaussServiosLtda.Resenha`, publisher
+`CN=423DACA4-6A0B-4E80-BFA4-9BF1E35E6AC1` and display publisher `CF Gauss`.
+`Windows/Store/identity.json` is the checked-in identity contract.
 
 ## Problem
 
@@ -65,6 +70,8 @@ the reserved Partner Center product. Candidate mode fails closed if any value is
 missing, synthetic, an example or inconsistent. CI may use an explicitly named
 synthetic identity only to prove MakeAppx structure; its filename contains
 `SYNTHETIC-NOT-FOR-SUBMISSION`, is not uploaded and creates no release evidence.
+The exact non-secret values are retained in `Windows/Store/identity.json`; every
+candidate build must match that file byte-for-byte.
 
 ## State machine
 
