@@ -32,8 +32,13 @@ ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0.19045
 OutputDir={#OutputDir}
 OutputBaseFilename={#InstallerBaseName}
+#ifdef SmokeUnsigned
+Compression=zip/1
+SolidCompression=no
+#else
 Compression=lzma2/max
 SolidCompression=yes
+#endif
 WizardStyle=modern
 SetupIconFile={#SourcePath}\..\Resenha.Windows\Assets\Resenha.ico
 UninstallDisplayIcon={app}\Resenha.exe

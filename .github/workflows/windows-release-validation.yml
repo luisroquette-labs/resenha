@@ -103,6 +103,16 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
+          function Invoke-BoundedProcess([string]$Name, [string]$FilePath, [string[]]$Arguments, [int]$TimeoutSeconds) {
+            Write-Host "Starting: $Name"
+            $process = Start-Process -FilePath $FilePath -ArgumentList $Arguments -PassThru
+            if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
+              & taskkill.exe /PID $process.Id /T /F | Out-Null
+              throw "$Name exceeded ${TimeoutSeconds}s."
+            }
+            if ($process.ExitCode -ne 0) { throw "$Name failed: $($process.ExitCode)" }
+            Write-Host "Completed: $Name"
+          }
           $toolUrl = 'https://github.com/jrsoftware/issrc/releases/download/is-6_7_3/innosetup-6.7.3.exe'
           $toolSha256 = '9c73c3bae7ed48d44112a0f48e66742c00090bdb5bef71d9d3c056c66e97b732'
           $toolInstaller = Join-Path $env:RUNNER_TEMP 'innosetup-6.7.3.exe'
@@ -115,8 +125,7 @@ jobs:
           if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch 'Pyrsys B\.V\.') {
             throw 'Pinned Inno Setup installer signature is not trusted.'
           }
-          $toolInstall = Start-Process -FilePath $toolInstaller -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', "/DIR=$toolRoot") -Wait -PassThru
-          if ($toolInstall.ExitCode -ne 0) { throw "Inno Setup installation failed: $($toolInstall.ExitCode)" }
+          Invoke-BoundedProcess 'Inno Setup installation' $toolInstaller @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', "/DIR=$toolRoot") 90
           $iscc = Join-Path $toolRoot 'ISCC.exe'
           if (-not (Test-Path -LiteralPath $iscc -PathType Leaf)) { throw 'Pinned ISCC.exe is missing.' }
 
@@ -132,21 +141,18 @@ jobs:
           Copy-Item -LiteralPath 'THIRD_PARTY_NOTICES.md' -Destination (Join-Path $payload 'licenses')
           Copy-Item -LiteralPath 'Vendor/whisper.cpp/LICENSE' -Destination (Join-Path $payload 'licenses/whisper.cpp-MIT.txt')
 
-          & $iscc '/DAppVersion=0.0.0' "/DPayloadDir=$payload" "/DOutputDir=$output" '/DSmokeUnsigned=1' 'Windows/Installer/Resenha.iss'
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          Invoke-BoundedProcess 'Inno smoke compilation' $iscc @('/DAppVersion=0.0.0', "/DPayloadDir=$payload", "/DOutputDir=$output", '/DSmokeUnsigned=1', 'Windows/Installer/Resenha.iss') 300
           $installer = Join-Path $output 'Resenha-0.0.0-windows-x64-UNSIGNED-NOT-FOR-DISTRIBUTION.exe'
           if (-not (Test-Path -LiteralPath $installer -PathType Leaf)) { throw 'Unsigned smoke installer was not produced.' }
           if ((Get-AuthenticodeSignature -FilePath $installer).Status -ne 'NotSigned') { throw 'Smoke installer must remain unsigned.' }
 
           $installedRoot = Join-Path $env:RUNNER_TEMP 'resenha-installed-smoke'
-          $install = Start-Process -FilePath $installer -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', "/DIR=$installedRoot") -Wait -PassThru
-          if ($install.ExitCode -ne 0) { throw "Smoke install failed: $($install.ExitCode)" }
+          Invoke-BoundedProcess 'Resenha smoke installation' $installer @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', "/DIR=$installedRoot") 90
           foreach ($relative in @('Resenha.exe', 'Resenha.TargetBroker.exe', 'native/whisper-cli.exe')) {
             if (-not (Test-Path -LiteralPath (Join-Path $installedRoot $relative) -PathType Leaf)) { throw "Installed payload missing: $relative" }
           }
           $uninstaller = Join-Path $installedRoot 'unins000.exe'
-          $uninstall = Start-Process -FilePath $uninstaller -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART') -Wait -PassThru
-          if ($uninstall.ExitCode -ne 0) { throw "Smoke uninstall failed: $($uninstall.ExitCode)" }
+          Invoke-BoundedProcess 'Resenha smoke uninstall' $uninstaller @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART') 90
           for ($attempt = 0; $attempt -lt 20 -and (Test-Path -LiteralPath $installedRoot); $attempt++) { Start-Sleep -Milliseconds 250 }
           if (Test-Path -LiteralPath $installedRoot) { throw 'Smoke uninstall left the application directory behind.' }
 

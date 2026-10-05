@@ -112,6 +112,8 @@ test('cloud Windows validation is manual, bounded, pinned and cannot claim physi
   assert.match(workflow, /9c73c3bae7ed48d44112a0f48e66742c00090bdb5bef71d9d3c056c66e97b732/);
   assert.ok(workflow.includes('Pyrsys B\\.V\\.'));
   assert.match(workflow, /UNSIGNED-NOT-FOR-DISTRIBUTION/);
+  assert.match(workflow, /Invoke-BoundedProcess/);
+  assert.match(workflow, /Inno smoke compilation.*300/);
   assert.match(workflow, /Smoke uninstall left the application directory behind/);
   assert.doesNotMatch(workflow, /upload-artifact|gh release|approvedHostInventory|physical-windows/u);
 });
@@ -121,6 +123,7 @@ test('installer separates ephemeral unsigned smoke from the signed release contr
   assert.match(installer, /#ifdef SmokeUnsigned/);
   assert.match(installer, /UNSIGNED-NOT-FOR-DISTRIBUTION/);
   assert.match(installer, /SignedUninstaller=no/);
+  assert.match(installer, /#ifdef SmokeUnsigned\nCompression=zip\/1\nSolidCompression=no\n#else\nCompression=lzma2\/max\nSolidCompression=yes/);
   assert.match(installer, /#else\nSignedUninstaller=yes\nSignTool=resenha/);
 });
 
