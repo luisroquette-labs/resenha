@@ -82,10 +82,13 @@ var
 
 function InitializeUninstall(): Boolean;
 begin
-  RemoveLocalData := MsgBox(
-    'Remover também o modelo local e as preferências deste usuário?'#13#10#13#10 +
-    '“Sim” é a opção recomendada. Arquivos importados de outras pastas e documentos pessoais não serão removidos.',
-    mbConfirmation, MB_YESNO) = IDYES;
+  if UninstallSilent then
+    RemoveLocalData := True
+  else
+    RemoveLocalData := MsgBox(
+      'Remover também o modelo local e as preferências deste usuário?'#13#10#13#10 +
+      '“Sim” é a opção recomendada. Arquivos importados de outras pastas e documentos pessoais não serão removidos.',
+      mbConfirmation, MB_YESNO) = IDYES;
   Result := True;
 end;
 

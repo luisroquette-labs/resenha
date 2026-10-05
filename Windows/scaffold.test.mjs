@@ -126,6 +126,7 @@ test('installer separates ephemeral unsigned smoke from the signed release contr
   assert.match(installer, /SignedUninstaller=no/);
   assert.match(installer, /#ifdef SmokeUnsigned\nCompression=zip\/1\nSolidCompression=no\n#else\nCompression=lzma2\/max\nSolidCompression=yes/);
   assert.match(installer, /#else\nSignedUninstaller=yes\nSignTool=resenha/);
+  assert.match(installer, /if UninstallSilent then\n\s+RemoveLocalData := True/);
 });
 
 test('repository text policy keeps byte-identity contracts deterministic on Windows', () => {
