@@ -221,6 +221,8 @@ kbd { padding: 10px 15px; border: 1px solid var(--line); border-bottom-width: 3p
 .release-slot span, .release-reason { margin: 0; color: var(--muted); font-size: 10px; line-height: 1.45; }
 .release-slot a { min-height: 44px; display: inline-flex; align-items: center; color: inherit; }
 .release-slot button { min-height: 44px; padding: 0; border: 0; background: transparent; color: inherit; cursor: pointer; text-decoration: underline; text-underline-offset: 5px; }
+.beta-release .release-action { color: var(--sage-deep); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 5px; }
+.beta-release .release-reason { max-width: 310px; color: #665f4f; }
 .secondary-release { opacity: 1; }
 
 .download-gate { width: min(720px, calc(100% - 32px)); max-height: min(880px, calc(100dvh - 32px)); padding: 0; overflow: auto; border: 1px solid rgba(255,255,255,.2); border-radius: 28px; background: var(--paper-soft); color: var(--ink); box-shadow: 0 30px 100px rgba(0,0,0,.34); }
