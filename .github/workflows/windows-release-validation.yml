@@ -62,6 +62,14 @@ jobs:
           submodules: recursive
           persist-credentials: false
 
+      - name: Assert pristine source before generating artifacts
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $dirty = @(& git status --porcelain --untracked-files=all)
+          if ($LASTEXITCODE) { throw 'Unable to inspect checkout cleanliness.' }
+          if ($dirty.Count -ne 0) { throw "Checkout is not pristine:`n$($dirty -join "`n")" }
+
       - name: Install pinned .NET SDK
         uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
         with:

@@ -108,6 +108,8 @@ test('cloud Windows validation is manual, bounded, pinned and cannot claim physi
   assert.match(workflow, /cancel-in-progress: true/);
   for (const sha of ['fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09', '26b0ec14cb23fa6904739307f278c14f94c95bf1',
     '249970729cb0ef3589644e2896645e5dc5ba9c38']) assert.ok(workflow.includes(sha));
+  assert.match(workflow, /Assert pristine source before generating artifacts/u);
+  assert.match(workflow, /git status --porcelain --untracked-files=all/u);
   assert.match(workflow, /TestCategory=WindowsIntegration/);
   assert.match(workflow, /TestCategory=WindowsNativeAudio/);
   assert.doesNotMatch(workflow, /TestCategory=PhysicalAcceptance/);
@@ -153,6 +155,8 @@ test('MSIX Store package is full-trust, identity-gated and never promotes synthe
   assert.match(script, /ValidateSet\('synthetic-smoke', 'store-candidate'\)/u);
   assert.match(script, /Store candidate authorization reference is required/u);
   assert.match(script, /Partner Center .* is missing or non-production/u);
+  assert.match(script, /git -C \$repositoryRoot diff --quiet HEAD --/u);
+  assert.match(script, /git -C \$repositoryRoot diff --cached --quiet/u);
   assert.match(script, /\(\[ordered\]@\{[^}]+\}\)\.GetEnumerator\(\)/u);
   assert.match(script, /MakeAppx pack failed/u);
   assert.match(script, /MakeAppx unpack validation failed/u);

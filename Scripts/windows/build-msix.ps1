@@ -62,9 +62,10 @@ if ($Mode -eq 'synthetic-smoke') {
     }
     if ($IdentityName -notmatch '^[A-Za-z0-9.-]{3,50}$') { throw 'Partner Center IdentityName format is invalid.' }
     if ($Publisher -notmatch '^CN=.{3,250}$') { throw 'Partner Center Publisher must begin with CN=.' }
-    if ((& git -C $repositoryRoot status --porcelain --untracked-files=all).Count -ne 0) {
-        throw 'Store candidate source must be clean.'
-    }
+    & git -C $repositoryRoot diff --quiet HEAD --
+    if ($LASTEXITCODE) { throw 'Store candidate tracked source must match HEAD.' }
+    & git -C $repositoryRoot diff --cached --quiet
+    if ($LASTEXITCODE) { throw 'Store candidate index must match HEAD.' }
 }
 
 $makeAppx = Get-Command 'makeappx.exe' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source -First 1
