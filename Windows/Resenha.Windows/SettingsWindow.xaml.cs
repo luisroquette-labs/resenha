@@ -22,6 +22,7 @@ public partial class SettingsWindow : Window
         if ((await model.SaveAsync()).IsSuccess) { Close(); }
     }
     private async void Download_Click(object sender, RoutedEventArgs e) => await model.DownloadModelAsync();
+    private async void RefreshMicrophones_Click(object sender, RoutedEventArgs e) => await model.RefreshMicrophonesAsync();
     private async void Clear_Click(object sender, RoutedEventArgs e) => await model.ClearLastResultAsync();
 
     private void Capture_Click(object sender, RoutedEventArgs e)

@@ -65,7 +65,8 @@ public partial class App : System.Windows.Application
             var initial = loaded.IsSuccess ? loaded.Value! : new ProductPreferences(1,
                 ShortcutPolicy.Default, available.FirstOrDefault(item => item.IsDefault)?.Id
                     ?? available.FirstOrDefault()?.Id ?? string.Empty, DictationLanguage.Pt);
-            model = new(coordinator, preferenceStore, models, initial, available, ApplyPreferencesAsync);
+            model = new(coordinator, preferenceStore, models, initial, available,
+                recorder.EnumerateAsync, ApplyPreferencesAsync);
             settings = new(model);
             settings.Closing += SettingsClosing;
             status = new(model);
@@ -146,6 +147,7 @@ public partial class App : System.Windows.Application
     {
         await coordinator!.CancelAsync();
         if (shortcut is not null) { await shortcut.StopAsync(AttemptId.New(), default); }
+        if (model is not null) { await model.RefreshMicrophonesAsync(); }
         settings!.Show();
         settings.WindowState = WindowState.Normal;
         settings.Activate();

@@ -25,6 +25,12 @@ public sealed class PresentationContractTests
         StringAssert.Contains(settings, "Local, gratuito e sem conta");
         StringAssert.Contains(settings, "SelectedShortcut");
         StringAssert.Contains(settings, "SelectedMicrophone");
+        StringAssert.Contains(settings, "VerticalScrollBarVisibility=\"Auto\"");
+        StringAssert.Contains(settings, "MicrophoneNotice");
+        var app = Read("Windows/Resenha.Windows/App.xaml.cs");
+        StringAssert.Contains(app, "recorder.EnumerateAsync");
+        StringAssert.Contains(app, "model.RefreshMicrophonesAsync");
+        StringAssert.Contains(settings, "RefreshMicrophones_Click");
         Assert.IsFalse(settings.Contains("histórico", StringComparison.OrdinalIgnoreCase));
     }
 

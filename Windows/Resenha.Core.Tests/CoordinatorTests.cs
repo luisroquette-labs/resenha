@@ -13,6 +13,22 @@ public sealed class CoordinatorTests
         "microphone", DictationLanguage.Pt);
 
     [TestMethod]
+    public async Task MissingMicrophoneReportsActionableFailureWithoutStartingCapture()
+    {
+        var fixture = new Fixture();
+        await using var coordinator = fixture.Create();
+        var preferences = Preferences with { MicrophoneEndpointId = "" };
+
+        var result = await coordinator.HandleShortcutAsync(
+            new(ShortcutEdgeKind.Pressed, new(10)), preferences);
+
+        Assert.AreEqual(ErrorCode.MicrophoneUnavailable, result.Failure?.Code);
+        Assert.AreEqual(DictationState.Failed, coordinator.Status.State);
+        Assert.AreEqual(RecoveryAction.ChooseMicrophone, coordinator.Status.Recovery?.Action);
+        Assert.AreEqual(0, fixture.Transcriptions);
+    }
+
+    [TestMethod]
     public async Task HappyPathCopiesBeforeExactlyOneInsertionAndCleansLeases()
     {
         var events = new List<string>();

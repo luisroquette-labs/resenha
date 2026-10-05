@@ -46,16 +46,19 @@ public sealed class PreferencesTests
     }
 
     [TestMethod]
-    public async Task FailedReplacementPreservesLastValidSettings()
+    public async Task MissingMicrophoneCanBeSavedButWhitespaceIdentifierCannot()
     {
         using var directory = new TemporaryDirectory();
         var store = new PreferencesStore(directory.Path);
         var first = new ProductPreferences(1, ShortcutPolicy.Default, "mic", DictationLanguage.En);
         Assert.IsTrue((await store.SaveAsync(AttemptId.New(), first, default)).IsSuccess);
-        var invalid = first with { MicrophoneEndpointId = "" };
+        var withoutMicrophone = first with { MicrophoneEndpointId = "" };
+        Assert.IsTrue((await store.SaveAsync(AttemptId.New(), withoutMicrophone, default)).IsSuccess);
+        Assert.AreEqual(withoutMicrophone, (await store.LoadAsync(AttemptId.New(), default)).Value);
+        var invalid = first with { MicrophoneEndpointId = " " };
         Assert.AreEqual(ErrorCode.CorruptInput,
             (await store.SaveAsync(AttemptId.New(), invalid, default)).Failure?.Code);
-        Assert.AreEqual(first, (await store.LoadAsync(AttemptId.New(), default)).Value);
+        Assert.AreEqual(withoutMicrophone, (await store.LoadAsync(AttemptId.New(), default)).Value);
     }
 
     private sealed class TemporaryDirectory : IDisposable

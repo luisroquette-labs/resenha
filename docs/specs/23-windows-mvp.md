@@ -134,6 +134,13 @@ validate canonical ownership and reject reparse-point traversal. Cleanup failure
 is visible and blocks readiness. Last completed text stays in RAM until replaced,
 cleared or exit; OS clipboard may retain it. See [privacy contract](../PRIVACY.md).
 
+The settings window remains vertically scrollable at its minimum size and under
+Windows display scaling. Opening it re-enumerates active capture devices so a
+microphone connected after launch appears without restarting. A missing microphone
+is an actionable runtime state, not invalid persisted data: shortcut and language
+preferences still save, the device selector explains that no input was found, and
+a dictation attempt reports `ChooseMicrophone` without starting capture.
+
 Public artifact: per-user Inno Setup 6.7.3 EXE, fixed AppId,
 `PrivilegesRequired=lowest`, x64/OS guards, self-contained runtime; no service,
 driver, startup entry, scheduled task or updater. Internal folder/ZIP is not the

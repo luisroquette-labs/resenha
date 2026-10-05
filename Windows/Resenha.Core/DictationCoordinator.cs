@@ -133,10 +133,17 @@ public sealed class DictationCoordinator : IAsyncDisposable
         {
             return Outcome<Unit>.Failed(operation, ErrorCode.Busy);
         }
-        if (preferences.SchemaVersion != 1 || string.IsNullOrWhiteSpace(preferences.MicrophoneEndpointId)
-            || ShortcutPolicy.Validate(preferences.Shortcut) != ErrorCode.None || !Enum.IsDefined(preferences.Language))
+        if (preferences.SchemaVersion != 1 || ShortcutPolicy.Validate(preferences.Shortcut) != ErrorCode.None
+            || !Enum.IsDefined(preferences.Language))
         {
             return Outcome<Unit>.Failed(operation, ErrorCode.NotReady);
+        }
+        if (string.IsNullOrWhiteSpace(preferences.MicrophoneEndpointId))
+        {
+            Publish(new(DictationState.Failed, operation,
+                new(operation, ErrorCode.MicrophoneUnavailable, RecoveryAction.ChooseMicrophone, lastResult),
+                false, lastResult is not null));
+            return Outcome<Unit>.Failed(operation, ErrorCode.MicrophoneUnavailable);
         }
         var attempt = new Attempt(operation, at, preferences);
         current = attempt;

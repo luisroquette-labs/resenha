@@ -10,6 +10,8 @@ public sealed class ProductViewModel : INotifyPropertyChanged, IDisposable
     private readonly DictationCoordinator coordinator;
     private readonly PreferencesStore preferences;
     private readonly ModelStore models;
+    private readonly Func<AttemptId, CancellationToken,
+        ValueTask<Outcome<IReadOnlyList<MicrophoneEndpoint>>>> enumerateMicrophones;
     private readonly Func<ProductPreferences, CancellationToken, ValueTask<Outcome<Unit>>> applyPreferences;
     private readonly SynchronizationContext ui;
     private ProductPreferences value;
@@ -18,12 +20,15 @@ public sealed class ProductViewModel : INotifyPropertyChanged, IDisposable
 
     public ProductViewModel(DictationCoordinator coordinator, PreferencesStore preferences, ModelStore models,
         ProductPreferences initial, IReadOnlyList<MicrophoneEndpoint> microphones,
+        Func<AttemptId, CancellationToken,
+            ValueTask<Outcome<IReadOnlyList<MicrophoneEndpoint>>>> enumerateMicrophones,
         Func<ProductPreferences, CancellationToken, ValueTask<Outcome<Unit>>> applyPreferences,
         SynchronizationContext? ui = null)
     {
         this.coordinator = coordinator;
         this.preferences = preferences;
         this.models = models;
+        this.enumerateMicrophones = enumerateMicrophones;
         this.applyPreferences = applyPreferences;
         value = initial;
         Microphones = microphones;
@@ -37,7 +42,10 @@ public sealed class ProductViewModel : INotifyPropertyChanged, IDisposable
     public event PropertyChangedEventHandler? PropertyChanged;
     public ProductPreferences Preferences => value;
     public Array Languages => Enum.GetValues<DictationLanguage>();
-    public IReadOnlyList<MicrophoneEndpoint> Microphones { get; }
+    public IReadOnlyList<MicrophoneEndpoint> Microphones { get; private set; }
+    public string MicrophoneNotice => Microphones.Count == 0
+        ? "Nenhum microfone encontrado. Conecte um dispositivo para ditar."
+        : string.Empty;
     public List<ShortcutChoice> ShortcutChoices { get; } =
     [
         new("Ctrl esquerdo + Alt esquerdo + Espaço", ShortcutPolicy.Default),
@@ -84,6 +92,31 @@ public sealed class ProductViewModel : INotifyPropertyChanged, IDisposable
         Changed(nameof(SelectedShortcut));
         Changed(nameof(ShortcutLabel));
         return true;
+    }
+
+    public void UpdateMicrophones(IReadOnlyList<MicrophoneEndpoint> microphones)
+    {
+        Microphones = microphones;
+        if (SelectedMicrophone is null)
+        {
+            var selected = microphones.FirstOrDefault(item => item.IsDefault) ?? microphones.FirstOrDefault();
+            value = value with { MicrophoneEndpointId = selected?.Id ?? string.Empty };
+        }
+        Changed(nameof(Microphones));
+        Changed(nameof(SelectedMicrophone));
+        Changed(nameof(MicrophoneNotice));
+    }
+
+    public async ValueTask RefreshMicrophonesAsync(CancellationToken cancellationToken = default)
+    {
+        var result = await enumerateMicrophones(AttemptId.New(), cancellationToken);
+        if (!result.IsSuccess)
+        {
+            Notice = "Não foi possível atualizar os microfones.";
+            return;
+        }
+        UpdateMicrophones(result.Value!);
+        Notice = Microphones.Count == 0 ? "Nenhum microfone encontrado." : "Microfones atualizados";
     }
 
     public async ValueTask<Outcome<Unit>> SaveAsync(CancellationToken cancellationToken = default)
