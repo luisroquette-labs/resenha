@@ -100,6 +100,7 @@ test('cloud Windows validation is manual, bounded, pinned and cannot claim physi
   assert.match(workflow, /permissions:\n\s+contents: read/);
   assert.match(workflow, /runs-on: windows-2022/);
   assert.match(workflow, /timeout-minutes: 35/);
+  assert.match(workflow, /cancel-in-progress: true/);
   for (const sha of ['fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09', '26b0ec14cb23fa6904739307f278c14f94c95bf1',
     '249970729cb0ef3589644e2896645e5dc5ba9c38']) assert.ok(workflow.includes(sha));
   assert.match(workflow, /TestCategory=WindowsIntegration/);
