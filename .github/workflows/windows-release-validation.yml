@@ -78,7 +78,12 @@ jobs:
       - name: Publish unsigned self-contained smoke payload
         if: ${{ always() }}
         working-directory: Windows
-        run: dotnet publish Resenha.Windows/Resenha.Windows.csproj --configuration Release --no-restore --no-build --runtime win-x64 --self-contained true --output ../artifacts/cloud-smoke
+        shell: pwsh
+        run: |
+          dotnet publish Resenha.Windows/Resenha.Windows.csproj --configuration Release --no-restore --no-build --runtime win-x64 --self-contained true --output ../artifacts/cloud-smoke/app
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          dotnet publish Resenha.TargetBroker/Resenha.TargetBroker.csproj --configuration Release --no-restore --no-build --runtime win-x64 --self-contained true --output ../artifacts/cloud-smoke/broker
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
 
       - name: Build pinned whisper.cpp CLI
         if: ${{ always() }}
@@ -92,6 +97,58 @@ jobs:
           if (-not (Test-Path -LiteralPath 'build/windows-x64-cpu/bin/Release/whisper-cli.exe' -PathType Leaf)) {
             throw 'whisper-cli.exe was not produced.'
           }
+
+      - name: Compile install and remove unsigned smoke installer
+        if: ${{ always() }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $toolUrl = 'https://github.com/jrsoftware/issrc/releases/download/is-6_7_3/innosetup-6.7.3.exe'
+          $toolSha256 = '9c73c3bae7ed48d44112a0f48e66742c00090bdb5bef71d9d3c056c66e97b732'
+          $toolInstaller = Join-Path $env:RUNNER_TEMP 'innosetup-6.7.3.exe'
+          $toolRoot = Join-Path $env:RUNNER_TEMP 'innosetup-6.7.3'
+          Invoke-WebRequest -Uri $toolUrl -OutFile $toolInstaller
+          if ((Get-FileHash -LiteralPath $toolInstaller -Algorithm SHA256).Hash.ToLowerInvariant() -ne $toolSha256) {
+            throw 'Pinned Inno Setup installer hash mismatch.'
+          }
+          $signature = Get-AuthenticodeSignature -FilePath $toolInstaller
+          if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch 'Pyrsys B\.V\.') {
+            throw 'Pinned Inno Setup installer signature is not trusted.'
+          }
+          $toolInstall = Start-Process -FilePath $toolInstaller -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', "/DIR=$toolRoot") -Wait -PassThru
+          if ($toolInstall.ExitCode -ne 0) { throw "Inno Setup installation failed: $($toolInstall.ExitCode)" }
+          $iscc = Join-Path $toolRoot 'ISCC.exe'
+          if (-not (Test-Path -LiteralPath $iscc -PathType Leaf)) { throw 'Pinned ISCC.exe is missing.' }
+
+          $payload = Join-Path $env:RUNNER_TEMP 'resenha-cloud-smoke-payload'
+          $output = Join-Path $env:RUNNER_TEMP 'resenha-cloud-smoke-installer'
+          New-Item -ItemType Directory -Path $payload, $output -Force | Out-Null
+          Copy-Item -Path 'artifacts/cloud-smoke/app/*' -Destination $payload -Recurse -Force
+          Copy-Item -Path 'artifacts/cloud-smoke/broker/*' -Destination $payload -Recurse -Force
+          New-Item -ItemType Directory -Path (Join-Path $payload 'native'), (Join-Path $payload 'licenses') -Force | Out-Null
+          Copy-Item -LiteralPath 'Windows/native/build/windows-x64-cpu/bin/Release/whisper-cli.exe' -Destination (Join-Path $payload 'native/whisper-cli.exe')
+          Get-ChildItem -LiteralPath 'Windows/native/build/windows-x64-cpu/bin/Release' -Filter '*.dll' | Copy-Item -Destination (Join-Path $payload 'native')
+          Copy-Item -LiteralPath 'LICENSE' -Destination (Join-Path $payload 'licenses/Resenha-MIT.txt')
+          Copy-Item -LiteralPath 'THIRD_PARTY_NOTICES.md' -Destination (Join-Path $payload 'licenses')
+          Copy-Item -LiteralPath 'Vendor/whisper.cpp/LICENSE' -Destination (Join-Path $payload 'licenses/whisper.cpp-MIT.txt')
+
+          & $iscc '/DAppVersion=0.0.0' "/DPayloadDir=$payload" "/DOutputDir=$output" '/DSmokeUnsigned=1' 'Windows/Installer/Resenha.iss'
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $installer = Join-Path $output 'Resenha-0.0.0-windows-x64-UNSIGNED-NOT-FOR-DISTRIBUTION.exe'
+          if (-not (Test-Path -LiteralPath $installer -PathType Leaf)) { throw 'Unsigned smoke installer was not produced.' }
+          if ((Get-AuthenticodeSignature -FilePath $installer).Status -ne 'NotSigned') { throw 'Smoke installer must remain unsigned.' }
+
+          $installedRoot = Join-Path $env:RUNNER_TEMP 'resenha-installed-smoke'
+          $install = Start-Process -FilePath $installer -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', "/DIR=$installedRoot") -Wait -PassThru
+          if ($install.ExitCode -ne 0) { throw "Smoke install failed: $($install.ExitCode)" }
+          foreach ($relative in @('Resenha.exe', 'Resenha.TargetBroker.exe', 'native/whisper-cli.exe')) {
+            if (-not (Test-Path -LiteralPath (Join-Path $installedRoot $relative) -PathType Leaf)) { throw "Installed payload missing: $relative" }
+          }
+          $uninstaller = Join-Path $installedRoot 'unins000.exe'
+          $uninstall = Start-Process -FilePath $uninstaller -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART') -Wait -PassThru
+          if ($uninstall.ExitCode -ne 0) { throw "Smoke uninstall failed: $($uninstall.ExitCode)" }
+          for ($attempt = 0; $attempt -lt 20 -and (Test-Path -LiteralPath $installedRoot); $attempt++) { Start-Sleep -Milliseconds 250 }
+          if (Test-Path -LiteralPath $installedRoot) { throw 'Smoke uninstall left the application directory behind.' }
 
       - name: Run portable release and site contracts
         if: ${{ always() }}

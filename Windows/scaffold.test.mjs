@@ -108,7 +108,20 @@ test('cloud Windows validation is manual, bounded, pinned and cannot claim physi
   assert.match(workflow, /working-directory: Windows\/native/);
   assert.doesNotMatch(workflow, /cmake --preset windows-x64-cpu -S native/);
   assert.match(workflow, /cmake --build --preset windows-x64-cpu/);
+  assert.match(workflow, /innosetup-6\.7\.3\.exe/);
+  assert.match(workflow, /9c73c3bae7ed48d44112a0f48e66742c00090bdb5bef71d9d3c056c66e97b732/);
+  assert.ok(workflow.includes('Pyrsys B\\.V\\.'));
+  assert.match(workflow, /UNSIGNED-NOT-FOR-DISTRIBUTION/);
+  assert.match(workflow, /Smoke uninstall left the application directory behind/);
   assert.doesNotMatch(workflow, /upload-artifact|gh release|approvedHostInventory|physical-windows/u);
+});
+
+test('installer separates ephemeral unsigned smoke from the signed release contract', () => {
+  const installer = read('Installer/Resenha.iss');
+  assert.match(installer, /#ifdef SmokeUnsigned/);
+  assert.match(installer, /UNSIGNED-NOT-FOR-DISTRIBUTION/);
+  assert.match(installer, /SignedUninstaller=no/);
+  assert.match(installer, /#else\nSignedUninstaller=yes\nSignTool=resenha/);
 });
 
 test('repository text policy keeps byte-identity contracts deterministic on Windows', () => {

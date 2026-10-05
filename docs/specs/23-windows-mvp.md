@@ -141,6 +141,12 @@ public download. Removal exits children, removes installed/owned session files
 and offers **Remove model and settings**, selected by default. Preserve imported
 source files, documents, unrelated data and clipboard. Test spaces/non-ASCII paths.
 
+A cloud Windows runner may compile, install and uninstall an explicitly named
+`UNSIGNED-NOT-FOR-DISTRIBUTION` smoke installer using the exact pinned Inno Setup
+compiler. That artifact is ephemeral, is never uploaded or promoted, and proves
+packaging mechanics only. It cannot satisfy signature, Defender, microphone,
+hotkey, insertion, physical OS or publication acceptance.
+
 ## Release truthfulness and evidence producers
 
 All release fields initially pending. A physical owner-controlled Windows 11

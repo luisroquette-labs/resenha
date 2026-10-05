@@ -9,6 +9,11 @@
 #endif
 #define AppPublisher "Luis Roquette"
 #define AppExeName "Resenha.exe"
+#ifdef SmokeUnsigned
+  #define InstallerBaseName "Resenha-" + AppVersion + "-windows-x64-UNSIGNED-NOT-FOR-DISTRIBUTION"
+#else
+  #define InstallerBaseName "Resenha-" + AppVersion + "-windows-x64-setup"
+#endif
 
 [Setup]
 AppId={{A83D31F2-02BC-4F04-A101-7120B87F8E38}
@@ -26,7 +31,7 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0.19045
 OutputDir={#OutputDir}
-OutputBaseFilename=Resenha-{#AppVersion}-windows-x64-setup
+OutputBaseFilename={#InstallerBaseName}
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
@@ -39,10 +44,14 @@ RestartApplications=no
 RestartIfNeededByRun=no
 CreateUninstallRegKey=yes
 Uninstallable=yes
+#ifdef SmokeUnsigned
+SignedUninstaller=no
+#else
 SignedUninstaller=yes
 SignTool=resenha
 SignToolRetryCount=2
 SignToolRunMinimized=yes
+#endif
 VersionInfoVersion={#AppVersion}.0
 VersionInfoCompany={#AppPublisher}
 VersionInfoDescription=Resenha — ditado local para Windows
