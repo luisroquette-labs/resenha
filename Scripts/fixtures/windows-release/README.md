@@ -91,7 +91,7 @@ detection/policy denial fails. Both stages require verifier report identity.
 The only permitted hosted URL is exactly:
 
 ```text
-https://github.com/luisroquette/resenha/releases/download/windows-v<version>/Resenha-<version>-windows-x64-setup.exe
+https://github.com/luisroquette-labs/resenha/releases/download/windows-v<version>/Resenha-<version>-windows-x64-setup.exe
 ```
 
 No `latest`, arbitrary host, query string, redirect parameter or macOS asset is

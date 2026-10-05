@@ -33,7 +33,7 @@ public sealed record ReleaseDecision(bool ContractValid, bool CandidateReady, bo
 /// </summary>
 public static class ReleasePolicy
 {
-    public const string SchemaSha256 = "3fc71b746406b7f5c9191282e0165a1c91d7dc3aa9cba2a16e885d1eb8802d59";
+    public const string SchemaSha256 = "b759897136de1644e2fc69a328c8203830b2c104c0bd9f4ca8cd392e27d322fd";
     private static readonly string[] RequiredPayload = ["Resenha.exe", "Resenha.TargetBroker.exe", "native/whisper-cli.exe", "unins000.exe"];
 
     public static ReleaseDecision Evaluate(string manifestJson, string schemaJson, ReleaseEvidenceInputs inputs)
@@ -83,7 +83,7 @@ public static class ReleasePolicy
     }
 
     public static string ExpectedAssetUrl(string version) =>
-        $"https://github.com/luisroquette/resenha/releases/download/windows-v{version}/Resenha-{version}-windows-x64-setup.exe";
+        $"https://github.com/luisroquette-labs/resenha/releases/download/windows-v{version}/Resenha-{version}-windows-x64-setup.exe";
 
     private static void ValidateIdentity(JsonElement root, ReleaseEvidenceInputs inputs)
     {

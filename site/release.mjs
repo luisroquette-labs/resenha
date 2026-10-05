@@ -12,23 +12,23 @@ const copy = Object.freeze({
 export const releaseState = Object.freeze({
   macos: Object.freeze({ state: 'published', platform: 'macos', version: '1.0.0',
     architecture: 'Apple Silicon (arm64)', minimumOS: 'macOS 14+',
-    url: 'https://github.com/luisroquette/resenha/releases/download/v1.0.0/Resenha-1.0.0-arm64.dmg',
+    url: 'https://github.com/luisroquette-labs/resenha/releases/download/v1.0.0/Resenha-1.0.0-arm64.dmg',
     evidence: Object.freeze({ channel: 'macos',
-      url: 'https://github.com/luisroquette/resenha/releases/download/v1.0.0/Resenha-1.0.0-arm64.dmg',
+      url: 'https://github.com/luisroquette-labs/resenha/releases/download/v1.0.0/Resenha-1.0.0-arm64.dmg',
       verifiedAt: '2026-10-04T00:35:16Z', artifact: Object.freeze({ platform: 'macos', version: '1.0.0',
         sha256: '9fc0728419c8c2ca4feb0631667a4ce8cdf88cfd894c821b3f82b98533056985',
         notarizationId: 'e3471859-6fe0-4166-8c6e-bcb723afdab3', notarizationStatus: 'Accepted' }) }) }),
-  source: Object.freeze({ state: 'published', url: 'https://github.com/luisroquette/resenha',
-    evidence: Object.freeze({ channel: 'source', url: 'https://github.com/luisroquette/resenha',
+  source: Object.freeze({ state: 'published', url: 'https://github.com/luisroquette-labs/resenha',
+    evidence: Object.freeze({ channel: 'source', url: 'https://github.com/luisroquette-labs/resenha',
       verifiedAt: '2026-10-03T02:30:00Z' }) }),
   store: Object.freeze({ state: 'planned', url: null, evidence: null }),
   windows: Object.freeze({ state: 'unavailable', platform: 'windows', version: null,
     architecture: 'x64', minimumOS: 'Windows 10 22H2 / Windows 11 25H2', url: null, evidence: null }),
   windowsBeta: Object.freeze({ state: 'beta', platform: 'windows', version: '0.1.0',
     architecture: 'x64', minimumOS: 'Windows 10 22H2 / Windows 11',
-    url: 'https://github.com/luisroquette/resenha/releases/download/windows-beta-v0.1.0/Resenha-0.1.0-windows-x64-BETA-UNSIGNED.exe',
+    url: 'https://github.com/luisroquette-labs/resenha/releases/download/windows-beta-v0.1.0/Resenha-0.1.0-windows-x64-BETA-UNSIGNED.exe',
     evidence: Object.freeze({ channel: 'windowsBeta',
-      url: 'https://github.com/luisroquette/resenha/releases/download/windows-beta-v0.1.0/Resenha-0.1.0-windows-x64-BETA-UNSIGNED.exe',
+      url: 'https://github.com/luisroquette-labs/resenha/releases/download/windows-beta-v0.1.0/Resenha-0.1.0-windows-x64-BETA-UNSIGNED.exe',
       verifiedAt: '2026-10-05T10:41:00Z', artifact: Object.freeze({ platform: 'windows', version: '0.1.0',
         filename: 'Resenha-0.1.0-windows-x64-BETA-UNSIGNED.exe',
         sha256: 'c189565d510c1e4f4d0b7843cddc9974a5e9a9846632a005ec55af6bef38b497',
@@ -69,7 +69,7 @@ export function resolveDestination(channel, record) {
     || evidence.artifact.notarizationStatus !== 'Accepted')) return inactive();
   if (channel === 'windows') {
     const expectedName = `Resenha-${record.version}-windows-x64-setup.exe`;
-    const expectedPath = `/luisroquette/resenha/releases/download/windows-v${record.version}/${expectedName}`;
+    const expectedPath = `/luisroquette-labs/resenha/releases/download/windows-v${record.version}/${expectedName}`;
     if (record.platform !== 'windows' || record.architecture !== 'x64' || !nonempty(record.version)
       || url.pathname !== expectedPath || evidence.artifact?.platform !== 'windows'
       || evidence.artifact.version !== record.version || evidence.artifact.filename !== expectedName
@@ -82,7 +82,7 @@ export function resolveDestination(channel, record) {
   }
   if (channel === 'windowsBeta') {
     const expectedName = `Resenha-${record.version}-windows-x64-BETA-UNSIGNED.exe`;
-    const expectedPath = `/luisroquette/resenha/releases/download/windows-beta-v${record.version}/${expectedName}`;
+    const expectedPath = `/luisroquette-labs/resenha/releases/download/windows-beta-v${record.version}/${expectedName}`;
     if (record.platform !== 'windows' || record.architecture !== 'x64' || !nonempty(record.version)
       || url.pathname !== expectedPath || evidence.artifact?.platform !== 'windows'
       || evidence.artifact.version !== record.version || evidence.artifact.filename !== expectedName

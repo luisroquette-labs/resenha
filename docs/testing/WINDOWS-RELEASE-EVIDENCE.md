@@ -118,7 +118,7 @@ per OS and clean removal. A VM/cross-build or asserted pass is insufficient.
 
 Only with publication authority upload the exact tested final bytes to the
 versioned GitHub Release. Expected destination pattern is
-`https://github.com/luisroquette/resenha/releases/download/windows-v<version>/Resenha-<version>-windows-x64-setup.exe`;
+`https://github.com/luisroquette-labs/resenha/releases/download/windows-v<version>/Resenha-<version>-windows-x64-setup.exe`;
 it is a naming contract, not an existing verified download. Keep artifact URL
 pending until actual hosting. Download through a browser on clean physical
 Windows, preserving Mark of the Web (`Zone.Identifier`), measure bytes/hash and

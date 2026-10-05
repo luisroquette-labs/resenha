@@ -15,7 +15,7 @@ export function projectWindowsRelease(manifest, verification, download) {
   if (verification?.contractValid !== true || verification.hostedReady !== true || verification.canEnablePublicDownload !== true) throw new Error('Verifier did not authorize public download.');
   if (verification.sourceCommit !== manifest.sourceCommit || verification.artifactSha256 !== manifest.sha256) throw new Error('Verifier identity mismatch.');
   const expectedName = `Resenha-${manifest.version}-windows-x64-setup.exe`;
-  const expectedUrl = `https://github.com/luisroquette/resenha/releases/download/windows-v${manifest.version}/${expectedName}`;
+  const expectedUrl = `https://github.com/luisroquette-labs/resenha/releases/download/windows-v${manifest.version}/${expectedName}`;
   if (manifest.filename !== expectedName || manifest.hosting?.url !== expectedUrl || manifest.hosting.downloadedSha256 !== manifest.sha256) throw new Error('Hosted identity mismatch.');
   if (download?.url !== expectedUrl || download.sha256 !== manifest.sha256 || download.byteLength !== manifest.byteLength || download.publisherDisplay !== manifest.signatures.publisher) throw new Error('Browser download evidence mismatch.');
   return Object.freeze({ state: 'published', platform: 'windows', version: manifest.version, architecture: 'x64',

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/luisroquette/resenha/blob/main/Windows/release-manifest.schema.json",
+  "$id": "https://github.com/luisroquette-labs/resenha/blob/main/Windows/release-manifest.schema.json",
   "title": "Resenha Windows release evidence v1",
   "description": "Structural contract only. ReleasePolicy additionally hashes supplied artifact/payload/reports, checks cross-field identity and report DAG. Synthetic fixtures never authorize publication. The manifest checksum is external.",
   "type": "object",

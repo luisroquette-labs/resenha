@@ -27,18 +27,18 @@ const negative = (name, change, channel = 'macos') => {
 const urlCase = (name, url) => negative(name, record => { record.url = url; record.evidence.url = url; });
 const windows = { state: 'published', platform: 'windows', version: '1.2.3', architecture: 'x64',
   minimumOS: 'Windows 10 22H2 / Windows 11 25H2',
-  url: 'https://github.com/luisroquette/resenha/releases/download/windows-v1.2.3/Resenha-1.2.3-windows-x64-setup.exe',
+  url: 'https://github.com/luisroquette-labs/resenha/releases/download/windows-v1.2.3/Resenha-1.2.3-windows-x64-setup.exe',
   evidence: { channel: 'windows',
-    url: 'https://github.com/luisroquette/resenha/releases/download/windows-v1.2.3/Resenha-1.2.3-windows-x64-setup.exe',
+    url: 'https://github.com/luisroquette-labs/resenha/releases/download/windows-v1.2.3/Resenha-1.2.3-windows-x64-setup.exe',
     verifiedAt: '2026-10-04T12:00:00Z', artifact: { platform: 'windows', version: '1.2.3',
       filename: 'Resenha-1.2.3-windows-x64-setup.exe', sha256: 'b'.repeat(64), sourceCommit: 'c'.repeat(40),
       signature: 'valid-trusted-rfc3161', scan: 'passed-zero-detections', physicalWindows10: true,
       physicalWindows11: true, hostedSha256: 'b'.repeat(64) } } };
 const windowsBeta = { state: 'beta', platform: 'windows', version: '0.1.0', architecture: 'x64',
   minimumOS: 'Windows 10 22H2 / Windows 11',
-  url: 'https://github.com/luisroquette/resenha/releases/download/windows-beta-v0.1.0/Resenha-0.1.0-windows-x64-BETA-UNSIGNED.exe',
+  url: 'https://github.com/luisroquette-labs/resenha/releases/download/windows-beta-v0.1.0/Resenha-0.1.0-windows-x64-BETA-UNSIGNED.exe',
   evidence: { channel: 'windowsBeta',
-    url: 'https://github.com/luisroquette/resenha/releases/download/windows-beta-v0.1.0/Resenha-0.1.0-windows-x64-BETA-UNSIGNED.exe',
+    url: 'https://github.com/luisroquette-labs/resenha/releases/download/windows-beta-v0.1.0/Resenha-0.1.0-windows-x64-BETA-UNSIGNED.exe',
     verifiedAt: '2026-10-05T10:41:00Z', artifact: { platform: 'windows', version: '0.1.0',
       filename: 'Resenha-0.1.0-windows-x64-BETA-UNSIGNED.exe', sha256: 'e'.repeat(64),
       sourceCommit: 'f'.repeat(40), signature: 'unsigned-owner-authorized-beta', cloudInstall: 'passed',
@@ -126,7 +126,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
   });
   test('CK-7/15: published DMG and source resolve while retired Store fails closed', () => {
     assert.equal(resolveDestination('source', releaseState.source).active, true);
-    assert.equal(resolveDestination('source', releaseState.source).href, 'https://github.com/luisroquette/resenha');
+    assert.equal(resolveDestination('source', releaseState.source).href, 'https://github.com/luisroquette-labs/resenha');
     assert.equal(resolveDestination('macos', releaseState.macos).active, true);
     assert.match(resolveDestination('macos', releaseState.macos).href, /Resenha-1\.0\.0-arm64\.dmg$/u);
     assert.equal(releaseState.store.url, null);
@@ -353,7 +353,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
         assert.ok((comparison.body.match(/data-reveal/gu) ?? []).length >= 5);
         const robots = await get(preview.origin, prefix + 'robots.txt');
         assert.equal(robots.status, 200);
-        assert.match(robots.body, /Sitemap: https:\/\/luisroquette\.github\.io\/resenha\/sitemap\.xml/u);
+        assert.match(robots.body, /Sitemap: https:\/\/luisroquette-labs\.github\.io\/resenha\/sitemap\.xml/u);
         const sitemap = await get(preview.origin, prefix + 'sitemap.xml');
         assert.equal(sitemap.status, 200);
         assert.match(sitemap.body, /alternativa-wispr-flow/u);

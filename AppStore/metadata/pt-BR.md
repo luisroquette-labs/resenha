@@ -52,6 +52,6 @@ texto,transcrição,Whisper,offline,português,atalho,microfone,produtividade,pr
 
 ## URLs
 
-- Suporte: https://github.com/luisroquette/resenha/issues
-- Marketing: https://luisroquette.github.io/resenha/
-- Privacidade: https://luisroquette.github.io/resenha/privacy/
+- Suporte: https://github.com/luisroquette-labs/resenha/issues
+- Marketing: https://luisroquette-labs.github.io/resenha/
+- Privacidade: https://luisroquette-labs.github.io/resenha/privacy/
