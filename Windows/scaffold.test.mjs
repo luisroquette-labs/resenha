@@ -116,16 +116,21 @@ test('cloud Windows validation is manual, bounded, pinned and cannot claim physi
   assert.match(workflow, /Invoke-BoundedProcess/);
   assert.match(workflow, /Inno smoke compilation.*300/);
   assert.match(workflow, /Smoke uninstall left the application directory behind/);
-  assert.doesNotMatch(workflow, /upload-artifact|gh release|approvedHostInventory|physical-windows/u);
+  assert.match(workflow, /publish_beta:/u);
+  assert.match(workflow, /owner-authorized-unsigned-beta/u);
+  assert.match(workflow, /actions\/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02/u);
+  assert.match(workflow, /retention-days: 1/u);
+  assert.doesNotMatch(workflow, /gh release|approvedHostInventory|physical-windows/u);
 });
 
 test('installer separates ephemeral unsigned smoke from the signed release contract', () => {
   const installer = read('Installer/Resenha.iss');
   assert.match(installer, /#ifdef SmokeUnsigned/);
   assert.match(installer, /UNSIGNED-NOT-FOR-DISTRIBUTION/);
+  assert.match(installer, /BETA-UNSIGNED/);
   assert.match(installer, /SignedUninstaller=no/);
   assert.match(installer, /#ifdef SmokeUnsigned\nCompression=zip\/1\nSolidCompression=no\n#else\nCompression=lzma2\/max\nSolidCompression=yes/);
-  assert.match(installer, /#else\nSignedUninstaller=yes\nSignTool=resenha/);
+  assert.match(installer, /#ifdef BetaUnsigned\nSignedUninstaller=no\n\s+#else\nSignedUninstaller=yes\nSignTool=resenha/);
   assert.match(installer, /if UninstallSilent then\n\s+RemoveLocalData := True/);
 });
 

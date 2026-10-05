@@ -12,7 +12,11 @@
 #ifdef SmokeUnsigned
   #define InstallerBaseName "Resenha-" + AppVersion + "-windows-x64-UNSIGNED-NOT-FOR-DISTRIBUTION"
 #else
-  #define InstallerBaseName "Resenha-" + AppVersion + "-windows-x64-setup"
+  #ifdef BetaUnsigned
+    #define InstallerBaseName "Resenha-" + AppVersion + "-windows-x64-BETA-UNSIGNED"
+  #else
+    #define InstallerBaseName "Resenha-" + AppVersion + "-windows-x64-setup"
+  #endif
 #endif
 
 [Setup]
@@ -52,10 +56,14 @@ Uninstallable=yes
 #ifdef SmokeUnsigned
 SignedUninstaller=no
 #else
+  #ifdef BetaUnsigned
+SignedUninstaller=no
+  #else
 SignedUninstaller=yes
 SignTool=resenha
 SignToolRetryCount=2
 SignToolRunMinimized=yes
+  #endif
 #endif
 VersionInfoVersion={#AppVersion}.0
 VersionInfoCompany={#AppPublisher}

@@ -147,6 +147,15 @@ compiler. That artifact is ephemeral, is never uploaded or promoted, and proves
 packaging mechanics only. It cannot satisfy signature, Defender, microphone,
 hotkey, insertion, physical OS or publication acceptance.
 
+An owner-authorized physical-test beta is a separate channel. It may be retained
+for one day by a manually dispatched workflow, then published as an explicitly
+named `BETA-UNSIGNED` GitHub prerelease for transfer to the owner's Windows host.
+The website must say that it is unsigned, may trigger SmartScreen and is not the
+final Windows release. Cloud compile/install/uninstall evidence may be shown, but
+signature, Defender, microphone, shortcut, insertion and physical acceptance
+remain pending until observed on the downloaded bytes. This exception never
+promotes the production Windows release state.
+
 ## Release truthfulness and evidence producers
 
 All release fields initially pending. A physical owner-controlled Windows 11

@@ -2,6 +2,17 @@ name: Windows release validation
 
 on:
   workflow_dispatch:
+    inputs:
+      publish_beta:
+        description: 'Retain an explicitly unsigned owner-authorized beta for 1 day'
+        required: true
+        default: false
+        type: boolean
+      beta_version:
+        description: 'Numeric Windows beta version'
+        required: true
+        default: '0.1.0'
+        type: string
   pull_request:
     types: [labeled]
 
@@ -141,8 +152,13 @@ jobs:
           Copy-Item -LiteralPath 'THIRD_PARTY_NOTICES.md' -Destination (Join-Path $payload 'licenses')
           Copy-Item -LiteralPath 'Vendor/whisper.cpp/LICENSE' -Destination (Join-Path $payload 'licenses/whisper.cpp-MIT.txt')
 
-          Invoke-BoundedProcess 'Inno smoke compilation' $iscc @('/DAppVersion=0.0.0', "/DPayloadDir=$payload", "/DOutputDir=$output", '/DSmokeUnsigned=1', 'Windows/Installer/Resenha.iss') 300
-          $installer = Join-Path $output 'Resenha-0.0.0-windows-x64-UNSIGNED-NOT-FOR-DISTRIBUTION.exe'
+          $publishBeta = '${{ inputs.publish_beta }}' -eq 'true'
+          $appVersion = if ($publishBeta) { '${{ inputs.beta_version }}' } else { '0.0.0' }
+          if ($appVersion -notmatch '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$') { throw 'Beta version must be numeric SemVer.' }
+          $modeDefine = if ($publishBeta) { '/DBetaUnsigned=1' } else { '/DSmokeUnsigned=1' }
+          Invoke-BoundedProcess 'Inno smoke compilation' $iscc @("/DAppVersion=$appVersion", "/DPayloadDir=$payload", "/DOutputDir=$output", $modeDefine, 'Windows/Installer/Resenha.iss') 300
+          $installerName = if ($publishBeta) { "Resenha-$appVersion-windows-x64-BETA-UNSIGNED.exe" } else { 'Resenha-0.0.0-windows-x64-UNSIGNED-NOT-FOR-DISTRIBUTION.exe' }
+          $installer = Join-Path $output $installerName
           if (-not (Test-Path -LiteralPath $installer -PathType Leaf)) { throw 'Unsigned smoke installer was not produced.' }
           if ((Get-AuthenticodeSignature -FilePath $installer).Status -ne 'NotSigned') { throw 'Smoke installer must remain unsigned.' }
 
@@ -156,6 +172,36 @@ jobs:
           for ($attempt = 0; $attempt -lt 20 -and (Test-Path -LiteralPath $installedRoot); $attempt++) { Start-Sleep -Milliseconds 250 }
           if (Test-Path -LiteralPath $installedRoot) { throw 'Smoke uninstall left the application directory behind.' }
 
+          if ($publishBeta) {
+            $betaRoot = 'artifacts/windows-beta'
+            New-Item -ItemType Directory -Path $betaRoot -Force | Out-Null
+            Copy-Item -LiteralPath $installer -Destination (Join-Path $betaRoot $installerName)
+            $hash = (Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash  $installerName" | Set-Content -LiteralPath (Join-Path $betaRoot "$installerName.sha256") -Encoding ascii -NoNewline
+            [ordered]@{
+              schemaVersion = 1
+              channel = 'owner-authorized-unsigned-beta'
+              version = $appVersion
+              filename = $installerName
+              sha256 = $hash
+              sourceCommit = '${{ github.sha }}'
+              signature = 'unsigned'
+              cloudInstall = 'passed'
+              cloudUninstall = 'passed'
+              physicalWindows = 'pending'
+            } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $betaRoot 'beta-evidence.json') -Encoding utf8NoBOM
+          }
+
       - name: Run portable release and site contracts
         if: ${{ always() }}
         run: node --test Scripts/windows-docs.test.mjs Scripts/windows-release.test.mjs Scripts/site.test.mjs Windows/scaffold.test.mjs
+
+      - name: Retain owner-authorized unsigned beta for transfer
+        if: ${{ success() && github.event_name == 'workflow_dispatch' && inputs.publish_beta == true }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: Resenha-Windows-Beta-${{ inputs.beta_version }}-${{ github.sha }}
+          path: artifacts/windows-beta/*
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
