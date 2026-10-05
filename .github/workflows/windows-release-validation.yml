@@ -192,6 +192,27 @@ jobs:
             } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $betaRoot 'beta-evidence.json') -Encoding utf8NoBOM
           }
 
+      - name: Build and validate synthetic Microsoft Store MSIX
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $payload = Join-Path $env:RUNNER_TEMP 'resenha-msix-smoke-payload'
+          $output = Join-Path $env:RUNNER_TEMP 'resenha-msix-smoke-output'
+          New-Item -ItemType Directory -Path $payload -Force | Out-Null
+          Copy-Item -Path 'artifacts/cloud-smoke/app/*' -Destination $payload -Recurse -Force
+          Copy-Item -Path 'artifacts/cloud-smoke/broker/*' -Destination $payload -Recurse -Force
+          New-Item -ItemType Directory -Path (Join-Path $payload 'native'), (Join-Path $payload 'licenses') -Force | Out-Null
+          Copy-Item -LiteralPath 'Windows/native/build/windows-x64-cpu/bin/Release/whisper-cli.exe' -Destination (Join-Path $payload 'native/whisper-cli.exe')
+          Get-ChildItem -LiteralPath 'Windows/native/build/windows-x64-cpu/bin/Release' -Filter '*.dll' | Copy-Item -Destination (Join-Path $payload 'native')
+          Copy-Item -LiteralPath 'LICENSE' -Destination (Join-Path $payload 'licenses/Resenha-MIT.txt')
+          Copy-Item -LiteralPath 'THIRD_PARTY_NOTICES.md' -Destination (Join-Path $payload 'licenses')
+          Copy-Item -LiteralPath 'Vendor/whisper.cpp/LICENSE' -Destination (Join-Path $payload 'licenses/whisper.cpp-MIT.txt')
+          & 'Scripts/windows/build-msix.ps1' -Mode synthetic-smoke -Version '0.1.0.0' -PayloadDir $payload -OutputDir $output
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $package = Join-Path $output 'Resenha-0.1.0.0-windows-x64-SYNTHETIC-NOT-FOR-SUBMISSION.msix'
+          if (-not (Test-Path -LiteralPath $package -PathType Leaf)) { throw 'Synthetic MSIX was not produced.' }
+          if (Test-Path -LiteralPath 'artifacts/windows-msix') { throw 'Synthetic MSIX must remain ephemeral.' }
+
       - name: Run portable release and site contracts
         if: ${{ always() }}
         run: node --test Scripts/windows-docs.test.mjs Scripts/windows-release.test.mjs Scripts/site.test.mjs Windows/scaffold.test.mjs

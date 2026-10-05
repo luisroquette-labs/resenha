@@ -52,7 +52,7 @@ The app requests permissions only after explicit user action and exposes separat
 
 Unit tests prove shortcut serialization/matching, permission combinations, clipboard staging and target identity. A signed app with real TCC grants must still prove physical TextEdit insertion, then browser and terminal compatibility. The legacy sandboxed Service design remains documented in SPEC-017 but is not registered in the direct bundle.
 
-## Windows accepted architecture — pending implementation and evidence
+## Windows architecture — implementation available, Store acceptance pending
 
 [SPEC-023](specs/23-windows-mvp.md) is the versioned Windows behavior contract;
 [physical evidence](testing/WINDOWS-MVP-EVIDENCE.md) and
@@ -87,14 +87,15 @@ Only preferences and a hash-verified multilingual model persist; owned session
 files are removed on every terminal path and next startup. Model download/import
 is explicit; established dictation works offline. See [privacy](PRIVACY.md).
 
-Distribution uses a per-user signed Inno Setup 6.7.3 EXE, not the internal ZIP.
-Payload/uninstaller/installer signing precedes final hashing, Defender scans and
-both physical OS runs. Exact tested bytes, report hashes and actual browser
-download identity precede site promotion. Windows is planned/unavailable while
-host, trusted certificate, physical QA, hosting or dedicated CF Gauss Windows
-form/redirect evidence is missing. No host/certificate possession is asserted.
-The required name/email/WhatsApp flow freezes platform selection and rejects
-foreign, malformed, duplicate and stale completions; macOS routing remains separate.
+Consumer distribution uses a full-trust x64 MSIX through Microsoft Store, with
+the exact identity copied from Partner Center. Microsoft signs an accepted Store
+package. Synthetic CI MSIX files are unpacked for structural validation, remain
+ephemeral and can never be submitted. The current public Inno Setup EXE is an
+explicitly unsigned physical-test Beta and may trigger SmartScreen; it is not the
+final channel. Store certification, a clean physical Store install and exact
+package evidence precede replacing that Beta route on the website. See
+[SPEC-024](specs/24-windows-store-msix.md) and
+[Store evidence](testing/WINDOWS-STORE-EVIDENCE.md).
 
 New implementation belongs to Windows/ and Scripts/windows/. Protected Swift,
 macOS tests/project/config/framework/media/release scripts, existing output

@@ -3,8 +3,9 @@
 **Fale. O Resenha escreve.** Ditado push-to-talk nativo para macOS, gratuito,
 local e de código aberto. Requer Apple Silicon e macOS 14 ou posterior.
 
-Windows: MVP em desenvolvimento; download indisponível enquanto as evidências
-de execução física, assinatura, scan e distribuição estiverem pendentes.
+Windows: há um EXE Beta público e explicitamente não assinado para testes. Ele
+pode acionar o SmartScreen. A distribuição final para leigos será o MSIX da
+Microsoft Store após certificação e teste físico do pacote exato.
 
 Segure o atalho, fale e solte. O Resenha grava só enquanto a combinação está
 pressionada, transcreve com whisper.cpp no próprio Mac e devolve o texto ao
@@ -93,10 +94,11 @@ falha de colagem exigem recuperação manual. Despacho de input não comprova
 aceitação pelo editor e não garante inserção automática.
 
 Leia [SPEC-023](docs/specs/23-windows-mvp.md),
+[SPEC-024](docs/specs/24-windows-store-msix.md),
 [protocolo físico](docs/testing/WINDOWS-MVP-EVIDENCE.md) e
-[protocolo de release](docs/testing/WINDOWS-RELEASE-EVIDENCE.md).
-Host físico Windows 10/11, certificado confiável e formulário/redirect Windows
-dedicados ainda são pré-requisitos pendentes, não recursos comprovados.
+[protocolo da Store](docs/testing/WINDOWS-STORE-EVIDENCE.md). O EXE Beta não é
+o canal final: identidade do Partner Center, certificação do MSIX e instalação
+física pela Store ainda são gates pendentes.
 
 ```sh
 ~/.local/bin/mac-gate node --test Scripts/windows-docs.test.mjs

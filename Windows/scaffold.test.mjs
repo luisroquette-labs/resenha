@@ -7,6 +7,11 @@ import test from 'node:test';
 const root = dirname(fileURLToPath(import.meta.url));
 const read = (path) => readFileSync(resolve(root, path), 'utf8').replaceAll('\r\n', '\n');
 const json = (path) => JSON.parse(read(path));
+const pngSize = (path) => {
+  const bytes = readFileSync(resolve(root, path));
+  assert.equal(bytes.subarray(1, 4).toString('ascii'), 'PNG');
+  return [bytes.readUInt32BE(16), bytes.readUInt32BE(20)];
+};
 const projects = ['Resenha.Core', 'Resenha.Platform', 'Resenha.Windows', 'Resenha.TargetBroker', 'Resenha.Core.Tests', 'Resenha.Platform.Tests', 'Resenha.ReleaseVerifier'];
 
 test('solution references exactly the seven existing projects with no escaping references', () => {
@@ -116,11 +121,39 @@ test('cloud Windows validation is manual, bounded, pinned and cannot claim physi
   assert.match(workflow, /Invoke-BoundedProcess/);
   assert.match(workflow, /Inno smoke compilation.*300/);
   assert.match(workflow, /Smoke uninstall left the application directory behind/);
+  assert.match(workflow, /Build and validate synthetic Microsoft Store MSIX/u);
+  assert.match(workflow, /build-msix\.ps1.*synthetic-smoke/u);
+  assert.match(workflow, /SYNTHETIC-NOT-FOR-SUBMISSION\.msix/u);
+  assert.match(workflow, /Synthetic MSIX must remain ephemeral/u);
   assert.match(workflow, /publish_beta:/u);
   assert.match(workflow, /owner-authorized-unsigned-beta/u);
   assert.match(workflow, /actions\/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02/u);
   assert.match(workflow, /retention-days: 1/u);
   assert.doesNotMatch(workflow, /gh release|approvedHostInventory|physical-windows/u);
+});
+
+test('MSIX Store package is full-trust, identity-gated and never promotes synthetic smoke', () => {
+  const manifest = read('Store/AppxManifest.xml.template');
+  const script = read('../Scripts/windows/build-msix.ps1');
+  assert.match(manifest, /Windows\.FullTrustApplication/u);
+  assert.match(manifest, /TargetDeviceFamily Name="Windows\.Desktop" MinVersion="10\.0\.19045\.0" MaxVersionTested="10\.0\.26200\.0"/u);
+  assert.match(manifest, /DeviceCapability Name="microphone"/u);
+  assert.match(manifest, /rescap:Capability Name="runFullTrust"/u);
+  assert.match(manifest, /ProcessorArchitecture="x64"/u);
+  for (const token of ['__IDENTITY_NAME__', '__PUBLISHER__', '__VERSION__', '__PUBLISHER_DISPLAY_NAME__']) assert.ok(manifest.includes(token));
+  assert.match(script, /ValidateSet\('synthetic-smoke', 'store-candidate'\)/u);
+  assert.match(script, /Store candidate authorization reference is required/u);
+  assert.match(script, /Partner Center .* is missing or non-production/u);
+  assert.match(script, /MakeAppx pack failed/u);
+  assert.match(script, /MakeAppx unpack validation failed/u);
+  assert.match(script, /synthetic-never-submit/u);
+  assert.match(script, /candidate-awaiting-partner-center/u);
+  assert.doesNotMatch(script, /Add-AppxPackage|SignTool|gh release/u);
+  for (const [file, size] of [
+    ['Square44x44Logo.png', 44], ['Square44x44Logo.scale-200.png', 88],
+    ['Square150x150Logo.png', 150], ['Square150x150Logo.scale-200.png', 300],
+    ['StoreLogo.png', 50], ['StoreLogo.scale-200.png', 100],
+  ]) assert.deepEqual(pngSize(`Store/Assets/${file}`), [size, size], file);
 });
 
 test('installer separates ephemeral unsigned smoke from the signed release contract', () => {

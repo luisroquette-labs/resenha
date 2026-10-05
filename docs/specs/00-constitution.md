@@ -35,6 +35,11 @@ After M0 passed physically, the owner authorized a local recovery buffer of the 
 
 The owner authorized one free, public Mac App Store product with full product-quality presentation. Distribution must not weaken the core privacy promise or silently ship a reduced workflow. The app uses App Sandbox, embeds every runtime dependency, works without Homebrew/Python/API keys and avoids Accessibility APIs. A sandbox-compatible macOS Service is the insertion boundary: the calling editor receives the transcript through its service pasteboard. Obsolete direct targets and duplicate app identities must be removed. App Store submission remains an explicit owner authorization gate after the exact binary, metadata, privacy answers, territories and release mode are shown.
 
+Windows consumer distribution uses a Microsoft Store MSIX as its primary trusted
+install path. Unsigned EXE artifacts are test-only, must be labeled explicitly and
+must never be presented as the finished onboarding experience. Partner Center
+identity, certification and a real Store install are independent evidence gates.
+
 ## Amendment 003 — direct distribution and in-app shortcut (2026-10-03)
 
 The owner explicitly replaced the Store shortcut boundary with direct distribution. The user chooses any shortcut inside Resenha, including a single right Option key. Accessibility is required for automatic insertion through a bounded synthetic `Command-V`; App Sandbox and the registered macOS Service are removed. The transcript remains on the clipboard if the target refuses insertion. This amendment supersedes Amendment 002 wherever the two conflict.

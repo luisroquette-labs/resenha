@@ -7,8 +7,10 @@ import { dirname, resolve } from 'node:path';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const paths = [
   'docs/specs/23-windows-mvp.md',
+  'docs/specs/24-windows-store-msix.md',
   'docs/testing/WINDOWS-MVP-EVIDENCE.md',
   'docs/testing/WINDOWS-RELEASE-EVIDENCE.md',
+  'docs/testing/WINDOWS-STORE-EVIDENCE.md',
   'README.md',
   'docs/architecture.md',
   'docs/specs/00-constitution.md',
@@ -16,8 +18,10 @@ const paths = [
 ];
 const docs = Object.fromEntries(paths.map(path => [path, readFileSync(resolve(root, path), 'utf8')]));
 const spec = docs[paths[0]];
-const physical = docs[paths[1]];
-const release = docs[paths[2]];
+const storeSpec = docs[paths[1]];
+const physical = docs[paths[2]];
+const release = docs[paths[3]];
+const storeEvidence = docs[paths[4]];
 
 function requires(text, expressions) {
   for (const expression of expressions) assert.match(text, expression);
@@ -141,5 +145,20 @@ test('privacy and required-form contract preserve owned data and separate macOS 
   requires(spec, [
     /mandatory/, /dedicated form/, /wrong form/, /duplicate\/stale success/,
     /not\naccess control/, /Never\nrun `next build`/,
+  ]);
+});
+
+test('Store MSIX spec keeps trusted consumer distribution separate from test EXE', () => {
+  requires(storeSpec, [
+    /primary Windows consumer distribution/u, /Microsoft signs an accepted MSIX/u,
+    /exact package identity and publisher values copied from Partner Center/u,
+    /SYNTHETIC-NOT-FOR-SUBMISSION/u, /never represented as the final app/u,
+    /Windows\.FullTrustApplication/u, /runFullTrust/u, /microphone/u,
+    /MSIX-001/u, /MSIX-007/u, /Store\s+acknowledgement is not certification/u,
+  ]);
+  requires(storeEvidence, [
+    /Partner Center identity/u, /exact candidate SHA-256/u,
+    /certification result/iu, /clean physical Store install/iu,
+    /SmartScreen/u, /pending/u,
   ]);
 });
