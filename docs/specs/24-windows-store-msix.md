@@ -3,6 +3,10 @@
 Status: implementation in progress. Partner Center identity and Store submission
 remain external gates.
 
+Owner decision (2026-10-05): publish from a Company developer account whose
+verified legal entity is `CF GAUSS SERVICOS LTDA`. The manifest publisher and
+publisher display name still come verbatim from Partner Center after verification.
+
 ## Problem
 
 The website beta is an unsigned Inno Setup EXE. Microsoft Defender SmartScreen

@@ -1,6 +1,9 @@
 {
   "schemaVersion": 1,
   "productName": "Resenha",
+  "publisherAccountType": "company",
+  "publisherLegalName": "CF GAUSS SERVICOS LTDA",
+  "publisherDisplayName": "pending-exact-partner-center-value",
   "category": "Productivity",
   "pricing": "free",
   "audience": "public",
@@ -8,8 +11,8 @@
   "privacyUrl": "https://luisroquette-labs.github.io/resenha/privacy/",
   "supportUrl": "https://github.com/luisroquette-labs/resenha/issues",
   "licenseTerms": "MIT License. O código-fonte e os termos completos estão disponíveis no repositório oficial do Resenha.",
-  "developedBy": "Resenha contributors",
-  "copyright": "Copyright 2026 Resenha contributors",
+  "developedBy": "CF Gauss Serviços Ltda.",
+  "copyright": "Copyright 2026 CF Gauss Serviços Ltda.",
   "restrictedCapabilityJustification": "Resenha é um aplicativo desktop WPF de ditado push-to-talk. runFullTrust é necessário para monitorar a hotkey global, capturar o microfone via WASAPI, executar o whisper.cpp local empacotado, manter o texto no clipboard e enviar um único Ctrl+V ao aplicativo que permaneceu em foco. Não há serviço, driver, elevação, telemetria, conta, backend ou transcrição em nuvem.",
   "certificationNotes": "Abra o Resenha, escolha PT-BR e aceite o microfone. O primeiro uso baixa explicitamente o modelo multilíngue oficial e valida tamanho e SHA-256; depois o ditado funciona offline. Mantenha Left Ctrl + Left Alt + Space pressionado enquanto fala e solte para transcrever. O texto é copiado antes da tentativa de Ctrl+V. O app não exige login nem chave de API.",
   "localizations": {

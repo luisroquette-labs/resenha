@@ -164,6 +164,10 @@ test('MSIX Store package is full-trust, identity-gated and never promotes synthe
     ['StoreLogo.png', 50], ['StoreLogo.scale-200.png', 100],
   ]) assert.deepEqual(pngSize(`Store/Assets/${file}`), [size, size], file);
   assert.equal(listing.pricing, 'free');
+  assert.equal(listing.publisherAccountType, 'company');
+  assert.equal(listing.publisherLegalName, 'CF GAUSS SERVICOS LTDA');
+  assert.equal(listing.publisherDisplayName, 'pending-exact-partner-center-value');
+  assert.equal(listing.developedBy, 'CF Gauss Serviços Ltda.');
   assert.equal(listing.screenshots.requiredCount, 5);
   assert.equal(listing.screenshots.captureState, 'pending-physical-windows');
   assert.match(listing.restrictedCapabilityJustification, /runFullTrust/u);
