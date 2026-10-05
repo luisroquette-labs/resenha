@@ -139,6 +139,8 @@ test('MSIX Store package is full-trust, identity-gated and never promotes synthe
   assert.match(manifest, /TargetDeviceFamily Name="Windows\.Desktop" MinVersion="10\.0\.19045\.0" MaxVersionTested="10\.0\.26200\.0"/u);
   assert.match(manifest, /DeviceCapability Name="microphone"/u);
   assert.match(manifest, /rescap:Capability Name="runFullTrust"/u);
+  assert.ok(manifest.indexOf('rescap:Capability') < manifest.indexOf('DeviceCapability'),
+    'restricted capabilities must precede device capabilities in the MSIX schema');
   assert.match(manifest, /ProcessorArchitecture="x64"/u);
   for (const token of ['__IDENTITY_NAME__', '__PUBLISHER__', '__VERSION__', '__PUBLISHER_DISPLAY_NAME__']) assert.ok(manifest.includes(token));
   assert.match(script, /ValidateSet\('synthetic-smoke', 'store-candidate'\)/u);
