@@ -29,7 +29,7 @@ On an authorized physical Windows host, build the pinned bundled CLI, acquire
 the verified model, disable network adapters, and set
 `RESENHA_CORPUS_INSTALL_DIRECTORY` to the directory containing
 `native/whisper-cli.exe` and `RESENHA_CORPUS_MODEL` to the pinned model file.
-Run the `WindowsIntegration` category without skips. The corpus test reports
+Run the `PhysicalAcceptance` category without skips. The corpus test reports
 per-language aggregate WER and PT/ES annotated occurrence retention; thresholds
 are WER <= 0.20 for every language and retention >= 0.90 separately for PT/ES.
 Keep those measured results with the source SHA, host inventory, CLI/model

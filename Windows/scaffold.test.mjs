@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 const root = dirname(fileURLToPath(import.meta.url));
-const read = (path) => readFileSync(resolve(root, path), 'utf8');
+const read = (path) => readFileSync(resolve(root, path), 'utf8').replaceAll('\r\n', '\n');
 const json = (path) => JSON.parse(read(path));
 const projects = ['Resenha.Core', 'Resenha.Platform', 'Resenha.Windows', 'Resenha.TargetBroker', 'Resenha.Core.Tests', 'Resenha.Platform.Tests', 'Resenha.ReleaseVerifier'];
 
@@ -16,7 +16,8 @@ test('solution references exactly the seven existing projects with no escaping r
   for (const name of projects) {
     for (const [, path] of read(`${name}/${name}.csproj`).matchAll(/ProjectReference Include="([^"]+)"/g)) {
       const destination = resolve(root, name, path);
-      assert.ok(destination.startsWith(`${root}/`));
+      const repositoryRelative = relative(root, destination);
+      assert.ok(repositoryRelative !== '..' && !repositoryRelative.startsWith(`..${process.platform === 'win32' ? '\\' : '/'}`) && !isAbsolute(repositoryRelative));
       assert.ok(existsSync(destination));
     }
   }
@@ -97,12 +98,19 @@ test('cloud Windows validation is manual, bounded, pinned and cannot claim physi
   assert.match(workflow, /github\.event\.label\.name == 'windows-release-validation'/);
   assert.doesNotMatch(workflow, /\n\s+push:|\n\s+schedule:/);
   assert.match(workflow, /permissions:\n\s+contents: read/);
-  assert.match(workflow, /runs-on: windows-2025/);
+  assert.match(workflow, /runs-on: windows-2022/);
   assert.match(workflow, /timeout-minutes: 35/);
-  for (const sha of ['11d5960a326750d5838078e36cf38b85af677262', '26b0ec14cb23fa6904739307f278c14f94c95bf1',
-    '49933ea5288caeca8642d1e84afbd3f7d6820020']) assert.ok(workflow.includes(sha));
+  for (const sha of ['fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09', '26b0ec14cb23fa6904739307f278c14f94c95bf1',
+    '249970729cb0ef3589644e2896645e5dc5ba9c38']) assert.ok(workflow.includes(sha));
   assert.match(workflow, /TestCategory=WindowsIntegration/);
   assert.match(workflow, /TestCategory=WindowsNativeAudio/);
+  assert.doesNotMatch(workflow, /TestCategory=PhysicalAcceptance/);
   assert.match(workflow, /cmake --build --preset windows-x64-cpu/);
   assert.doesNotMatch(workflow, /upload-artifact|gh release|approvedHostInventory|physical-windows/u);
+});
+
+test('repository text policy keeps byte-identity contracts deterministic on Windows', () => {
+  const attributes = read('../.gitattributes');
+  assert.match(attributes, /^\* text=auto eol=lf$/m);
+  assert.doesNotMatch(read('release-manifest.schema.json'), /\r/);
 });

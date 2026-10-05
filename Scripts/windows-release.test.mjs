@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { canonical, createSyntheticBundle, mutate, schemaErrors, sha256 } from './fixtures/windows-release/synthetic-fixture.mjs';
 
-const read = path => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
+const read = path => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8').replaceAll('\r\n', '\n');
 const schemaText = read('Windows/release-manifest.schema.json');
 const schema = JSON.parse(schemaText);
 const core = read('Windows/Resenha.Core/ReleasePolicy.cs');

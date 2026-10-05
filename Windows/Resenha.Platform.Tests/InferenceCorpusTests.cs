@@ -121,7 +121,7 @@ public sealed class CorpusScoringTests
 }
 
 [TestClass]
-[TestCategory("WindowsIntegration")]
+[TestCategory("PhysicalAcceptance")]
 public sealed class InferenceCorpusTests
 {
     public TestContext TestContext { get; set; } = null!;
