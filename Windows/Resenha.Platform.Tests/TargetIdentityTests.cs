@@ -122,7 +122,7 @@ public sealed class TargetIdentityTests
     }
 
     [TestMethod]
-    public void SuppressedTriggerRemainsDownForWatchdogUntilHookSeesRelease()
+    public void SuppressedChordRemainsDownForWatchdogUntilHookSeesRelease()
     {
         var shortcut = new Shortcut(0x13, false,
             ShortcutModifiers.LeftControl | ShortcutModifiers.LeftAlt);
@@ -133,13 +133,17 @@ public sealed class TargetIdentityTests
         Assert.AreEqual(ShortcutEdgeKind.Pressed,
             policy.Process(new(new(0x13), true), new(3)).Edge?.Kind);
 
-        Assert.IsTrue(KeyboardHook.ResolveTriggerDown(policy, asynchronousState: false),
-            "GetAsyncKeyState stays false when the low-level hook suppresses the trigger.");
-        Assert.IsNull(policy.Watchdog(new(true,
-            ShortcutModifiers.LeftControl | ShortcutModifiers.LeftAlt), new(4)));
+        var snapshot = KeyboardHook.ResolveSnapshot(policy, asynchronousTrigger: false,
+            ShortcutModifiers.None, desktopAvailable: true);
+        Assert.IsTrue(snapshot.TriggerDown,
+            "GetAsyncKeyState can stay false when the low-level hook suppresses the trigger.");
+        Assert.AreEqual(ShortcutModifiers.LeftControl | ShortcutModifiers.LeftAlt, snapshot.Modifiers,
+            "The active physical chord must not be released by an asynchronous modifier mismatch.");
+        Assert.IsNull(policy.Watchdog(snapshot, new(4)));
         Assert.AreEqual(ShortcutEdgeKind.Released,
             policy.Process(new(new(0x13), false), new(5)).Edge?.Kind);
-        Assert.IsFalse(KeyboardHook.ResolveTriggerDown(policy, asynchronousState: false));
+        Assert.IsFalse(KeyboardHook.ResolveSnapshot(policy, asynchronousTrigger: false,
+            ShortcutModifiers.None, desktopAvailable: true).TriggerDown);
     }
 
     private static TargetBrokerResponse Response(AttemptId attempt) => new(1, new string('a', 64), attempt.Value, 10,

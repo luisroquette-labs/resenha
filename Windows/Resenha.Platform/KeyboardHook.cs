@@ -121,8 +121,10 @@ public sealed class KeyboardHook : IShortcutSource, IShortcutAttemptContext, IAs
         key == new PhysicalKey(shortcut.ScanCode, shortcut.IsExtended)
         || (ShortcutPolicy.ModifierFor(key) & shortcut.Modifiers) != 0;
 
-    internal static bool ResolveTriggerDown(ShortcutPolicy policy, bool asynchronousState) =>
-        policy.IsHolding ? policy.TriggerDown : asynchronousState;
+    internal static ShortcutKeySnapshot ResolveSnapshot(ShortcutPolicy policy, bool asynchronousTrigger,
+        ShortcutModifiers asynchronousModifiers, bool desktopAvailable) => policy.IsHolding
+        ? new(policy.TriggerDown, policy.TrackedModifiers, desktopAvailable)
+        : new(asynchronousTrigger, asynchronousModifiers, desktopAvailable);
 
     private static uint TriggerVirtualKey(Shortcut shortcut)
     {
@@ -399,7 +401,7 @@ public sealed class KeyboardHook : IShortcutSource, IShortcutAttemptContext, IAs
             }
             uint virtualKey = TriggerVirtualKey(policy.Shortcut);
             bool asynchronousTrigger = virtualKey != 0 && Native.GetAsyncKeyState((int)virtualKey) < 0;
-            return new(ResolveTriggerDown(policy, asynchronousTrigger), modifiers, available && virtualKey != 0);
+            return ResolveSnapshot(policy, asynchronousTrigger, modifiers, available && virtualKey != 0);
         }
 
         private static string? DesktopName(nint desktop)
