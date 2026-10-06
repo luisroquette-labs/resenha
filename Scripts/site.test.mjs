@@ -6,10 +6,12 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { execFileSync } from 'node:child_process';
-import { releaseState, resolveDestination } from '../site/release.mjs';
+import { releaseState, resolveDestination, resolvePresentation } from '../site/release.mjs';
 import { consentState, GA4_ID, GTM_ID } from '../site/analytics.mjs';
 import { DOWNLOAD_URL, EMBED_ORIGIN, FORM_ID, FORM_URL, isFormMessage } from '../site/download-gate.mjs';
-import { createPreviewServer } from './site.mjs';
+import { DOWNLOAD_PLATFORMS, platformConfig } from '../site/download-platforms.mjs';
+import { projectWindowsRelease } from './windows/promote-release.mjs';
+import { createPreviewServer, isConfinedPath } from './site.mjs';
 
 // Synthetic destinations are never fetched; browser audits must intercept them.
 const macos = { state: 'published', platform: 'macos', version: 'v0.0.0-test', architecture: 'arm64', minimumOS: 'macOS 14+',
@@ -23,6 +25,28 @@ const negative = (name, change, channel = 'macos') => {
   return { name, channel, record, active: false };
 };
 const urlCase = (name, url) => negative(name, record => { record.url = url; record.evidence.url = url; });
+const windows = { state: 'published', platform: 'windows', version: '1.2.3', architecture: 'x64',
+  minimumOS: 'Windows 10 22H2 / Windows 11 25H2',
+  url: 'https://github.com/luisroquette-labs/resenha/releases/download/windows-v1.2.3/Resenha-1.2.3-windows-x64-setup.exe',
+  evidence: { channel: 'windows',
+    url: 'https://github.com/luisroquette-labs/resenha/releases/download/windows-v1.2.3/Resenha-1.2.3-windows-x64-setup.exe',
+    verifiedAt: '2026-10-04T12:00:00Z', artifact: { platform: 'windows', version: '1.2.3',
+      filename: 'Resenha-1.2.3-windows-x64-setup.exe', sha256: 'b'.repeat(64), sourceCommit: 'c'.repeat(40),
+      signature: 'valid-trusted-rfc3161', scan: 'passed-zero-detections', physicalWindows10: true,
+      physicalWindows11: true, hostedSha256: 'b'.repeat(64) } } };
+const windowsBeta = { state: 'beta', platform: 'windows', version: '0.1.0', architecture: 'x64',
+  minimumOS: 'Windows 10 22H2 / Windows 11',
+  url: 'https://github.com/luisroquette-labs/resenha/releases/download/windows-beta-v0.1.0/Resenha-0.1.0-windows-x64-BETA-UNSIGNED.exe',
+  evidence: { channel: 'windowsBeta',
+    url: 'https://github.com/luisroquette-labs/resenha/releases/download/windows-beta-v0.1.0/Resenha-0.1.0-windows-x64-BETA-UNSIGNED.exe',
+    verifiedAt: '2026-10-05T10:41:00Z', artifact: { platform: 'windows', version: '0.1.0',
+      filename: 'Resenha-0.1.0-windows-x64-BETA-UNSIGNED.exe', sha256: 'e'.repeat(64),
+      sourceCommit: 'f'.repeat(40), signature: 'unsigned-owner-authorized-beta', cloudInstall: 'passed',
+      cloudUninstall: 'passed', physicalWindows: 'pending' } } };
+const negativeWindows = (name, change) => {
+  const record = structuredClone(windows); change(record);
+  return { name, channel: 'windows', record, active: false };
+};
 
 export const destinationFixtures = [
   negative('unavailable', r => { r.state = 'unavailable'; }),
@@ -62,6 +86,14 @@ export const destinationFixtures = [
   { name: 'valid-published-store', channel: 'store', active: true, record: { state: 'published',
     url: 'https://apps.apple.com/br/app/resenha-test/id1234567890', evidence: { channel: 'store',
       url: 'https://apps.apple.com/br/app/resenha-test/id1234567890', verifiedAt: '2026-10-02T00:00:00Z' } } },
+  negativeWindows('windows-wrong-filename', r => { r.evidence.artifact.filename = 'Resenha.exe'; }),
+  negativeWindows('windows-missing-signature', r => { delete r.evidence.artifact.signature; }),
+  negativeWindows('windows-scan-not-clean', r => { r.evidence.artifact.scan = 'pending'; }),
+  negativeWindows('windows-missing-physical-10', r => { r.evidence.artifact.physicalWindows10 = false; }),
+  negativeWindows('windows-missing-physical-11', r => { r.evidence.artifact.physicalWindows11 = false; }),
+  negativeWindows('windows-hosted-hash-mismatch', r => { r.evidence.artifact.hostedSha256 = 'd'.repeat(64); }),
+  { name: 'valid-windows-release', channel: 'windows', record: structuredClone(windows), active: true },
+  { name: 'valid-owner-authorized-windows-beta', channel: 'windowsBeta', record: structuredClone(windowsBeta), active: true },
 ];
 
 function get(origin, path, method = 'GET') {
@@ -77,11 +109,11 @@ function get(origin, path, method = 'GET') {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
-  test('CK-7: exact finite catalogue has 30 inactive and three active fixtures', () => {
-    assert.equal(destinationFixtures.length, 33);
-    assert.equal(new Set(destinationFixtures.map(f => f.name)).size, 33);
-    assert.ok(destinationFixtures.slice(0, 30).every(f => !f.active));
-    assert.ok(destinationFixtures.slice(30).every(f => f.active));
+  test('CK-7/15: exact finite catalogue has 36 inactive and five active fixtures', () => {
+    assert.equal(destinationFixtures.length, 41);
+    assert.equal(new Set(destinationFixtures.map(f => f.name)).size, 41);
+    assert.equal(destinationFixtures.filter(f => !f.active).length, 36);
+    assert.equal(destinationFixtures.filter(f => f.active).length, 5);
   });
   for (const fixture of destinationFixtures) test(`CK-7: ${fixture.name}`, () => {
     const before = structuredClone(fixture.record);
@@ -94,13 +126,20 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
   });
   test('CK-7/15: published DMG and source resolve while retired Store fails closed', () => {
     assert.equal(resolveDestination('source', releaseState.source).active, true);
-    assert.equal(resolveDestination('source', releaseState.source).href, 'https://github.com/luisroquette/resenha');
+    assert.equal(resolveDestination('source', releaseState.source).href, 'https://github.com/luisroquette-labs/resenha');
     assert.equal(resolveDestination('macos', releaseState.macos).active, true);
     assert.match(resolveDestination('macos', releaseState.macos).href, /Resenha-1\.0\.0-arm64\.dmg$/u);
     assert.equal(releaseState.store.url, null);
     assert.equal(releaseState.store.evidence, null);
     assert.equal(resolveDestination('store', releaseState.store).active, false);
-    for (const channel of ['macos', 'source', 'store'])
+    assert.equal(releaseState.windows.state, 'unavailable');
+    assert.equal(resolveDestination('windows', releaseState.windows).active, false);
+    assert.equal(releaseState.windowsBeta.state, 'beta');
+    assert.equal(resolveDestination('windowsBeta', releaseState.windowsBeta).active, true);
+    assert.match(resolveDestination('windowsBeta', releaseState.windowsBeta).href, /BETA-UNSIGNED\.exe$/u);
+    assert.equal(resolvePresentation('windows', windows).active, false);
+    assert.equal(resolvePresentation('windows', windows, Object.freeze({ platform: 'windows' })).active, true);
+    for (const channel of ['macos', 'source', 'store', 'windows', 'windowsBeta'])
       for (const record of [null, undefined, {}, '', [], { state: 'published' }]) assert.equal(resolveDestination(channel, record).active, false);
     assert.equal(resolveDestination('__proto__', macos).active, false);
   });
@@ -113,10 +152,32 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
     assert.equal(isFormMessage({ ...valid, data: { ...valid.data, formId: 'outro-form' } }, iframeWindow), false);
     assert.match(FORM_URL, /^https:\/\/cfgauss\.com\.br\/t\/formembed-/u);
     assert.match(DOWNLOAD_URL, /^https:\/\/cfgauss\.com\.br\/t\/formredirect-/u);
+    assert.equal(platformConfig('windows'), null);
+    assert.equal(DOWNLOAD_PLATFORMS.windows, null);
+    assert.equal(platformConfig('__proto__'), null);
+    const clonedMac = platformConfig('macos');
+    assert.notEqual(clonedMac, DOWNLOAD_PLATFORMS.macos);
+    assert.deepEqual(clonedMac, DOWNLOAD_PLATFORMS.macos);
     assert.match(await readFile(new URL('../site/download-gate.mjs', import.meta.url), 'utf8'), /Informe nome, e-mail e WhatsApp\./u);
     assert.match(execFileSync(process.execPath, ['--input-type=module', '-e',
       `import(${JSON.stringify(new URL('../site/download-gate.mjs', import.meta.url).href)}).then(() => process.stdout.write('ok'))`],
     { encoding: 'utf8', timeout: 5000 }), /^ok$/u);
+  });
+  test('CK-15: promotion projects only exact hosted observed Windows evidence', () => {
+    const manifest = { schemaVersion: 1, evidenceClass: 'observed', stage: 'hosted-ready', version: '1.2.3',
+      filename: 'Resenha-1.2.3-windows-x64-setup.exe', byteLength: 42, sha256: 'b'.repeat(64), sourceCommit: 'c'.repeat(40),
+      signatures: { publisher: 'Resenha Publisher' }, hosting: { url: windows.url, downloadedSha256: 'b'.repeat(64) } };
+    const verification = { contractValid: true, hostedReady: true, canEnablePublicDownload: true,
+      sourceCommit: 'c'.repeat(40), artifactSha256: 'b'.repeat(64), verifiedAtUtc: '2026-10-04T12:00:00Z' };
+    const download = { url: windows.url, sha256: 'b'.repeat(64), byteLength: 42, publisherDisplay: 'Resenha Publisher' };
+    assert.deepEqual(projectWindowsRelease(manifest, verification, download), windows);
+    for (const mutate of [
+      value => { value.manifest.evidenceClass = 'synthetic'; }, value => { value.verification.hostedReady = false; },
+      value => { value.download.sha256 = 'd'.repeat(64); }, value => { value.manifest.hosting.url += '?latest=1'; },
+    ]) {
+      const value = structuredClone({ manifest, verification, download }); mutate(value);
+      assert.throws(() => projectWindowsRelease(value.manifest, value.verification, value.download));
+    }
   });
   test('Consent Mode v2 denies analytics and all advertising signals by default', () => {
     const denied = consentState(false);
@@ -129,7 +190,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
     assert.match(GA4_ID, /^G-[A-Z0-9]+$/u);
   });
   test('CK-7: malformed evidence and concrete-destination partitions', () => {
-    for (const fixture of destinationFixtures.slice(30)) {
+    for (const fixture of destinationFixtures.filter(item => item.active)) {
       for (const change of [r => { r.evidence.channel = 'other'; }, r => { r.evidence.verifiedAt = 'invalid'; },
         r => { r.url += '?fake=1'; r.evidence.url = r.url; }, r => { r.url += '#fake'; r.evidence.url = r.url; },
         r => { r.url = r.url.replace('https://', 'https://').replace(/(\.com)/u, '$1:444'); r.evidence.url = r.url; }]) {
@@ -145,20 +206,23 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
       const record = structuredClone(macos); record.url = url; record.evidence.url = url;
       assert.equal(resolveDestination('macos', record).active, false);
     }
-    const source = structuredClone(destinationFixtures[31].record);
+    const source = structuredClone(destinationFixtures.find(item => item.name === 'valid-public-source').record);
     source.url = 'https://github.com/example'; source.evidence.url = source.url;
     assert.equal(resolveDestination('source', source).active, false);
-    const store = structuredClone(destinationFixtures[32].record);
+    const store = structuredClone(destinationFixtures.find(item => item.name === 'valid-published-store').record);
     store.url = 'https://apps.apple.com/br/app/resenha'; store.evidence.url = store.url;
     assert.equal(resolveDestination('store', store).active, false);
   });
   test('CK-16: importing fixtures registers no tests and opens no server', () => {
     const stdout = execFileSync(process.execPath, ['--input-type=module', '-e',
-      `const {destinationFixtures}=await import(${JSON.stringify(import.meta.url)}); if(destinationFixtures.length!==33) process.exit(2);`],
+      `const {destinationFixtures}=await import(${JSON.stringify(import.meta.url)}); if(destinationFixtures.length!==41) process.exit(2);`],
     { encoding: 'utf8', timeout: 5000 });
     assert.equal(stdout, '');
   });
   test('CK-13/16: preview confinement and lifecycle at root and subpath', async () => {
+    assert.equal(isConfinedPath('../outside.txt'), false);
+    assert.equal(isConfinedPath('..\\outside.txt'), false);
+    assert.equal(isConfinedPath('media/demo.mp4'), true);
     const fixtureRoot = await mkdtemp(join(tmpdir(), 'resenha-site-'));
     const { mkdir } = await import('node:fs/promises');
     const root = join(fixtureRoot, 'site'); await mkdir(root);
@@ -168,6 +232,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
     await writeFile(join(root, 'media.mjs'), 'export const test = true;');
     await writeFile(join(root, 'analytics.mjs'), 'export const test = true;');
     await writeFile(join(root, 'download-gate.mjs'), 'export const test = true;');
+    await writeFile(join(root, 'download-platforms.mjs'), 'export const test = true;');
+    await writeFile(join(root, 'windows-release-evidence.json'), '{"state":"unavailable"}');
     await writeFile(join(fixtureRoot, 'outside.txt'), 'OWNED_OUTSIDE_SENTINEL');
     await symlink(join(fixtureRoot, 'outside.txt'), join(root, 'escape.txt'));
     try {
@@ -180,7 +246,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
           const head = await get(preview.origin, prefix, 'HEAD');
           assert.equal(head.status, 200); assert.equal(head.body, '');
           assert.match(head.headers['content-type'], /text\/html/u);
-          for (const [name, type] of [['styles.css', 'text/css'], ['release.mjs', 'text/javascript'], ['media.mjs', 'text/javascript'], ['analytics.mjs', 'text/javascript'], ['download-gate.mjs', 'text/javascript']]) {
+          for (const [name, type] of [['styles.css', 'text/css'], ['release.mjs', 'text/javascript'], ['media.mjs', 'text/javascript'], ['analytics.mjs', 'text/javascript'], ['download-gate.mjs', 'text/javascript'], ['download-platforms.mjs', 'text/javascript'], ['windows-release-evidence.json', 'application/json']]) {
             assert.ok((await get(preview.origin, prefix + name)).headers['content-type'].startsWith(type));
           }
           for (const path of ['../outside.txt', '%2e%2e/outside.txt', '%2e%2e%2foutside.txt', '%ZZ', '%00', 'escape.txt', '%5c..%5coutside.txt', '/outside.txt']) {
@@ -223,6 +289,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
         assert.match(html.match(/<section\b[^>]*id="inicio"[\s\S]*?<\/section>/u)?.[0] ?? '', /href="#download"/u);
         assert.match(html.match(/<nav\b[\s\S]*?<\/nav>/u)?.[0] ?? '', /href="#download"/u);
         assert.equal((html.match(/data-release-channel="macos"/gu) ?? []).length, 1);
+        assert.equal((html.match(/data-release-channel="windowsBeta"/gu) ?? []).length, 1);
         assert.ok((html.match(/data-release-channel="source"/gu) ?? []).length >= 1);
         assert.doesNotMatch(html, /href="(?:|#|https?:\/\/(?:github\.com|apps\.apple\.com)[^"]*)"/u);
         assert.match(html, /rel="canonical"/u);
@@ -247,12 +314,14 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
         assert.doesNotMatch(html, /OpenAI|chave API/u);
         assert.match(html, /atalho é gravado dentro do Resenha/u);
         assert.match(html, /Option direita isolada/u);
+        assert.match(html, /Baixar para Windows — Beta/u);
+        assert.match(html, /SmartScreen/u);
         assert.match(html, /class="voice-ribbon"/u);
         assert.match(html, /class="hero-stamp"/u);
         assert.ok((html.match(/data-reveal/gu) ?? []).length >= 8);
         assert.match(html, /type="module"/u);
-        assert.match(html, /styles\.css\?v=20261004-3/u);
-        assert.match(html, /release\.mjs\?v=20261004-3/u);
+        assert.match(html, /styles\.css\?v=20261005-1/u);
+        assert.match(html, /release\.mjs\?v=20261005-1/u);
         assert.match(html, /media\.mjs\?v=20261003-2/u);
         const media = await get(preview.origin, prefix + 'media.mjs');
         assert.equal(media.status, 200);
@@ -263,7 +332,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
         assert.match(gate.body, /Informe nome, e-mail e WhatsApp\./u);
         const privacy = await get(preview.origin, prefix + 'privacy/');
         assert.equal(privacy.status, 200);
-        assert.match(privacy.body, /Sua voz fica no seu Mac/u);
+        assert.match(privacy.body, /Sua voz fica no seu computador/u);
+        assert.match(privacy.body, /No Windows, o MVP não grava histórico em disco/u);
         assert.match(privacy.body, /Acessibilidade devolve o foco/u);
         assert.match(privacy.body, /não lê o conteúdo de outros apps/u);
         assert.match(privacy.body, /Consent Mode v2/u);
@@ -274,15 +344,16 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
         assert.match(comparison.body, /<title>Alternativa gratuita e sem limite ao Wispr Flow \| Resenha<\/title>/u);
         assert.match(comparison.body, /Sem limite semanal imposto pelo plano/u);
         assert.match(comparison.body, /Resenha é um projeto independente/u);
+        assert.match(comparison.body, /Windows x64 em Beta não assinada/u);
         assert.match(comparison.body, /wisprflow\.ai\/pricing/u);
         assert.match(comparison.body, /application\/ld\+json/u);
         assert.match(comparison.body, /src="\.\.\/media\.mjs\?v=20261003-2"/u);
-        assert.match(comparison.body, /src="\.\.\/release\.mjs\?v=20261004-3"/u);
+        assert.match(comparison.body, /src="\.\.\/release\.mjs\?v=20261005-1"/u);
         assert.match(comparison.body, /src="\.\.\/analytics\.mjs\?v=20261004-1"/u);
         assert.ok((comparison.body.match(/data-reveal/gu) ?? []).length >= 5);
         const robots = await get(preview.origin, prefix + 'robots.txt');
         assert.equal(robots.status, 200);
-        assert.match(robots.body, /Sitemap: https:\/\/luisroquette\.github\.io\/resenha\/sitemap\.xml/u);
+        assert.match(robots.body, /Sitemap: https:\/\/luisroquette-labs\.github\.io\/resenha\/sitemap\.xml/u);
         const sitemap = await get(preview.origin, prefix + 'sitemap.xml');
         assert.equal(sitemap.status, 200);
         assert.match(sitemap.body, /alternativa-wispr-flow/u);

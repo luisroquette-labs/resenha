@@ -8,3 +8,6 @@ xcuserdata/
 .specs/scratchpad/
 Tools/site-audit/node_modules/
 AppStore/media/generated/
+Windows/**/bin/
+Windows/**/obj/
+artifacts/windows/

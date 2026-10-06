@@ -1,0 +1,1266 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/luisroquette-labs/resenha/blob/main/Windows/release-manifest.schema.json",
+  "title": "Resenha Windows release evidence v1",
+  "description": "Structural contract only. ReleasePolicy additionally hashes supplied artifact/payload/reports, checks cross-field identity and report DAG. Synthetic fixtures never authorize publication. The manifest checksum is external.",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "evidenceClass",
+    "stage",
+    "platform",
+    "architecture",
+    "version",
+    "filename",
+    "byteLength",
+    "sha256",
+    "sourceCommit",
+    "whisperCommit",
+    "model",
+    "requirements",
+    "build",
+    "payload",
+    "signatures",
+    "scan",
+    "physical",
+    "hosting",
+    "verification"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "evidenceClass": {
+      "enum": [
+        "observed",
+        "synthetic"
+      ]
+    },
+    "stage": {
+      "enum": [
+        "candidate-ready",
+        "hosted-ready"
+      ]
+    },
+    "platform": {
+      "const": "windows"
+    },
+    "architecture": {
+      "const": "x64"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+    },
+    "filename": {
+      "type": "string",
+      "pattern": "^Resenha-[0-9]+\\.[0-9]+\\.[0-9]+-windows-x64-setup\\.exe$"
+    },
+    "byteLength": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "sourceCommit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "whisperCommit": {
+      "const": "4979e04f5dcaccb36057e059bbaed8a2f5288315"
+    },
+    "model": {
+      "type": "object",
+      "required": [
+        "name",
+        "byteLength",
+        "sha256"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "const": "ggml-small-q5_1.bin"
+        },
+        "byteLength": {
+          "const": 190085487
+        },
+        "sha256": {
+          "const": "ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb"
+        }
+      }
+    },
+    "requirements": {
+      "const": {
+        "windows10": {
+          "release": "22H2",
+          "build": "10.0.19045",
+          "editions": [
+            "Home",
+            "Pro"
+          ]
+        },
+        "windows11": {
+          "release": "25H2",
+          "build": "10.0.26200",
+          "editions": [
+            "Home",
+            "Pro"
+          ]
+        },
+        "cpuFeatures": [
+          "AVX2",
+          "FMA",
+          "F16C",
+          "SSE4.2",
+          "OS_AVX_STATE"
+        ],
+        "minimumRamGiB": 8,
+        "minimumExtraDiskGiB": 1
+      }
+    },
+    "build": {
+      "$ref": "#/$defs/build"
+    },
+    "payload": {
+      "$ref": "#/$defs/payload"
+    },
+    "signatures": {
+      "$ref": "#/$defs/signatures"
+    },
+    "scan": {
+      "$ref": "#/$defs/scan"
+    },
+    "physical": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/physical"
+      },
+      "minItems": 2,
+      "maxItems": 2,
+      "uniqueItems": true
+    },
+    "hosting": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/hosting"
+        }
+      ]
+    },
+    "verification": {
+      "$ref": "#/$defs/verification"
+    }
+  },
+  "$defs": {
+    "reportRef": {
+      "type": "object",
+      "required": [
+        "path",
+        "sha256"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string",
+          "pattern": "^reports/(build|payload|signatures|scan|physical-windows10|physical-windows11|hosting|verification)-[0-9a-f]{64}\\.json$"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "input": {
+      "type": "object",
+      "required": [
+        "path",
+        "sha256"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]+(?:/[A-Za-z0-9_.-]+)*$"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "file": {
+      "type": "object",
+      "required": [
+        "path",
+        "byteLength",
+        "sha256",
+        "isPe"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]+(?:[A-Za-z0-9_. -]*[A-Za-z0-9_-])?(?:/[A-Za-z0-9_-]+(?:[A-Za-z0-9_. -]*[A-Za-z0-9_-])?)*\\.[A-Za-z0-9]+$"
+        },
+        "byteLength": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "isPe": {
+          "type": "boolean"
+        }
+      }
+    },
+    "build": {
+      "type": "object",
+      "required": [
+        "report",
+        "recordedAtUtc",
+        "host",
+        "sourceCommit",
+        "toolchain",
+        "preflight",
+        "inputs"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "report": {
+          "$ref": "#/$defs/reportRef"
+        },
+        "recordedAtUtc": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+        },
+        "host": {
+          "type": "object",
+          "required": [
+            "os",
+            "physical",
+            "authorizationReference"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "os": {
+              "type": "object",
+              "required": [
+                "name",
+                "edition",
+                "release",
+                "build",
+                "architecture"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "name": {
+                  "enum": [
+                    "windows10",
+                    "windows11"
+                  ]
+                },
+                "edition": {
+                  "enum": [
+                    "Home",
+                    "Pro"
+                  ]
+                },
+                "release": {
+                  "enum": [
+                    "22H2",
+                    "25H2"
+                  ]
+                },
+                "build": {
+                  "type": "string",
+                  "pattern": "^10\\.0\\.(19045|26200)\\.[0-9]+$"
+                },
+                "architecture": {
+                  "const": "x64"
+                }
+              }
+            },
+            "physical": {
+              "const": true
+            },
+            "authorizationReference": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "sourceCommit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "toolchain": {
+          "type": "object",
+          "required": [
+            "dotnetSdk",
+            "dotnetRuntime",
+            "mstestSdk",
+            "languageVersion",
+            "targetFramework",
+            "runtimeIdentifier",
+            "selfContained",
+            "msvcToolset",
+            "windowsSdkVersion",
+            "msvcCompilerVersion",
+            "msvcCompilerSha256",
+            "linkerVersion",
+            "linkerSha256",
+            "cmakeVersion",
+            "cmakeSha256",
+            "powerShellVersion",
+            "powerShellSha256",
+            "innoCompilerVersion",
+            "innoCompilerSha256"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "dotnetSdk": {
+              "const": "10.0.401"
+            },
+            "dotnetRuntime": {
+              "const": "10.0.12"
+            },
+            "mstestSdk": {
+              "const": "4.4.0"
+            },
+            "languageVersion": {
+              "const": "14.0"
+            },
+            "targetFramework": {
+              "const": "net10.0-windows10.0.19041.0"
+            },
+            "runtimeIdentifier": {
+              "const": "win-x64"
+            },
+            "selfContained": {
+              "const": true
+            },
+            "msvcToolset": {
+              "const": "v143"
+            },
+            "windowsSdkVersion": {
+              "type": "string",
+              "minLength": 1
+            },
+            "msvcCompilerVersion": {
+              "type": "string",
+              "minLength": 1
+            },
+            "msvcCompilerSha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "linkerVersion": {
+              "type": "string",
+              "minLength": 1
+            },
+            "linkerSha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "cmakeVersion": {
+              "type": "string",
+              "minLength": 1
+            },
+            "cmakeSha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "powerShellVersion": {
+              "type": "string",
+              "pattern": "^7\\.[0-9]+\\.[0-9]+$"
+            },
+            "powerShellSha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "innoCompilerVersion": {
+              "const": "6.7.3"
+            },
+            "innoCompilerSha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        },
+        "preflight": {
+          "type": "object",
+          "required": [
+            "sourceCommit",
+            "exitCode",
+            "totalTests",
+            "skippedTests",
+            "report"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "sourceCommit": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{40}$"
+            },
+            "exitCode": {
+              "const": 0
+            },
+            "totalTests": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "skippedTests": {
+              "const": 0
+            },
+            "report": {
+              "$ref": "#/$defs/input"
+            }
+          }
+        },
+        "inputs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/input"
+          },
+          "minItems": 1,
+          "maxItems": 4096,
+          "uniqueItems": true
+        }
+      }
+    },
+    "payload": {
+      "type": "object",
+      "required": [
+        "report",
+        "inventorySha256",
+        "files"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "report": {
+          "$ref": "#/$defs/reportRef"
+        },
+        "inventorySha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/file"
+          },
+          "minItems": 1,
+          "maxItems": 4096,
+          "uniqueItems": true
+        }
+      }
+    },
+    "signatures": {
+      "type": "object",
+      "required": [
+        "report",
+        "verifiedAtUtc",
+        "publisher",
+        "certificateThumbprint",
+        "items"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "report": {
+          "$ref": "#/$defs/reportRef"
+        },
+        "verifiedAtUtc": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+        },
+        "publisher": {
+          "type": "string",
+          "minLength": 1
+        },
+        "certificateThumbprint": {
+          "type": "string",
+          "pattern": "^[0-9A-F]{40}$"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/signature"
+          },
+          "minItems": 1,
+          "maxItems": 4096,
+          "uniqueItems": true
+        }
+      }
+    },
+    "signature": {
+      "type": "object",
+      "required": [
+        "path",
+        "sha256",
+        "authority",
+        "status",
+        "publisher",
+        "certificateThumbprint",
+        "certificateNotBeforeUtc",
+        "certificateNotAfterUtc",
+        "publiclyTrusted",
+        "chainTrusted",
+        "digestAlgorithm",
+        "timestamp"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "authority": {
+          "enum": [
+            "release",
+            "vendor"
+          ]
+        },
+        "status": {
+          "const": "Valid"
+        },
+        "publisher": {
+          "type": "string",
+          "minLength": 1
+        },
+        "certificateThumbprint": {
+          "type": "string",
+          "pattern": "^[0-9A-F]{40}$"
+        },
+        "certificateNotBeforeUtc": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+        },
+        "certificateNotAfterUtc": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+        },
+        "publiclyTrusted": {
+          "const": true
+        },
+        "chainTrusted": {
+          "const": true
+        },
+        "digestAlgorithm": {
+          "const": "SHA256"
+        },
+        "timestamp": {
+          "type": "object",
+          "required": [
+            "atUtc",
+            "protocol",
+            "status",
+            "chainTrusted"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "atUtc": {
+              "type": "string",
+              "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+            },
+            "protocol": {
+              "const": "RFC3161"
+            },
+            "status": {
+              "const": "Valid"
+            },
+            "chainTrusted": {
+              "const": true
+            }
+          }
+        }
+      }
+    },
+    "scan": {
+      "type": "object",
+      "required": [
+        "report",
+        "scanner",
+        "engineVersion",
+        "platformVersion",
+        "signatureVersion",
+        "signatureUpdatedAtUtc",
+        "artifactSha256",
+        "payloadInventorySha256",
+        "targets"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "report": {
+          "$ref": "#/$defs/reportRef"
+        },
+        "scanner": {
+          "const": "Microsoft Defender"
+        },
+        "engineVersion": {
+          "type": "string",
+          "minLength": 1
+        },
+        "platformVersion": {
+          "type": "string",
+          "minLength": 1
+        },
+        "signatureVersion": {
+          "type": "string",
+          "minLength": 1
+        },
+        "signatureUpdatedAtUtc": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+        },
+        "artifactSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "payloadInventorySha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "targets": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "kind",
+              "startedAtUtc",
+              "completedAtUtc",
+              "complete",
+              "exitCode",
+              "detections",
+              "remediations",
+              "remediationDisabled",
+              "detailReport"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "enum": [
+                  "installer",
+                  "payload"
+                ]
+              },
+              "startedAtUtc": {
+                "type": "string",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+              },
+              "completedAtUtc": {
+                "type": "string",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+              },
+              "complete": {
+                "const": true
+              },
+              "exitCode": {
+                "const": 0
+              },
+              "detections": {
+                "const": 0
+              },
+              "remediations": {
+                "const": 0
+              },
+              "remediationDisabled": {
+                "const": true
+              },
+              "detailReport": {
+                "$ref": "#/$defs/input"
+              }
+            }
+          },
+          "minItems": 2,
+          "maxItems": 2,
+          "uniqueItems": true
+        }
+      }
+    },
+    "observation": {
+      "type": "object",
+      "required": [
+        "outcome",
+        "observation"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "outcome": {
+          "const": "observed-pass"
+        },
+        "observation": {
+          "type": "string",
+          "minLength": 20,
+          "maxLength": 4096
+        }
+      }
+    },
+    "physical": {
+      "type": "object",
+      "required": [
+        "report",
+        "observedAtUtc",
+        "verifier",
+        "hardware",
+        "os",
+        "sourceCommit",
+        "appVersion",
+        "artifactSha256",
+        "artifactByteLength",
+        "model",
+        "checks",
+        "cycles",
+        "corpus"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "report": {
+          "$ref": "#/$defs/reportRef"
+        },
+        "observedAtUtc": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+        },
+        "verifier": {
+          "type": "string",
+          "minLength": 1
+        },
+        "hardware": {
+          "type": "object",
+          "required": [
+            "physical",
+            "cpu",
+            "cpuFeatures",
+            "ramGiB",
+            "microphone"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "physical": {
+              "const": true
+            },
+            "cpu": {
+              "type": "string",
+              "minLength": 1
+            },
+            "cpuFeatures": {
+              "const": [
+                "AVX2",
+                "FMA",
+                "F16C",
+                "SSE4.2",
+                "OS_AVX_STATE"
+              ]
+            },
+            "ramGiB": {
+              "type": "integer",
+              "minimum": 8,
+              "maximum": 9007199254740991
+            },
+            "microphone": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "os": {
+          "type": "object",
+          "required": [
+            "name",
+            "edition",
+            "release",
+            "build",
+            "architecture"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "enum": [
+                "windows10",
+                "windows11"
+              ]
+            },
+            "edition": {
+              "enum": [
+                "Home",
+                "Pro"
+              ]
+            },
+            "release": {
+              "enum": [
+                "22H2",
+                "25H2"
+              ]
+            },
+            "build": {
+              "type": "string",
+              "pattern": "^10\\.0\\.(19045|26200)\\.[0-9]+$"
+            },
+            "architecture": {
+              "const": "x64"
+            }
+          }
+        },
+        "sourceCommit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "appVersion": {
+          "type": "string",
+          "minLength": 1
+        },
+        "artifactSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "artifactByteLength": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "model": {
+          "type": "object",
+          "required": [
+            "name",
+            "byteLength",
+            "sha256"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "const": "ggml-small-q5_1.bin"
+            },
+            "byteLength": {
+              "const": 190085487
+            },
+            "sha256": {
+              "const": "ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb"
+            }
+          }
+        },
+        "checks": {
+          "type": "object",
+          "required": [
+            "standardUserInstall",
+            "noDeveloperTools",
+            "offlineDictation",
+            "notepad",
+            "chromeInput",
+            "chromeContenteditable",
+            "abnt2AltGr",
+            "focusRace",
+            "microphonePermission",
+            "microphoneDisconnect",
+            "missingModel",
+            "corruptModel",
+            "inferenceFailure",
+            "clipboardContention",
+            "blockedInsertion",
+            "copyAgain",
+            "cancelLockSuspend",
+            "temporaryAudioCleanup",
+            "spacesNonAsciiPath",
+            "uninstall",
+            "ownedDataRemoval",
+            "unrelatedDataPreserved"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "standardUserInstall": {
+              "$ref": "#/$defs/observation"
+            },
+            "noDeveloperTools": {
+              "$ref": "#/$defs/observation"
+            },
+            "offlineDictation": {
+              "$ref": "#/$defs/observation"
+            },
+            "notepad": {
+              "$ref": "#/$defs/observation"
+            },
+            "chromeInput": {
+              "$ref": "#/$defs/observation"
+            },
+            "chromeContenteditable": {
+              "$ref": "#/$defs/observation"
+            },
+            "abnt2AltGr": {
+              "$ref": "#/$defs/observation"
+            },
+            "focusRace": {
+              "$ref": "#/$defs/observation"
+            },
+            "microphonePermission": {
+              "$ref": "#/$defs/observation"
+            },
+            "microphoneDisconnect": {
+              "$ref": "#/$defs/observation"
+            },
+            "missingModel": {
+              "$ref": "#/$defs/observation"
+            },
+            "corruptModel": {
+              "$ref": "#/$defs/observation"
+            },
+            "inferenceFailure": {
+              "$ref": "#/$defs/observation"
+            },
+            "clipboardContention": {
+              "$ref": "#/$defs/observation"
+            },
+            "blockedInsertion": {
+              "$ref": "#/$defs/observation"
+            },
+            "copyAgain": {
+              "$ref": "#/$defs/observation"
+            },
+            "cancelLockSuspend": {
+              "$ref": "#/$defs/observation"
+            },
+            "temporaryAudioCleanup": {
+              "$ref": "#/$defs/observation"
+            },
+            "spacesNonAsciiPath": {
+              "$ref": "#/$defs/observation"
+            },
+            "uninstall": {
+              "$ref": "#/$defs/observation"
+            },
+            "ownedDataRemoval": {
+              "$ref": "#/$defs/observation"
+            },
+            "unrelatedDataPreserved": {
+              "$ref": "#/$defs/observation"
+            }
+          }
+        },
+        "cycles": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "number",
+              "recordings",
+              "clipboardCommits",
+              "insertions",
+              "returnedIdle",
+              "observation"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "number": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+              },
+              "recordings": {
+                "const": 1
+              },
+              "clipboardCommits": {
+                "const": 1
+              },
+              "insertions": {
+                "const": 1
+              },
+              "returnedIdle": {
+                "const": true
+              },
+              "observation": {
+                "type": "string",
+                "minLength": 20
+              }
+            }
+          },
+          "minItems": 10,
+          "maxItems": 10,
+          "uniqueItems": true
+        },
+        "corpus": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              {
+                "type": "object",
+                "required": [
+                  "language",
+                  "utterances",
+                  "wordErrorRate",
+                  "anglicismRetention",
+                  "networkDisconnected",
+                  "silenceProducedNoText",
+                  "report"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "language": {
+                    "enum": [
+                      "pt",
+                      "es"
+                    ]
+                  },
+                  "utterances": {
+                    "type": "integer",
+                    "minimum": 5,
+                    "maximum": 9007199254740991
+                  },
+                  "wordErrorRate": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 0.2
+                  },
+                  "anglicismRetention": {
+                    "type": "number",
+                    "minimum": 0.9,
+                    "maximum": 1
+                  },
+                  "networkDisconnected": {
+                    "const": true
+                  },
+                  "silenceProducedNoText": {
+                    "const": true
+                  },
+                  "report": {
+                    "$ref": "#/$defs/input"
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "required": [
+                  "language",
+                  "utterances",
+                  "wordErrorRate",
+                  "anglicismRetention",
+                  "networkDisconnected",
+                  "silenceProducedNoText",
+                  "report"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "language": {
+                    "const": "en"
+                  },
+                  "utterances": {
+                    "type": "integer",
+                    "minimum": 5,
+                    "maximum": 9007199254740991
+                  },
+                  "wordErrorRate": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 0.2
+                  },
+                  "anglicismRetention": {
+                    "const": "not-applicable"
+                  },
+                  "networkDisconnected": {
+                    "const": true
+                  },
+                  "silenceProducedNoText": {
+                    "const": true
+                  },
+                  "report": {
+                    "$ref": "#/$defs/input"
+                  }
+                }
+              }
+            ]
+          },
+          "minItems": 3,
+          "maxItems": 3,
+          "uniqueItems": true
+        }
+      }
+    },
+    "hosting": {
+      "type": "object",
+      "required": [
+        "report",
+        "url",
+        "releaseTag",
+        "releaseId",
+        "assetId",
+        "immutableRelease",
+        "downloadedAtUtc",
+        "downloadedByteLength",
+        "downloadedSha256",
+        "browser",
+        "os",
+        "physical",
+        "markOfTheWebZoneId",
+        "smartScreen",
+        "publisherDisplay",
+        "reputationDisclosure",
+        "detailReport"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "report": {
+          "$ref": "#/$defs/reportRef"
+        },
+        "url": {
+          "type": "string",
+          "minLength": 1
+        },
+        "releaseTag": {
+          "type": "string",
+          "minLength": 1
+        },
+        "releaseId": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*$"
+        },
+        "assetId": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*$"
+        },
+        "immutableRelease": {
+          "const": true
+        },
+        "downloadedAtUtc": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+        },
+        "downloadedByteLength": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "downloadedSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "browser": {
+          "type": "string",
+          "minLength": 1
+        },
+        "os": {
+          "type": "object",
+          "required": [
+            "name",
+            "edition",
+            "release",
+            "build",
+            "architecture"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "enum": [
+                "windows10",
+                "windows11"
+              ]
+            },
+            "edition": {
+              "enum": [
+                "Home",
+                "Pro"
+              ]
+            },
+            "release": {
+              "enum": [
+                "22H2",
+                "25H2"
+              ]
+            },
+            "build": {
+              "type": "string",
+              "pattern": "^10\\.0\\.(19045|26200)\\.[0-9]+$"
+            },
+            "architecture": {
+              "const": "x64"
+            }
+          }
+        },
+        "physical": {
+          "const": true
+        },
+        "markOfTheWebZoneId": {
+          "const": 3
+        },
+        "smartScreen": {
+          "enum": [
+            "allowed",
+            "reputation-warning"
+          ]
+        },
+        "publisherDisplay": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reputationDisclosure": {
+          "type": "string"
+        },
+        "detailReport": {
+          "$ref": "#/$defs/input"
+        }
+      }
+    },
+    "verification": {
+      "type": "object",
+      "required": [
+        "report",
+        "tool",
+        "toolSha256",
+        "verifiedAtUtc",
+        "sourceCommit",
+        "artifactSha256",
+        "payloadInventorySha256",
+        "stage",
+        "exitCode"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "report": {
+          "$ref": "#/$defs/reportRef"
+        },
+        "tool": {
+          "const": "Scripts/windows/verify-release.ps1"
+        },
+        "toolSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "verifiedAtUtc": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+        },
+        "sourceCommit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "artifactSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "payloadInventorySha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "stage": {
+          "enum": [
+            "candidate-ready",
+            "hosted-ready"
+          ]
+        },
+        "exitCode": {
+          "const": 0
+        }
+      }
+    }
+  }
+}

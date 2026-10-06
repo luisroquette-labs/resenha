@@ -1,0 +1,223 @@
+import assert from 'node:assert/strict';
+import { readFileSync, existsSync } from 'node:fs';
+import { dirname, isAbsolute, relative, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import test from 'node:test';
+
+const root = dirname(fileURLToPath(import.meta.url));
+const read = (path) => readFileSync(resolve(root, path), 'utf8').replaceAll('\r\n', '\n');
+const json = (path) => JSON.parse(read(path));
+const pngSize = (path) => {
+  const bytes = readFileSync(resolve(root, path));
+  assert.equal(bytes.subarray(1, 4).toString('ascii'), 'PNG');
+  return [bytes.readUInt32BE(16), bytes.readUInt32BE(20)];
+};
+const projects = ['Resenha.Core', 'Resenha.Platform', 'Resenha.Windows', 'Resenha.TargetBroker', 'Resenha.Core.Tests', 'Resenha.Platform.Tests', 'Resenha.ReleaseVerifier'];
+
+test('solution references exactly the seven existing projects with no escaping references', () => {
+  const declared = [...read('Resenha.Windows.sln').matchAll(/^Project\("[^"]+"\) = "([^"]+)", "([^"]+)"/gm)];
+  assert.deepEqual(declared.map((match) => match[1]), projects);
+  for (const [, , path] of declared) assert.ok(existsSync(resolve(root, path.replaceAll('\\', '/'))));
+  for (const name of projects) {
+    for (const [, path] of read(`${name}/${name}.csproj`).matchAll(/ProjectReference Include="([^"]+)"/g)) {
+      const destination = resolve(root, name, path);
+      const repositoryRelative = relative(root, destination);
+      assert.ok(repositoryRelative !== '..' && !repositoryRelative.startsWith(`..${process.platform === 'win32' ? '\\' : '/'}`) && !isAbsolute(repositoryRelative));
+      assert.ok(existsSync(destination));
+    }
+  }
+});
+
+test('exact SDK/runtime/test pins and conservative publish configuration are explicit', () => {
+  const global = json('global.json');
+  assert.deepEqual(global.sdk, { version: '10.0.401', rollForward: 'disable', allowPrerelease: false });
+  assert.equal(global['msbuild-sdks']['MSTest.Sdk'], '4.4.0');
+  assert.equal(global.test.runner, 'Microsoft.Testing.Platform');
+  const toolchain = json('toolchain-lock.json');
+  const props = read('Directory.Build.props');
+  for (const name of ['TreatWarningsAsErrors', 'CodeAnalysisTreatWarningsAsErrors', 'RestorePackagesWithLockFile', 'RestoreLockedMode']) assert.ok(props.includes(`<${name}>true</${name}>`));
+  for (const name of ['PublishTrimmed', 'PublishSingleFile', 'PublishAot']) assert.ok(props.includes(`<${name}>false</${name}>`));
+  assert.doesNotMatch(props, /<RuntimeFrameworkVersion>/,
+    'a global RuntimeFrameworkVersion creates conflicting Windows SDK reference packs');
+  assert.equal(toolchain.requirements.dotnetRuntime, '10.0.12');
+  for (const name of ['Resenha.Windows', 'Resenha.TargetBroker']) {
+    const project = read(`${name}/${name}.csproj`);
+    assert.match(project, /<RuntimeIdentifier>win-x64<\/RuntimeIdentifier>/);
+    assert.match(project, /<SelfContained>true<\/SelfContained>/);
+  }
+  for (const name of ['Resenha.Core.Tests', 'Resenha.Platform.Tests']) assert.match(read(`${name}/${name}.csproj`), /Sdk="MSTest.Sdk"/);
+});
+
+test('portable Core has no UI, native, network or project/package dependencies', () => {
+  const project = read('Resenha.Core/Resenha.Core.csproj');
+  assert.match(project, /<TargetFramework>net10\.0<\/TargetFramework>/);
+  assert.doesNotMatch(project, /PackageReference|ProjectReference|UseWPF|UseWindowsForms|RuntimeIdentifier/);
+  const core = read('Resenha.Core/Contracts.cs');
+  assert.doesNotMatch(core, /DllImport|LibraryImport|System\.Windows|HttpClient|WebRequest|Process\.Start/);
+  const asyncMethods = [...core.matchAll(/ValueTask<[^;]+?\s(\w+Async)\(([^;]+?)\);/g)];
+  assert.equal(asyncMethods.length, 14);
+  for (const [, name, parameters] of asyncMethods) {
+    assert.match(parameters, /^AttemptId attempt,/, name);
+    assert.match(parameters, /CancellationToken cancellationToken$/, name);
+  }
+});
+
+test('app composition owns one instance, real adapters and bounded local IPC', () => {
+  const app = read('Resenha.Windows/App.xaml.cs');
+  for (const boundary of ['SingleInstanceCoordinator', 'KeyboardHook', 'WasapiRecorder', 'ModelStore',
+    'TargetBrokerClient', 'ClipboardService', 'TextInjector', 'WhisperCliTranscriber', 'DictationCoordinator']) {
+    assert.ok(app.includes(boundary), boundary);
+  }
+  assert.match(app, /PipeOptions\.Asynchronous \| PipeOptions\.CurrentUserOnly/);
+  assert.match(app, /shortcut\.Edge \+= ShortcutEdge/);
+  assert.match(app, /await coordinator\.DisposeAsync\(\)/);
+  assert.match(app, /await shortcut\.DisposeAsync\(\)/);
+  assert.doesNotMatch(read('Resenha.Windows/App.xaml'), /StartupUri=/);
+  const broker = read('Resenha.TargetBroker/Program.cs');
+  const client = read('Resenha.Platform/TargetBrokerClient.cs');
+  assert.match(broker, /arguments\.Length != 6/);
+  assert.match(broker, /NamedPipeClientStream\("\."/);
+  assert.match(broker, /payload\.Length > 64 \* 1024/);
+  assert.match(client, /PipeOptions\.Asynchronous \| PipeOptions\.CurrentUserOnly/);
+  assert.doesNotMatch(`${broker}\n${client}`, /TcpListener|HttpListener|Socket\(/);
+  assert.match(read('Resenha.Windows/app.manifest'), /level="asInvoker" uiAccess="false"/);
+});
+
+test('cross-target evidence is recorded without claiming native Windows validation', () => {
+  const lock = json('toolchain-lock.json');
+  assert.equal(lock.status, 'blocked-awaiting-authorized-windows-host');
+  assert.equal(lock.approvedHostInventory, null);
+  assert.match(lock.validation.lockedRestore, /^passed-on-macos-cross-target-/);
+  assert.match(lock.validation.compile, /^passed-on-macos-cross-target-/);
+  assert.match(lock.validation.coreTests, /^passed-145-on-macos-/);
+  assert.match(lock.validation.platformTests, /^passed-43-explicit-portable-plus-34-other-nonnative-on-macos-.*native-failed-or-inconclusive-as-required-/);
+  assert.match(lock.validation.dependencyLocks, /^generated-with-sdk-10\.0\.401-/);
+  for (const name of projects) assert.ok(existsSync(resolve(root, `${name}/packages.lock.json`)));
+  assert.deepEqual(json('Resenha.Core/packages.lock.json').dependencies, { 'net10.0': {} });
+});
+
+test('cloud Windows validation is manual, bounded, pinned and cannot claim physical acceptance', () => {
+  const workflow = read('../.github/workflows/windows-release-validation.yml');
+  assert.match(workflow, /workflow_dispatch:/);
+  assert.match(workflow, /pull_request:\n\s+types: \[labeled\]/);
+  assert.match(workflow, /github\.event\.label\.name == 'windows-release-validation'/);
+  assert.doesNotMatch(workflow, /\n\s+push:|\n\s+schedule:/);
+  assert.match(workflow, /permissions:\n\s+contents: read/);
+  assert.match(workflow, /runs-on: windows-2022/);
+  assert.match(workflow, /timeout-minutes: 35/);
+  assert.match(workflow, /cancel-in-progress: true/);
+  for (const sha of ['fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09', '26b0ec14cb23fa6904739307f278c14f94c95bf1',
+    '249970729cb0ef3589644e2896645e5dc5ba9c38']) assert.ok(workflow.includes(sha));
+  assert.match(workflow, /Assert pristine source before generating artifacts/u);
+  assert.match(workflow, /git status --porcelain --untracked-files=all/u);
+  assert.match(workflow, /TestCategory=WindowsIntegration/);
+  assert.match(workflow, /TestCategory=WindowsNativeAudio/);
+  assert.doesNotMatch(workflow, /TestCategory=PhysicalAcceptance/);
+  assert.match(workflow, /working-directory: Windows\/native/);
+  assert.doesNotMatch(workflow, /cmake --preset windows-x64-cpu -S native/);
+  assert.match(workflow, /cmake --build --preset windows-x64-cpu/);
+  assert.match(workflow, /innosetup-6\.7\.3\.exe/);
+  assert.match(workflow, /9c73c3bae7ed48d44112a0f48e66742c00090bdb5bef71d9d3c056c66e97b732/);
+  assert.ok(workflow.includes('Pyrsys B\\.V\\.'));
+  assert.match(workflow, /UNSIGNED-NOT-FOR-DISTRIBUTION/);
+  assert.match(workflow, /Invoke-BoundedProcess/);
+  assert.match(workflow, /Inno smoke compilation.*300/);
+  assert.match(workflow, /Smoke uninstall left the application directory behind/);
+  assert.match(workflow, /Build and validate synthetic Microsoft Store MSIX/u);
+  assert.match(workflow, /build-msix\.ps1.*synthetic-smoke/u);
+  assert.match(workflow, /SYNTHETIC-NOT-FOR-SUBMISSION\.msix/u);
+  assert.match(workflow, /Synthetic MSIX must remain ephemeral/u);
+  assert.match(workflow, /Build Partner Center-bound Microsoft Store candidate/u);
+  assert.match(workflow, /inputs\.build_store_candidate == true/u);
+  assert.match(workflow, /STORE_IDENTITY_NAME: \$\{\{ inputs\.store_identity_name \}\}/u);
+  assert.match(workflow, /Retain Partner Center-bound Store candidate for transfer/u);
+  assert.match(workflow, /retention-days: 1/u);
+  assert.match(workflow, /publish_beta:/u);
+  assert.match(workflow, /owner-authorized-unsigned-beta/u);
+  assert.match(workflow, /actions\/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02/u);
+  assert.match(workflow, /retention-days: 1/u);
+  assert.doesNotMatch(workflow, /gh release|approvedHostInventory|physical-windows/u);
+});
+
+test('MSIX Store package is full-trust, identity-gated and never promotes synthetic smoke', () => {
+  const manifest = read('Store/AppxManifest.xml.template');
+  const script = read('../Scripts/windows/build-msix.ps1');
+  const listing = json('Store/listing.json');
+  const identity = json('Store/identity.json');
+  assert.match(manifest, /Windows\.FullTrustApplication/u);
+  assert.match(manifest, /TargetDeviceFamily Name="Windows\.Desktop" MinVersion="10\.0\.19045\.0" MaxVersionTested="10\.0\.26200\.0"/u);
+  assert.match(manifest, /DeviceCapability Name="microphone"/u);
+  assert.match(manifest, /rescap:Capability Name="runFullTrust"/u);
+  assert.ok(manifest.indexOf('rescap:Capability') < manifest.indexOf('DeviceCapability'),
+    'restricted capabilities must precede device capabilities in the MSIX schema');
+  assert.match(manifest, /ProcessorArchitecture="x64"/u);
+  for (const token of ['__IDENTITY_NAME__', '__PUBLISHER__', '__VERSION__', '__PUBLISHER_DISPLAY_NAME__']) assert.ok(manifest.includes(token));
+  assert.match(script, /ValidateSet\('synthetic-smoke', 'store-candidate'\)/u);
+  assert.match(script, /Store candidate authorization reference is required/u);
+  assert.match(script, /Partner Center .* is missing or non-production/u);
+  assert.match(script, /git -C \$repositoryRoot diff --quiet HEAD --/u);
+  assert.match(script, /git -C \$repositoryRoot diff --cached --quiet/u);
+  assert.match(script, /\(\[ordered\]@\{[^}]+\}\)\.GetEnumerator\(\)/u);
+  assert.match(script, /MakeAppx pack failed/u);
+  assert.match(script, /MakeAppx unpack validation failed/u);
+  assert.match(script, /synthetic-never-submit/u);
+  assert.match(script, /candidate-awaiting-partner-center/u);
+  assert.doesNotMatch(script, /Add-AppxPackage|SignTool|gh release/u);
+  for (const [file, size] of [
+    ['Square44x44Logo.png', 44], ['Square44x44Logo.scale-200.png', 88],
+    ['Square150x150Logo.png', 150], ['Square150x150Logo.scale-200.png', 300],
+    ['StoreLogo.png', 50], ['StoreLogo.scale-200.png', 100],
+  ]) assert.deepEqual(pngSize(`Store/Assets/${file}`), [size, size], file);
+  assert.equal(listing.pricing, 'free');
+  assert.equal(listing.publisherAccountType, 'company');
+  assert.equal(listing.publisherLegalName, 'CF GAUSS SERVICOS LTDA');
+  assert.equal(listing.publisherDisplayName, 'CF Gauss');
+  assert.equal(listing.developedBy, 'CF Gauss Serviços Ltda.');
+  assert.deepEqual(identity, {
+    schemaVersion: 1,
+    productName: 'Resenha',
+    storeId: '9P4M40MZH627',
+    identityName: 'CFGaussServiosLtda.Resenha',
+    publisher: 'CN=423DACA4-6A0B-4E80-BFA4-9BF1E35E6AC1',
+    publisherDisplayName: 'CF Gauss',
+    productUrl: 'https://apps.microsoft.com/detail/9P4M40MZH627',
+    reservationDate: '2026-10-05',
+    accountType: 'company',
+    legalEntity: 'CF GAUSS SERVICOS LTDA',
+  });
+  assert.equal(listing.publisherDisplayName, identity.publisherDisplayName);
+  assert.equal(listing.screenshots.requiredCount, 5);
+  assert.equal(listing.screenshots.captureState, 'store-composites-generated-physical-e2e-pending');
+  for (const screenshot of [
+    '01-fale-solte-continue.png',
+    '02-atalho-e-idiomas.png',
+    '03-clipboard-seguro.png',
+    '04-privacidade-local.png',
+    '05-portugues-com-anglicismos.png',
+  ]) assert.deepEqual(pngSize(`Store/Screenshots/pt-BR/${screenshot}`), [1920, 1080], screenshot);
+  assert.match(listing.restrictedCapabilityJustification, /runFullTrust/u);
+  for (const language of ['pt-BR', 'en-US', 'es-ES']) {
+    const localized = listing.localizations[language];
+    assert.ok(localized.shortDescription.length <= 270, `${language} short description`);
+    assert.ok(localized.description.length <= 10_000, `${language} description`);
+    assert.ok(localized.features.length <= 20 && localized.features.every(value => value.length <= 200), `${language} features`);
+    assert.ok(localized.searchTerms.length <= 7 && localized.searchTerms.every(value => value.length <= 40), `${language} search terms`);
+  }
+});
+
+test('installer separates ephemeral unsigned smoke from the signed release contract', () => {
+  const installer = read('Installer/Resenha.iss');
+  assert.match(installer, /#ifdef SmokeUnsigned/);
+  assert.match(installer, /UNSIGNED-NOT-FOR-DISTRIBUTION/);
+  assert.match(installer, /BETA-UNSIGNED/);
+  assert.match(installer, /SignedUninstaller=no/);
+  assert.match(installer, /#ifdef SmokeUnsigned\nCompression=zip\/1\nSolidCompression=no\n#else\nCompression=lzma2\/max\nSolidCompression=yes/);
+  assert.match(installer, /#ifdef BetaUnsigned\nSignedUninstaller=no\n\s+#else\nSignedUninstaller=yes\nSignTool=resenha/);
+  assert.match(installer, /if UninstallSilent then\n\s+RemoveLocalData := True/);
+});
+
+test('repository text policy keeps byte-identity contracts deterministic on Windows', () => {
+  const attributes = read('../.gitattributes');
+  assert.match(attributes, /^\* text=auto eol=lf$/m);
+  assert.doesNotMatch(read('release-manifest.schema.json'), /\r/);
+});

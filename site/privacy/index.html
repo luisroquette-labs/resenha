@@ -4,10 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="color-scheme" content="light dark">
-  <meta name="description" content="Política de privacidade do Resenha, ditado local para macOS.">
+  <meta name="description" content="Política de privacidade do Resenha, ditado local para macOS e Windows.">
   <title>Privacidade — Resenha</title>
-  <link rel="canonical" href="https://luisroquette.github.io/resenha/privacy/">
-  <link rel="stylesheet" href="../styles.css?v=20261004-3">
+  <link rel="canonical" href="https://luisroquette-labs.github.io/resenha/privacy/">
+  <link rel="stylesheet" href="../styles.css?v=20261005-1">
   <script type="module" src="../analytics.mjs?v=20261004-1"></script>
 </head>
 <body class="legal-page">
@@ -17,7 +17,7 @@
   </header>
   <main class="legal-copy">
     <p class="eyebrow">POLÍTICA DE PRIVACIDADE · 2 OUT 2026</p>
-    <h1>Sua voz fica no seu Mac.</h1>
+    <h1>Sua voz fica no seu computador.</h1>
     <p class="legal-lead">O aplicativo Resenha não cria conta, não exibe anúncios e não envia áudio ou transcrições para servidores. O site usa métricas opcionais e um formulário de pré-download, descritos abaixo.</p>
 
     <h2>Dados processados</h2>
@@ -25,6 +25,7 @@
 
     <h2>Histórico local</h2>
     <p>Se a opção estiver ativa, os 10 últimos textos ficam no Application Support deste Mac. Você pode desativar e apagar esse histórico nos Ajustes. Ele nunca é sincronizado.</p>
+    <p>No Windows, o MVP não grava histórico em disco: mantém somente o último texto na memória até ser substituído, limpo ou o aplicativo fechar. A área de transferência do Windows pode conservar o texto depois disso.</p>
 
     <h2>Rede</h2>
     <p>A única conexão necessária baixa o modelo de voz oficial na primeira configuração. O arquivo é verificado por tamanho e SHA-256 antes do uso. O ditado funciona offline depois disso.</p>
@@ -33,13 +34,17 @@
     <p>O site carrega o Google Tag Manager com o Consent Mode v2 negado por padrão. O armazenamento do Google Analytics 4 só é liberado após sua escolha; os sinais de publicidade permanecem negados. Não enviamos nome, e-mail, áudio ou transcrições ao Google. Eventos de download carregam apenas versão do app, plataforma e identificador técnico do formulário. Você pode rever a escolha no botão “Cookies”.</p>
 
     <h2>Formulário de pré-download</h2>
-    <p>Nome e e-mail são enviados ao motor de formulários da CF Gauss para liberar o download, registrar a origem da visita e criar o atendimento no CRM/Trello. Esses dados não entram no GA4. O formulário usa identificador de submissão para evitar duplicidades.</p>
+    <p>Nome, e-mail e WhatsApp são enviados ao motor de formulários da CF Gauss para liberar o download, registrar a origem da visita e criar o atendimento no CRM/Trello. Esses dados não entram no GA4. Cada plataforma usa um formulário identificado; uma conclusão do formulário de Mac não libera o instalador Windows.</p>
+
+    <h2>Windows</h2>
+    <p>A versão Windows usa WASAPI para o microfone, whisper.cpp local e arquivos temporários sob <code>%LOCALAPPDATA%\Resenha\sessions</code>, apagados ao concluir, cancelar ou falhar. Preferências guardam apenas atalho, microfone e idioma. O modelo verificado permanece local até a remoção.</p>
+    <p>Antes de um único Ctrl+V automático, o Resenha compara o campo original, a atividade física e a área de transferência. Campos protegidos, elevados, alterados ou inacessíveis exigem colagem manual. O aplicativo não pede elevação nem lê o texto do campo.</p>
 
     <h2>Permissões</h2>
     <p>Microfone captura sua fala. Monitoramento de Entrada observa somente o atalho configurado. Acessibilidade devolve o foco ao aplicativo original e envia um único comando de colar ao concluir o ditado; o Resenha não lê o conteúdo de outros apps.</p>
 
     <h2>Contato e código</h2>
-    <p>Dúvidas e relatos podem ser enviados pelo <a href="https://github.com/luisroquette/resenha/issues">GitHub Issues</a>. O código-fonte e a implementação desta política são públicos no <a href="https://github.com/luisroquette/resenha">repositório do Resenha</a>.</p>
+    <p>Dúvidas e relatos podem ser enviados pelo <a href="https://github.com/luisroquette-labs/resenha/issues">GitHub Issues</a>. O código-fonte e a implementação desta política são públicos no <a href="https://github.com/luisroquette-labs/resenha">repositório do Resenha</a>.</p>
   </main>
 </body>
 </html>

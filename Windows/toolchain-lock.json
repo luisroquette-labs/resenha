@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "status": "blocked-awaiting-authorized-windows-host",
+  "requirements": {
+    "dotnetSdk": "10.0.401",
+    "dotnetRuntime": "10.0.12",
+    "mstestSdk": "4.4.0",
+    "microsoftTestingPlatform": "2.4.0",
+    "languageVersion": "14.0",
+    "targetFramework": "net10.0-windows10.0.19041.0",
+    "runtimeIdentifier": "win-x64",
+    "selfContained": true,
+    "msvcToolset": "v143",
+    "innoSetup": "6.7.3",
+    "whisperCommit": "4979e04f5dcaccb36057e059bbaed8a2f5288315"
+  },
+  "approvedHostInventory": null,
+  "requiredInventoryFields": [
+    "anonymousHostId", "authorizationReference", "windowsEdition", "windowsBuild",
+    "architecture", "dotnetSdkVersion", "dotnetRuntimeVersion", "windowsSdkVersion",
+    "msvcCompilerVersion", "msvcCompilerSha256", "linkerVersion", "linkerSha256",
+    "cmakeVersion", "cmakeSha256", "powerShellVersion", "powerShellSha256",
+    "innoCompilerVersion", "innoCompilerSha256", "observedAtUtc"
+  ],
+  "validation": {
+    "lockedRestore": "passed-on-macos-cross-target-2026-10-04",
+    "compile": "passed-on-macos-cross-target-2026-10-04",
+    "coreTests": "passed-145-on-macos-net10-arm64-2026-10-04",
+    "platformTests": "passed-43-explicit-portable-plus-34-other-nonnative-on-macos-net10-arm64-native-failed-or-inconclusive-as-required-2026-10-04",
+    "dependencyLocks": "generated-with-sdk-10.0.401-and-locked-restore-passed"
+  },
+  "blockers": [
+    "No authorized Windows host or native toolchain inventory has been supplied.",
+    "macOS cross-target compilation does not prove Win32 execution, WPF, hooks, WASAPI, UI Automation, signing or installer behavior.",
+    "PowerShell, MSVC, Windows SDK, CMake, Inno Setup and physical Windows execution remain unobserved."
+  ]
+}

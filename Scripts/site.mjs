@@ -7,11 +7,9 @@ const defaultRoot = fileURLToPath(new URL('../site/', import.meta.url));
 const types = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8',
   '.mjs': 'text/javascript; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
   '.svg': 'image/svg+xml', '.png': 'image/png', '.webp': 'image/webp', '.ico': 'image/x-icon',
-  '.mp4': 'video/mp4' };
-const inside = (root, candidate) => {
-  const path = relative(root, candidate);
-  return path !== '..' && !path.startsWith('../') && !isAbsolute(path);
-};
+  '.mp4': 'video/mp4', '.json': 'application/json; charset=utf-8' };
+export const isConfinedPath = path => !/^\.\.(?:[\\/]|$)/u.test(path) && !isAbsolute(path);
+const inside = (root, candidate) => isConfinedPath(relative(root, candidate));
 
 export async function createPreviewServer({ root = defaultRoot, prefix = '/', port = 0 } = {}) {
   if (!/^\/(?:[A-Za-z0-9_-]+\/)*$/u.test(prefix)) throw new Error('Prefix must be / or a slash-terminated path such as /resenha/.');

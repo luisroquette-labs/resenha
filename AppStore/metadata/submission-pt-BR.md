@@ -32,13 +32,13 @@
 - Criptografia não isenta: não; somente TLS fornecido pelo sistema para baixar o modelo
 - Conteúdo de terceiros: não exibe catálogo ou mídia de terceiros; whisper.cpp e o modelo Whisper são componentes locais cobertos pelas licenças documentadas em `THIRD_PARTY_NOTICES.md`
 - IDFA, analytics, crash SDK e logging remoto: ausentes
-- Política: https://luisroquette.github.io/resenha/privacy/
+- Política: https://luisroquette-labs.github.io/resenha/privacy/
 
 ## URLs e contato de revisão
 
-- Marketing: https://luisroquette.github.io/resenha/
-- Suporte: https://github.com/luisroquette/resenha/issues
-- Código-fonte: https://github.com/luisroquette/resenha
+- Marketing: https://luisroquette-labs.github.io/resenha/
+- Suporte: https://github.com/luisroquette-labs/resenha/issues
+- Código-fonte: https://github.com/luisroquette-labs/resenha
 - Contato, telefone e e-mail de revisão: preencher com os dados verificados da conta, sem publicar no repositório
 
 ## Ativos
