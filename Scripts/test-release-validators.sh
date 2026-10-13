@@ -34,13 +34,15 @@ grep -q 'source commit do archive diverge do candidato' "$work_root/commit-misma
   exit 1
 }
 ditto "$archive" "$work_root/build-mismatch.xcarchive"
-plutil -replace CFBundleVersion -string 3 \
+source_build="$(plutil -extract CFBundleVersion raw "$archive/Products/Applications/Resenha.app/Contents/Info.plist")"
+bad_build="$(( source_build + 1 ))"
+plutil -replace CFBundleVersion -string "$bad_build" \
   "$work_root/build-mismatch.xcarchive/Products/Applications/Resenha.app/Contents/Info.plist"
 if "$validator" "$work_root/build-mismatch.xcarchive" "$state" >"$work_root/build-mismatch.log" 2>&1; then
   print -u2 "FALHOU: validador aceitou build divergente"
   exit 1
 fi
-grep -q 'build do archive (3) diverge da fonte (2)' "$work_root/build-mismatch.log" || {
+grep -q "build do archive ($bad_build) diverge da fonte ($source_build)" "$work_root/build-mismatch.log" || {
   print -u2 "FALHOU: mismatch não falhou pelo contrato de build"
   exit 1
 }
