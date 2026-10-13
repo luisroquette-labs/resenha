@@ -251,8 +251,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard !interaction.isRequestingPermission else { return }
         interaction.isRequestingPermission = true
         updateStatusItem()
-        permissions.requestInputMonitoring()
         #if !RESENHA_APP_STORE
+        permissions.requestInputMonitoring()
         permissions.requestAccessibility()
         #endif
         Task {

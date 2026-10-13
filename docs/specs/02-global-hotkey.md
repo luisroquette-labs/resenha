@@ -4,7 +4,7 @@ Status: implemented by distribution channel
 
 ## App Store contract
 
-The App Store build uses the macOS Service **Ditar com Resenha**. Uppercase `E` is a valid `NSKeyEquivalent` and maps to **Command + Shift + E**. A listen-only event tap correlates the real Service request with the most recent still-held non-modifier key and stops only on that matching key-up. Text returns through AppKit; Accessibility is not requested.
+The App Store build uses the macOS Service **Ditar com Resenha**. Uppercase `E` is a valid `NSKeyEquivalent` and maps to **Command + Shift + E**. A non-exclusive `RegisterEventHotKey` registration receives only this shortcut's release. Text returns through AppKit; Input Monitoring and Accessibility are not requested. The Store shortcut remains fixed because a user-assigned Services shortcut cannot be tracked through this registration.
 
 Users may change the Service shortcut in macOS Keyboard Shortcuts. The app retains one numeric keycode for at most one second, never stores text events and rejects ambiguous admission.
 

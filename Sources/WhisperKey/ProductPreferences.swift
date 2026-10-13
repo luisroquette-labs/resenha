@@ -652,13 +652,8 @@ private struct ShortcutSettingsPane: View {
                 ResenhaRuleSection("Pressione e segure para falar") {
                     if ResenhaDistributionChannel.current.usesSandboxedTextService {
                         LabeledContent("Atalho do Serviço", value: ResenhaServiceShortcut.displayName)
-                        Text("Na versão da App Store, o macOS controla o atalho do Serviço Resenha.")
+                        Text("Na versão da App Store, use este atalho para iniciar e concluir o ditado.")
                             .font(.callout).foregroundStyle(.secondary)
-                        Button("Personalizar nos Ajustes do Sistema") {
-                            if let url = URL(string: "x-apple.systempreferences:com.apple.Keyboard-Settings.extension") {
-                                NSWorkspace.shared.open(url)
-                            }
-                        }
                     } else {
                         LabeledContent("Atalho atual", value: preferences.shortcut.displayName)
                         Text("Escolha uma tecla ou combinação. A mudança vale imediatamente em qualquer aplicativo.")

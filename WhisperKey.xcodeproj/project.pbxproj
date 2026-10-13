@@ -14,6 +14,7 @@
 		215BEFC1AEC743FF631DB269 /* HotkeyMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 134C1BDCDE10F8CF85B7E4CF /* HotkeyMonitor.swift */; };
 		21BFEB851E15B4030C254977 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 00EE951794E83B89436ADF66 /* Assets.xcassets */; };
 		23B9446876E4BE5B1AFE5873 /* DictationInteraction.swift in Sources */ = {isa = PBXBuildFile; fileRef = 360ACBBE554E2869FCDC8B7E /* DictationInteraction.swift */; };
+		3E1F1215F16C704FD35D434D /* StoreHotkeyMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 52FE3F4A3432FFF0BE83EA2F /* StoreHotkeyMonitor.swift */; };
 		4606CD9D92C6ACAA3C397C20 /* SoundLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75D558D773F2BC3AB3159027 /* SoundLibrary.swift */; };
 		488CDC52580DCA390B89A260 /* ShortcutCaptureController.swift in Sources */ = {isa = PBXBuildFile; fileRef = D37823F6AEBFF7A451345AD9 /* ShortcutCaptureController.swift */; };
 		4C18792BBBF841A1AFFBA1C0 /* LICENSE-whisper.cpp.txt in Resources */ = {isa = PBXBuildFile; fileRef = FEE8E30AB64AF4FD978D2686 /* LICENSE-whisper.cpp.txt */; };
@@ -69,6 +70,7 @@
 		4D1F830A2CA5F7BBF9179783 /* PermissionOnboarding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionOnboarding.swift; sourceTree = "<group>"; };
 		4FA43D69884F75983C03D5CD /* whisper.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = whisper.xcframework; path = Frameworks/whisper.xcframework; sourceTree = "<group>"; };
 		523F074FCFE5942E2581895F /* NativeMenuController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeMenuController.swift; sourceTree = "<group>"; };
+		52FE3F4A3432FFF0BE83EA2F /* StoreHotkeyMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoreHotkeyMonitor.swift; sourceTree = "<group>"; };
 		5A4EE543D9038B2C11445D3E /* TargetWindowResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TargetWindowResolver.swift; sourceTree = "<group>"; };
 		5D146404C7236681875DFD04 /* WhisperModelManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhisperModelManager.swift; sourceTree = "<group>"; };
 		5FFCCC5A27F52BFFEE1004E2 /* WhisperKeyApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhisperKeyApp.swift; sourceTree = "<group>"; };
@@ -197,6 +199,7 @@
 				28A48336C2B348342B43E11A /* RuntimeBounds.swift */,
 				D37823F6AEBFF7A451345AD9 /* ShortcutCaptureController.swift */,
 				75D558D773F2BC3AB3159027 /* SoundLibrary.swift */,
+				52FE3F4A3432FFF0BE83EA2F /* StoreHotkeyMonitor.swift */,
 				5A4EE543D9038B2C11445D3E /* TargetWindowResolver.swift */,
 				733DACDEB4AB93D5CF9C3903 /* TextInjector.swift */,
 				B3739A1A43D300FD95FA56BD /* TranscriptHistory.swift */,
@@ -354,6 +357,7 @@
 				5F8DBCA2C7004676FA67C4F1 /* RuntimeBounds.swift in Sources */,
 				488CDC52580DCA390B89A260 /* ShortcutCaptureController.swift in Sources */,
 				4606CD9D92C6ACAA3C397C20 /* SoundLibrary.swift in Sources */,
+				3E1F1215F16C704FD35D434D /* StoreHotkeyMonitor.swift in Sources */,
 				FE4B7A84B2D6715897333D08 /* TargetWindowResolver.swift in Sources */,
 				726C0EFD16B67C19F84BC57B /* TextInjector.swift in Sources */,
 				05000D0D3D17971B45BD1891 /* TranscriptHistory.swift in Sources */,
@@ -438,7 +442,7 @@
 				CODE_SIGN_ENTITLEMENTS = Config/ResenhaStore.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_TEAM = S3YCFYY8SC;
 				ENABLE_HARDENED_RUNTIME = YES;
 				FRAMEWORK_SEARCH_PATHS = (
@@ -508,7 +512,7 @@
 				CODE_SIGN_ENTITLEMENTS = Config/Resenha.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_TEAM = S3YCFYY8SC;
 				ENABLE_HARDENED_RUNTIME = YES;
 				FRAMEWORK_SEARCH_PATHS = (
@@ -677,7 +681,7 @@
 				CODE_SIGN_ENTITLEMENTS = Config/Resenha.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_TEAM = S3YCFYY8SC;
 				ENABLE_HARDENED_RUNTIME = YES;
 				FRAMEWORK_SEARCH_PATHS = (

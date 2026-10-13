@@ -919,17 +919,17 @@ final class WhisperKeyTests: XCTestCase {
         }
     }
 
-    func testAppStorePermissionSnapshotExcludesAccessibilityEvenWhenDenied() {
+    func testAppStorePermissionSnapshotRequiresOnlyMicrophone() {
         let snapshot = PermissionSnapshot(
             microphone: true,
-            inputMonitoring: true,
+            inputMonitoring: false,
             accessibility: false,
             requiresAccessibility: false
         )
 
         XCTAssertTrue(snapshot.isReady)
-        XCTAssertEqual(snapshot.presentations.map(\.permission), [.microphone, .inputMonitoring])
-        XCTAssertFalse(snapshot.missingPermissions.contains(.accessibility))
+        XCTAssertEqual(snapshot.presentations.map(\.permission), [.microphone])
+        XCTAssertTrue(snapshot.missingPermissions.isEmpty)
         XCTAssertEqual(snapshot.missingPermissionMessage, "Permissões prontas")
     }
 

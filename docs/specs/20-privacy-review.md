@@ -8,7 +8,7 @@
 - **Limpar textos** removes the canonical history and every sibling quarantine named
   `recent-transcripts.corrupt-*.json`; every matching deletion is attempted even if
   another fails, and any incomplete sweep is reported as unavailable storage.
-- Privacy policy explains microphone, Input Monitoring, clipboard recovery, local storage and model delivery.
+- Privacy policy explains microphone, channel-specific keyboard access, clipboard recovery, local storage and model delivery.
 - A valid `PrivacyInfo.xcprivacy` ships in `Contents/Resources`; required-reason APIs are audited on the archived binary.
 
 ## Review package

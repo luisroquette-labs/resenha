@@ -1,3 +1,4 @@
+#if !RESENHA_APP_STORE
 import ApplicationServices
 import OSLog
 
@@ -275,3 +276,4 @@ final class HotkeyMonitor {
     private static let modifierKeyCodes: Set<Int64> = [54, 55, 56, 57, 58, 59, 60, 61, 62, 63]
     private static let nonModifierKeyCodes = (0...127).map(Int64.init).filter { !modifierKeyCodes.contains($0) }
 }
+#endif

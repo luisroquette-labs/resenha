@@ -13,7 +13,7 @@ Status: automated control flow implemented; native TCC validation pending
 ## Requirements
 
 - Developer ID explains and gates on all three permissions.
-- Mac App Store explains and gates only on Microphone and Input Monitoring; it must never request Accessibility.
+- Mac App Store explains and gates only on Microphone; its registered Services shortcut must never request Input Monitoring or Accessibility.
 - Prompt only after explicit user action; polling and checks never open System Settings.
 - Open the exact privacy pane for each missing permission.
 - Keep the hotkey stopped until every permission required by the active channel is granted.

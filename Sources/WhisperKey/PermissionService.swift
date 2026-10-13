@@ -1,31 +1,43 @@
 import AppKit
+#if !RESENHA_APP_STORE
 import ApplicationServices
+#endif
 import AVFoundation
 
 enum RequiredPermission: Hashable {
     case microphone
+    #if !RESENHA_APP_STORE
     case inputMonitoring
     case accessibility
+    #endif
 
     static func requiredCases(for channel: ResenhaDistributionChannel) -> [RequiredPermission] {
+        #if RESENHA_APP_STORE
+        [.microphone]
+        #else
         channel.requiresAccessibility
             ? [.microphone, .inputMonitoring, .accessibility]
-            : [.microphone, .inputMonitoring]
+            : [.microphone]
+        #endif
     }
 
     var name: String {
         switch self {
         case .microphone: "Microfone"
+        #if !RESENHA_APP_STORE
         case .inputMonitoring: "Monitoramento de Entrada"
         case .accessibility: "Acessibilidade"
+        #endif
         }
     }
 
     var purpose: String {
         switch self {
         case .microphone: "Necessário para capturar sua voz."
+        #if !RESENHA_APP_STORE
         case .inputMonitoring: "Necessário para detectar o atalho em outros aplicativos."
         case .accessibility: "Necessário para inserir o texto no aplicativo ativo."
+        #endif
         }
     }
 
@@ -39,8 +51,10 @@ enum RequiredPermission: Hashable {
         let pane: String
         switch self {
         case .microphone: pane = "Privacy_Microphone"
+        #if !RESENHA_APP_STORE
         case .inputMonitoring: pane = "Privacy_ListenEvent"
         case .accessibility: pane = "Privacy_Accessibility"
+        #endif
         }
         return URL(string: "x-apple.systempreferences:com.apple.preference.security?\(pane)")!
     }
@@ -71,15 +85,23 @@ struct PermissionSnapshot: Equatable {
         self.requiresAccessibility = requiresAccessibility
     }
 
-    var isReady: Bool { microphone && inputMonitoring && (!requiresAccessibility || accessibility) }
+    var isReady: Bool {
+        #if RESENHA_APP_STORE
+        microphone
+        #else
+        microphone && (!requiresAccessibility || (inputMonitoring && accessibility))
+        #endif
+    }
 
     var presentations: [PermissionPresentation] {
         RequiredPermission.requiredCases(for: requiresAccessibility ? .direct : .appStore).map { permission in
             let granted: Bool
             switch permission {
             case .microphone: granted = microphone
+            #if !RESENHA_APP_STORE
             case .inputMonitoring: granted = inputMonitoring
             case .accessibility: granted = accessibility
+            #endif
             }
             return PermissionPresentation(permission: permission, isGranted: granted)
         }
@@ -91,8 +113,10 @@ struct PermissionSnapshot: Equatable {
 
     var missingPermissionMessage: String {
         if !microphone { return "Acesso ao Microfone necessário" }
-        if !inputMonitoring { return "Acesso ao Monitoramento de Entrada necessário" }
+        #if !RESENHA_APP_STORE
+        if requiresAccessibility && !inputMonitoring { return "Acesso ao Monitoramento de Entrada necessário" }
         if requiresAccessibility && !accessibility { return "Acesso à Acessibilidade necessário" }
+        #endif
         return "Permissões prontas"
     }
 }
@@ -110,7 +134,9 @@ enum PermissionGate {
 
 struct PermissionService {
     var isMicrophoneGranted: Bool { AVCaptureDevice.authorizationStatus(for: .audio) == .authorized }
+    #if !RESENHA_APP_STORE
     var isInputMonitoringGranted: Bool { CGPreflightListenEventAccess() }
+    #endif
 
     #if !RESENHA_APP_STORE
     var isAccessibilityGranted: Bool { AXIsProcessTrusted() }
@@ -120,7 +146,7 @@ struct PermissionService {
         #if RESENHA_APP_STORE
         PermissionSnapshot(
             microphone: isMicrophoneGranted,
-            inputMonitoring: isInputMonitoringGranted,
+            inputMonitoring: true,
             accessibility: true,
             requiresAccessibility: false
         )
@@ -147,9 +173,11 @@ struct PermissionService {
         await AVCaptureDevice.requestAccess(for: .audio)
     }
 
+    #if !RESENHA_APP_STORE
     func requestInputMonitoring() {
         CGRequestListenEventAccess()
     }
+    #endif
 
     #if !RESENHA_APP_STORE
     func requestAccessibility() {

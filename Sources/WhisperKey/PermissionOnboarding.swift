@@ -13,24 +13,30 @@ private extension RequiredPermission {
     var onboardingTitle: String {
         switch self {
         case .microphone: "Microfone"
+        #if !RESENHA_APP_STORE
         case .inputMonitoring: "Monitoramento de Entrada"
         case .accessibility: "Acessibilidade"
+        #endif
         }
     }
 
     var onboardingPurpose: String {
         switch self {
         case .microphone: "Captura sua voz enquanto a tecla estiver pressionada."
+        #if !RESENHA_APP_STORE
         case .inputMonitoring: "Detecta o atalho escolhido mesmo em outros aplicativos."
         case .accessibility: "Insere a transcrição no campo em que você estava digitando."
+        #endif
         }
     }
 
     var onboardingIcon: String {
         switch self {
         case .microphone: "mic.fill"
+        #if !RESENHA_APP_STORE
         case .inputMonitoring: "keyboard"
         case .accessibility: "text.cursor"
+        #endif
         }
     }
 }
@@ -51,8 +57,9 @@ private struct PermissionOnboardingView: View {
     private var setupReady: Bool { snapshot.isReady && modelReady }
 
     private var introText: String {
-        let count = snapshot.requiresAccessibility ? "Três permissões" : "Duas permissões"
-        return "\(count) conectam voz, atalho e inserção automática. O áudio nunca sai deste Mac."
+        return snapshot.requiresAccessibility
+            ? "Três permissões conectam voz, atalho e inserção automática. O áudio nunca sai deste Mac."
+            : "O Microfone permite ditar. O atalho do Serviço devolve o texto ao campo ativo. O áudio nunca sai deste Mac."
     }
     var body: some View {
         ZStack {
@@ -171,7 +178,11 @@ private struct PermissionOnboardingView: View {
                     .buttonStyle(.borderedProminent)
                     .foregroundStyle(ResenhaTheme.onControl)
                     .disabled(isRequesting)
-                    .accessibilityHint("Solicita Microfone e abre os Ajustes para Monitoramento de Entrada")
+                    #if RESENHA_APP_STORE
+                    .accessibilityHint("Solicita acesso ao Microfone")
+                    #else
+                    .accessibilityHint("Solicita Microfone e abre os Ajustes para Monitoramento de Entrada e Acessibilidade")
+                    #endif
             }
         }
     }

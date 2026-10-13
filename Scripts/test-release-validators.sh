@@ -65,17 +65,27 @@ if [[ "$negative_only" == 1 ]]; then
 
   assert_ax_symbol_rejected AXUIElementCopyAttributeValue
   assert_ax_symbol_rejected AXObserverCreate
+  assert_ax_symbol_rejected CGEventTapCreate
+  assert_ax_symbol_rejected CGPreflightListenEventAccess
+  assert_ax_symbol_rejected CGRequestListenEventAccess
 
   clean_source="$work_root/clean.c"
   clean_binary="$work_root/clean"
-  print 'int main(void) { return 0; }' > "$clean_source"
-  xcrun clang "$clean_source" -o "$clean_binary"
+  cat > "$clean_source" <<'EOF'
+#include <Carbon/Carbon.h>
+int main(void) {
+  EventHotKeyRef hotkey = NULL;
+  EventHotKeyID identifier = { 'RSNH', 1 };
+  return RegisterEventHotKey(kVK_ANSI_E, cmdKey | shiftKey, identifier, GetApplicationEventTarget(), 0, &hotkey);
+}
+EOF
+  xcrun clang "$clean_source" -framework Carbon -o "$clean_binary"
   "$binary_boundary_validator" "$clean_binary" >"$work_root/clean.log"
-  grep -q 'PASS: binário App Store sem Accessibility ou postagem sintética' "$work_root/clean.log" || {
+  grep -q 'PASS: binário App Store com atalho registrado' "$work_root/clean.log" || {
     print -u2 "FALHOU: fixture limpa não produziu o aceite esperado"
     exit 1
   }
-  print "PASS: versão, source commit e build divergentes rejeitados; dois AX rejeitados; fixture limpa aceita"
+  print "PASS: versão, source commit e build divergentes rejeitados; Accessibility e Input Monitoring rejeitados; fixture limpa aceita"
 else
   print "PASS: pacote exato aceito; versão, source commit e build divergentes rejeitados"
 fi

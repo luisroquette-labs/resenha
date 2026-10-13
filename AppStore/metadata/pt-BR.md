@@ -24,7 +24,7 @@ O áudio é processado pelo whisper.cpp no próprio Mac e apagado após cada ten
 
 RÁPIDO DE USAR
 
-• Atalho global personalizável nos Ajustes do macOS
+• Atalho Command + Shift + E integrado ao Serviço do macOS
 • HUD discreto com duração e nível real do microfone
 • Sons de início e fim configuráveis
 • Texto sempre disponível no clipboard

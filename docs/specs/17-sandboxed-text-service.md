@@ -14,7 +14,7 @@ Resenha advertises a sandbox-safe macOS Service with no input type and a plain-t
 
 1. Command + Shift + E (or a user-assigned Service shortcut with a main key) is pressed and held in a compatible editable field.
 2. Resenha starts capture and shows the passive listening HUD.
-3. Input Monitoring matches the most recent held non-modifier key-down and observes only that key's release.
+3. A registered, non-exclusive Services shortcut receives its own release event without Input Monitoring.
 4. Resenha stops capture, transcribes locally and writes plain text to the service pasteboard.
 5. The requesting app reads the returned pasteboard and replaces its active selection.
 

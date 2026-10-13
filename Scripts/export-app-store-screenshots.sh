@@ -23,7 +23,6 @@ required=(
   hud-inserting-light.png
   hud-failure-light.png
   settings-general-light.png
-  settings-shortcut-light.png
   settings-sounds-light.png
   settings-audio-light.png
   settings-transcription-light.png
@@ -131,7 +130,7 @@ magick "$work_root/flow-title.png" \
   \( "$fixture_root/hud-inserting-light.png" -resize 1260x267 \) -geometry +930+1300 -composite \
   "$output_root/02-tres-estados.png"
 
-settings_shot '03' 'Seu atalho. Seu ritmo.' 'Configure a combinação global e segure para falar.' 'settings-shortcut-light.png' 'atalho-global'
+settings_shot '03' 'Sons do seu jeito.' 'Escolha os sinais que acompanham seu ditado.' 'settings-sounds-light.png' 'sons-do-seu-jeito'
 settings_shot '04' 'Português sem medo do inglês.' 'PT-BR, English e Español com vocabulário pessoal.' 'settings-transcription-light.png' 'idiomas-anglicismos'
 settings_shot '05' 'Seu texto continua com você.' 'Cada transcrição vai ao clipboard; o histórico local é opcional.' 'settings-general-light.png' 'clipboard-local'
 settings_shot '06' 'Sua voz não sai deste Mac.' 'Whisper local, sem conta, nuvem ou backend.' 'settings-about-light.png' 'privacidade-local'
