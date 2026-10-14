@@ -18,7 +18,9 @@
     "submittedAt": "2026-10-04T12:52:00-03:00"
   },
   "requiredBeforeSubmission": [
-    "Physical Services shortcut and text-return check on a clean App Store build"
+    "Physical Services shortcut and text-return check on a clean App Store build",
+    "Replace stale 03-atalho-global.png screenshot in App Store Connect",
+    "Account Holder accepts the updated Apple Developer Program agreement"
   ],
   "remoteMutationRequiresOwnerApproval": true,
   "previousSubmission": {
