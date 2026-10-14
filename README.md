@@ -1,12 +1,12 @@
 # Resenha
 
-**Fale. O Resenha escreve.** Ditado push-to-talk nativo para macOS, gratuito,
+**Fale. O Resenha escreve.** Ditado nativo para macOS, gratuito,
 local e de código aberto. Requer Apple Silicon e macOS 14 ou posterior.
 
-Segure o atalho, fale e solte. O Resenha grava só enquanto a combinação está
-pressionada, transcreve com whisper.cpp no próprio Mac e devolve o texto ao
-campo ativo. A distribuição direta usa Acessibilidade; a Mac App Store usa um
-Serviço nativo e permanece dentro do sandbox.
+Na Mac App Store, pressione `Command + Shift + E` em um campo de texto, fale e
+clique em **Concluir** no painel. O Serviço nativo devolve a transcrição ao
+campo ativo. Na distribuição direta, segure o atalho escolhido, fale e solte;
+essa versão usa Acessibilidade. Ambas transcrevem com whisper.cpp no próprio Mac.
 
 ## O que já funciona
 
@@ -14,7 +14,8 @@ Serviço nativo e permanece dentro do sandbox.
 - Whisper embarcado, acelerado por Metal em Apple Silicon; nenhuma instalação de Python.
 - Áudio transitório, clipboard imediato e últimos 10 textos locais e opcionais.
 - HUD compacto com nível real do microfone, sons configuráveis e feedback de erro.
-- Atalho livre configurado dentro do app, inclusive Option direita isolada.
+- Na distribuição direta, atalho livre configurado dentro do app, inclusive
+  Option direita isolada. Na Mac App Store, Serviço com `Command + Shift + E`.
 - Sem conta, anúncios, analytics, backend ou chave de API.
 
 ## Privacidade
@@ -60,7 +61,7 @@ Gatekeeper. Cada artefato recebe um arquivo `.sha256` correspondente.
 ## Arquitetura
 
 ```text
-Atalho global escolhido no Resenha
+Atalho global (DMG) ou Serviço do macOS (App Store)
   → AVFoundation (PCM mono, 16 kHz)
   → whisper.cpp + Metal
   → pós-processamento determinístico

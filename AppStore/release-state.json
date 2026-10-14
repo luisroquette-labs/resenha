@@ -25,6 +25,12 @@
     "uploadedAt": "2026-10-14T13:06-03:00",
     "screenshots": "10/10 pt-BR APP_DESKTOP processed in order",
     "metadata": "Promotional text, description, review notes and audio-input justification saved",
+    "internalTest": {
+      "group": "Teste interno Luis",
+      "build": 5,
+      "testerStatusObserved": "INVITED",
+      "automaticDistribution": false
+    },
     "submittedForReview": false
   },
   "submitted": {
