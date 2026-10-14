@@ -14,10 +14,19 @@
     "version": "1.0.0"
   },
   "requiredBeforeSubmission": [
-    "Physical Services shortcut and text-return check on a clean App Store build",
-    "Replace all 10 stale screenshots in App Store Connect with the build 5 set",
-    "Update App Store Connect promotional text, description, review notes and audio-input justification for the Concluir flow"
+    "Physical Services shortcut and text-return check on a clean App Store build"
   ],
+  "currentVersion": {
+    "version": "1.0",
+    "statusObserved": "PREPARE_FOR_SUBMISSION",
+    "releaseModeObserved": "MANUAL",
+    "build": 5,
+    "buildDeliveryID": "60435478-68b3-4c5d-b42a-c60d0513a1dd",
+    "uploadedAt": "2026-10-14T13:06-03:00",
+    "screenshots": "10/10 pt-BR APP_DESKTOP processed in order",
+    "metadata": "Promotional text, description, review notes and audio-input justification saved",
+    "submittedForReview": false
+  },
   "submitted": {
     "build": 2,
     "reviewDate": "2026-10-08",
