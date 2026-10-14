@@ -15,7 +15,7 @@
   },
   "requiredBeforeSubmission": [
     "Physical Services shortcut and text-return check on a clean App Store build",
-    "Replace stale 03-atalho-global.png screenshot in App Store Connect",
+    "Replace all 10 stale screenshots in App Store Connect with the build 5 set",
     "Update App Store Connect promotional text, description, review notes and audio-input justification for the Concluir flow"
   ],
   "submitted": {
