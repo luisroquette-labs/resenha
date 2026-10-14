@@ -134,8 +134,7 @@ struct FloatingStatusView: View {
                 HStack(spacing: 12) {
                     RecordingWaveformView(
                         meter: model.recording,
-                        fixtureReduceMotion: fixtureReduceMotion,
-                        accessibilityLayout: resolvedDynamicTypeSize.isAccessibilitySize
+                        fixtureReduceMotion: fixtureReduceMotion
                     )
                     if let finishRecording {
                         Button("Concluir", action: finishRecording)

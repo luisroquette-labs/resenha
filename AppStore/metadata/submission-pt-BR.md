@@ -8,7 +8,7 @@
 - SKU: `resenha-macos-1`
 - Plataforma: macOS
 - Versão: `1.0.0`
-- Build candidato mínimo: `5` (`2` foi rejeitado; `3` não inclui o link de privacidade no app; `4` não tem o botão Concluir)
+- Build candidato mínimo: `6` (`2` foi rejeitado; `3` não inclui o link de privacidade no app; `4` não tem o botão Concluir; `5` não inclui o orb de voz)
 - Preço: grátis
 - Disponibilidade: todos os territórios elegíveis
 - Lançamento: manual após aprovação; confirmar no App Store Connect antes de submeter
@@ -54,5 +54,5 @@
 1. Acordos Apple vigentes e app record reservado.
 2. Certificados `Apple Distribution` e `Mac Installer Distribution` disponíveis.
 3. Archive Release assinado, exportado e validado sem avisos.
-4. Build processado e smoke testado via TestFlight/App Store Connect.
+4. Build processado no App Store Connect e pacote validado localmente.
 5. Metadados conferidos no painel antes de `Submit for Review`.

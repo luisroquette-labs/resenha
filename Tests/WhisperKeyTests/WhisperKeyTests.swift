@@ -1727,6 +1727,15 @@ final class WhisperKeyTests: XCTestCase {
                     storeView.layoutSubtreeIfNeeded()
                     let storeBitmap = try XCTUnwrap(storeView.bitmapImageRepForCachingDisplay(in: storeView.bounds))
                     storeView.cacheDisplay(in: storeView.bounds, to: storeBitmap)
+                    let coloredPixels = (0..<storeBitmap.pixelsHigh).reduce(0) { count, y in
+                        count + (0..<(storeBitmap.pixelsWide / 2)).reduce(0) { rowCount, x in
+                            guard let color = storeBitmap.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB) else {
+                                return rowCount
+                            }
+                            return rowCount + (color.blueComponent > 0.45 && color.saturationComponent > 0.35 ? 1 : 0)
+                        }
+                    }
+                    XCTAssertGreaterThan(coloredPixels, 500, "O orb precisa aparecer no modal e na captura da loja")
                     let storeData = try XCTUnwrap(storeBitmap.representation(using: .png, properties: [:]))
                     try storeData.write(to: directory.appendingPathComponent("hud-store-listening-light.png"))
                 }

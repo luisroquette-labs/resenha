@@ -60,26 +60,12 @@ struct RecordingMeter: Equatable {
 struct RecordingWaveformView: View {
     let meter: RecordingMeter
     var fixtureReduceMotion: Bool? = nil
-    var accessibilityLayout = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        Group {
-            if accessibilityLayout {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 10) {
-                        resonatingMark
-                        listeningSummary
-                    }
-                    waveform
-                }
-            } else {
-                HStack(spacing: 10) {
-                    resonatingMark
-                    listeningSummary
-                    waveform
-                }
-            }
+        HStack(spacing: 10) {
+            voiceOrb
+            listeningSummary
         }
         .foregroundStyle(.primary)
         .transaction { $0.animation = nil }
@@ -99,41 +85,75 @@ struct RecordingWaveformView: View {
         .fixedSize(horizontal: true, vertical: true)
     }
 
-    private var waveform: some View {
-        let levels = meter.displayLevels(reduceMotion: fixtureReduceMotion ?? reduceMotion)
-        return HStack(spacing: 1.5) {
-            ForEach(0..<RecordingMeter.barCount, id: \.self) { index in
-                Capsule()
-                    .fill(LinearGradient(
-                        colors: [Color.primary.opacity(0.72), ResenhaTheme.signal],
-                        startPoint: .bottom,
-                        endPoint: .top
-                    ))
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 3 + CGFloat(levels[index]) * 29)
-            }
+    private var voiceOrb: some View {
+        let shouldReduceMotion = fixtureReduceMotion ?? reduceMotion
+        return TimelineView(.animation(minimumInterval: 1.0 / 30, paused: shouldReduceMotion)) { timeline in
+            VoiceOrbView(
+                level: shouldReduceMotion ? 0 : RecordingResonance.normalized(meter.currentLevel),
+                time: shouldReduceMotion ? 0 : timeline.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 10_000)
+            )
         }
-        .frame(maxWidth: .infinity)
-        .frame(height: 32)
+        .frame(width: 64, height: 64)
+    }
+}
+
+private struct VoiceOrbRing: Shape {
+    let level: CGFloat
+    let time: TimeInterval
+
+    func path(in rect: CGRect) -> Path {
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+        let baseRadius = min(rect.width, rect.height) * 0.34
+        let wave = 1.5 + level * 4
+        let phase = CGFloat(time)
+        var path = Path()
+        for index in 0...120 {
+            let angle = CGFloat(index) * .pi / 60
+            let radius = baseRadius + wave * (
+                0.55 * sin(angle * 3 + phase * 1.3) +
+                0.30 * sin(angle * 5 - phase * 0.8) +
+                0.15 * sin(angle * 9 + phase * 1.7)
+            )
+            let point = CGPoint(x: center.x + radius * cos(angle), y: center.y + radius * sin(angle))
+            if index == 0 { path.move(to: point) } else { path.addLine(to: point) }
+        }
+        path.closeSubpath()
+        return path
+    }
+}
+
+private struct VoiceOrbView: View {
+    let level: CGFloat
+    let time: TimeInterval
+
+    private var colors: [Color] {
+        [Color(red: 0.61, green: 0.26, blue: 1),
+         Color(red: 0.30, green: 0.76, blue: 0.91),
+         Color(red: 0.06, green: 0.08, blue: 0.60),
+         Color(red: 0.88, green: 0.30, blue: 0.91),
+         Color(red: 0.61, green: 0.26, blue: 1)]
     }
 
-    private var resonatingMark: some View {
-        let shouldReduceMotion = fixtureReduceMotion ?? reduceMotion
-        return ZStack {
-            Image("ResenhaMark")
-                .resizable()
-                .renderingMode(.template)
-                .scaledToFit()
-                .foregroundStyle(ResenhaTheme.signal)
-                .opacity(RecordingResonance.haloOpacity(level: meter.currentLevel, reduceMotion: shouldReduceMotion))
-                .scaleEffect(RecordingResonance.haloScale(level: meter.currentLevel, reduceMotion: shouldReduceMotion))
-            Image("ResenhaMark")
-                .resizable()
-                .renderingMode(.template)
-                .scaledToFit()
-                .foregroundStyle(.primary)
-                .scaleEffect(RecordingResonance.markScale(level: meter.currentLevel, reduceMotion: shouldReduceMotion))
+    var body: some View {
+        let phase = CGFloat(time)
+        let gradient = AngularGradient(colors: colors, center: .center, angle: .radians(time * 0.7))
+        ZStack {
+            Circle()
+                .fill(RadialGradient(colors: [.clear, colors[2].opacity(0.65), .clear],
+                                     center: .center, startRadius: 5, endRadius: 32))
+            VoiceOrbRing(level: level, time: time)
+                .stroke(gradient, lineWidth: 15 + level * 4)
+                .blur(radius: 6)
+                .opacity(0.7)
+            VoiceOrbRing(level: level, time: time)
+                .stroke(gradient, lineWidth: 9 + level * 3)
+            Circle()
+                .fill(.white.opacity(0.85))
+                .frame(width: 5 + level * 4, height: 5 + level * 4)
+                .blur(radius: 2)
+                .offset(x: 21 * cos(phase), y: 21 * sin(phase))
         }
-        .frame(width: 28, height: 28)
+        .frame(width: 64, height: 64)
+        .accessibilityHidden(true)
     }
 }
