@@ -16,9 +16,26 @@ Make transcription self-contained, signed, sandbox-compatible and optimized for 
 ## Security and privacy
 
 - Verify model SHA-256 before use.
+- On every launch, an existing model enters `verifying`; it cannot enter `ready`
+  until its exact byte count and SHA-256 have been recomputed. A corrupt file is
+  removed and reported as unavailable.
+- The Service and hotkey remain disabled outside `ready`. Admission captures the
+  verified model URL and passes that exact URL through the dictation session; the
+  transcriber never re-resolves a production model by file existence.
+- Downloads use one named staging file and one named resume-data file. Cancellation
+  removes staging immediately and persists only resumable URLSession metadata. Success,
+  unrecoverable failure and invalid payloads remove both artifacts.
+- Installation first verifies the staged payload, then replaces the destination with
+  an atomic Foundation replacement that retains a rollback backup until success. A
+  failed replacement restores the previously verified destination.
+- A rollback failure is explicit and retains the verified backup path. On launch,
+  a valid canonical model removes matching stale backups; a missing or invalid
+  canonical model is restored from the newest valid matching backup before use.
 - Audio and inference buffers never leave the process/container.
 - Temporary files use user-only permissions and are deleted on success, failure, cancellation and stale-startup cleanup.
 - No model path or executable override from environment variables in Release Store builds.
+- `WHISPER_MODEL_PATH` is compiled only in `DEBUG`; the literal and branch must be
+  absent from the Release executable.
 
 ## Acceptance
 
@@ -26,3 +43,5 @@ Make transcription self-contained, signed, sandbox-compatible and optimized for 
 - `WHISPER-STORE-002`: a network-disabled Release build transcribes the fixture corpus.
 - `WHISPER-STORE-003`: English terms inside pt-BR speech retain or improve the current baseline.
 - `WHISPER-STORE-004`: third-party notices include whisper.cpp and model licenses.
+- `WHISPER-STORE-005`: cancellation can resume without a `.download` orphan; a failed
+  update leaves the prior verified model byte-for-byte intact.

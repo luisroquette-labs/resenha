@@ -1,0 +1,12 @@
+{
+  "fps": 30,
+  "duration": 8,
+  "scenes": [
+    {"name":"general","sampleTime":0.500,"fixtureSHA256":"dd8c9a694a93de83257aa89168a45ad91b732ca3328c242652b539d95dd8179a"},
+    {"name":"shortcut","sampleTime":1.833,"fixtureSHA256":"07dca453b042d0f9dd121325f960ad92035bec255d6f0ac8380e4ffa3d19faa7"},
+    {"name":"sounds-angelic","sampleTime":3.167,"fixtureSHA256":"138171875f25bfa9326ab7d11b419b3e309b00bc23d694129cf5ccbdd4306d69"},
+    {"name":"sounds-query","sampleTime":4.500,"fixtureSHA256":"fc69addd641224ee3340448abbeb4c4b1bc3cf1b1b1f818ff31abf2ffd08b289"},
+    {"name":"sounds-favorite","sampleTime":5.833,"fixtureSHA256":"973b2f08ad5ea7d57d6ffb246d85f0df968c94b62bc546f72b5ae1d2ebe92fd1"},
+    {"name":"sounds-favorites-only","sampleTime":7.167,"fixtureSHA256":"5ca14b28ec7c5e79c118069cd6d482f58c347af3cc442e0a051a05f857c56dab"}
+  ]
+}

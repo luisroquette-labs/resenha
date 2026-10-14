@@ -9,9 +9,9 @@ Resenha is a macOS input method: hold the global shortcut chosen inside the app,
 ## Non-negotiable principles
 
 1. **Local-only:** microphone audio and transcripts never leave the Mac.
-2. **Native:** Swift, SwiftUI, AVFoundation, Accessibility event posting, and embedded whisper.cpp. No Electron, Python runtime, or backend.
+2. **Native:** Swift, SwiftUI, AVFoundation, channel-appropriate native text delivery, and embedded whisper.cpp. No Electron, Python runtime, or backend.
 3. **Invisible workflow:** dictation requires no app switching, file selection, copying, or manual pasting.
-4. **Least privilege:** request Microphone, Input Monitoring and Accessibility; never retain or act on keystrokes beyond the configured shortcut and one insertion command.
+4. **Least privilege:** request only the permissions required by the distribution channel; never retain or act on keystrokes beyond the active shortcut and one bounded delivery action.
 5. **Ephemeral audio:** M0 deletes audio and generated transcript files after each attempt. A later owner-approved amendment may retain final text locally with an explicit limit and clear action.
 
 ## Engineering rules
@@ -38,6 +38,10 @@ The owner authorized one free, public Mac App Store product with full product-qu
 ## Amendment 003 — direct distribution and in-app shortcut (2026-10-03)
 
 The owner explicitly replaced the Store shortcut boundary with direct distribution. The user chooses any shortcut inside Resenha, including a single right Option key. Accessibility is required for automatic insertion through a bounded synthetic `Command-V`; App Sandbox and the registered macOS Service are removed. The transcript remains on the clipboard if the target refuses insertion. This amendment supersedes Amendment 002 wherever the two conflict.
+
+## Amendment 004 — dual distribution channels (2026-10-03)
+
+The owner authorized both full product channels from one source tree. The Mac App Store build is sandboxed, uses `Ditar com Resenha` through `NSServices`, and never requests Accessibility. The Developer ID DMG keeps the configurable in-app shortcut and bounded Accessibility insertion. Both channels preserve local transcription, verified model integrity, clipboard recovery, opt-in history, runtime limits and the same product identity. This amendment controls wherever Amendments 002 and 003 conflict; neither channel is a reduced edition.
 
 ## Definition of done
 

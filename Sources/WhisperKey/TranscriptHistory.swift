@@ -6,6 +6,27 @@ struct TranscriptHistoryItem: Codable, Equatable, Identifiable {
     let text: String
 }
 
+struct TranscriptHistoryClearFileOperations {
+    var fileExists: (URL) -> Bool
+    var contents: (URL) throws -> [URL]
+    var remove: (URL) throws -> Void
+    var identity: (URL) -> URL = {
+        $0.standardizedFileURL.resolvingSymlinksInPath()
+    }
+
+    static let live = Self(
+        fileExists: { FileManager.default.fileExists(atPath: $0.path) },
+        contents: {
+            try FileManager.default.contentsOfDirectory(
+                at: $0,
+                includingPropertiesForKeys: nil,
+                options: [.skipsHiddenFiles]
+            )
+        },
+        remove: { try FileManager.default.removeItem(at: $0) }
+    )
+}
+
 @MainActor
 final class TranscriptHistory {
     static let limit = 10
@@ -13,13 +34,18 @@ final class TranscriptHistory {
     static let maximumFileBytes = 2 * 1_024 * 1_024
 
     private let fileURL: URL
+    private let clearFileOperations: TranscriptHistoryClearFileOperations
     private(set) var items: [TranscriptHistoryItem]
     private(set) var storageAvailable = true
     var onChange: (([TranscriptHistoryItem], Bool) -> Void)?
 
-    init(fileURL: URL? = nil) {
+    init(
+        fileURL: URL? = nil,
+        clearFileOperations: TranscriptHistoryClearFileOperations = .live
+    ) {
         let resolvedURL = fileURL ?? Self.defaultURL()
         self.fileURL = resolvedURL
+        self.clearFileOperations = clearFileOperations
         Self.prepareDirectory(for: resolvedURL)
         items = Self.load(from: resolvedURL)
     }
@@ -35,17 +61,32 @@ final class TranscriptHistory {
         onChange?(items, storageAvailable)
     }
 
-    func clear() {
+    @discardableResult
+    func clear() -> Bool {
         items = []
+        var deletionFailed = false
         do {
-            if FileManager.default.fileExists(atPath: fileURL.path) {
-                try FileManager.default.removeItem(at: fileURL)
+            let directory = fileURL.deletingLastPathComponent()
+            let canonicalStem = fileURL.deletingPathExtension().lastPathComponent
+            let canonicalIdentity = clearFileOperations.identity(fileURL)
+            if clearFileOperations.fileExists(directory) {
+                for sibling in try clearFileOperations.contents(directory)
+                where clearFileOperations.identity(sibling) == canonicalIdentity
+                    || (sibling.lastPathComponent.hasPrefix("\(canonicalStem).corrupt-")
+                        && sibling.pathExtension == "json") {
+                    do {
+                        try clearFileOperations.remove(sibling)
+                    } catch {
+                        deletionFailed = true
+                    }
+                }
             }
-            storageAvailable = true
         } catch {
-            storageAvailable = false
+            deletionFailed = true
         }
+        storageAvailable = !deletionFailed
         onChange?(items, storageAvailable)
+        return storageAvailable
     }
 
     @discardableResult

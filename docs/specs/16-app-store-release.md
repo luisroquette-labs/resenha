@@ -1,6 +1,6 @@
 # SPEC-016 — Mac App Store release
 
-Status: superseded by SPEC-021 on 2026-10-03; retained as historical release work.
+Status: active for the `ResenhaAppStore`/`AppStore` channel under Amendment 004.
 
 Previous status: accepted for implementation
 

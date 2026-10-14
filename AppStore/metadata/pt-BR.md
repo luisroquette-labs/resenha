@@ -1,20 +1,18 @@
 # Resenha — Ditado por Voz
 
-> Arquivo histórico: a distribuição pela Mac App Store foi substituída pela distribuição direta em 03/10/2026.
-
 ## Subtítulo
 
 Fale. O Resenha escreve.
 
 ## Texto promocional
 
-Segure o atalho, fale e solte. Ditado local com Whisper, feito para português e anglicismos — grátis, sem conta, anúncios ou envio do seu áudio.
+Inicie com Command + Shift + E, fale e clique em Concluir. Ditado local com Whisper — grátis, sem conta ou envio do seu áudio.
 
 ## Descrição
 
 Sua voz vira texto no campo em que você já está escrevendo.
 
-Resenha é um ditado push-to-talk nativo para Mac. Pressione e segure o atalho, fale naturalmente e solte. A transcrição aparece no aplicativo ativo sem você precisar trocar de janela, selecionar arquivo, copiar ou colar manualmente.
+Resenha é um app de ditado nativo para Mac. Em um campo de texto, pressione Command + Shift + E, fale naturalmente e clique em Concluir no painel. A transcrição aparece no aplicativo ativo sem você precisar selecionar arquivo, copiar ou colar manualmente.
 
 FEITO PARA O PORTUGUÊS REAL
 
@@ -26,7 +24,7 @@ O áudio é processado pelo whisper.cpp no próprio Mac e apagado após cada ten
 
 RÁPIDO DE USAR
 
-• Atalho global personalizável nos Ajustes do macOS
+• Atalho Command + Shift + E integrado ao Serviço do macOS
 • HUD discreto com duração e nível real do microfone
 • Sons de início e fim configuráveis
 • Texto sempre disponível no clipboard
@@ -39,7 +37,7 @@ Construído em Swift e SwiftUI com AVFoundation, App Sandbox e aceleração Meta
 
 Requer um Mac com Apple Silicon e macOS 14 ou posterior.
 
-Resenha é simples de propósito: fale, solte, continue escrevendo.
+Resenha é simples de propósito: inicie, fale, conclua e continue escrevendo.
 
 ## Palavras-chave
 
@@ -52,6 +50,6 @@ texto,transcrição,Whisper,offline,português,atalho,microfone,produtividade,pr
 
 ## URLs
 
-- Suporte: https://github.com/luisroquette/resenha/issues
-- Marketing: https://luisroquette.github.io/resenha/
-- Privacidade: https://luisroquette.github.io/resenha/privacy/
+- Suporte: https://github.com/luisroquette-labs/resenha/issues
+- Marketing: https://luisroquette-labs.github.io/resenha/
+- Privacidade: https://luisroquette-labs.github.io/resenha/privacy/

@@ -2,7 +2,7 @@
 
 Data: 2 de outubro de 2026
 
-## Binário candidato
+## Build 1 submetido — obsoleto
 
 - Archive: `build/archive/Resenha-1.0.0-b1-r2.xcarchive`
 - Bundle: `br.com.luisroquette.Resenha`
@@ -14,7 +14,17 @@ Data: 2 de outubro de 2026
 - `PrivacyInfo.xcprivacy`: presente
 - `ITSAppUsesNonExemptEncryption`: `false`
 
-## Gates concluídos
+Este archive antecede a correção do contrato de Serviço e **não é candidato a
+release**. Em 3 de outubro de 2026, o App Store Connect indicava
+`WAITING_FOR_REVIEW` com publicação `AFTER_APPROVAL`; essa combinação permitiria
+publicar um binário obsoleto. Nenhuma retirada, troca de build ou mudança do modo
+de publicação foi executada sem aprovação explícita do proprietário.
+
+O próximo candidato deve ser `1.0.0 (2)` ou superior, usar lançamento manual e
+passar os gates automatizados e físicos no binário exato. A trava legível por
+ferramentas está em `AppStore/release-state.json`.
+
+## Gates históricos do build 1
 
 - `mac-gate xcodebuild … test`: 59 testes, zero falhas
 - Inferência real: whisper.cpp embarcado, Metal e modelo oficial local
@@ -32,9 +42,8 @@ Após a aceitação do acordo Apple, o Xcode exportou `Resenha.pkg` com sucesso:
 - Profile: `Mac Team Store Provisioning Profile: br.com.luisroquette.Resenha`
 - Assinatura e conteúdo do package: verificados pelo `pkgutil`
 
-## Gate externo atual
+## Registro histórico anterior
 
-O upload autenticou no App Store Connect e recebeu HTTP 200, mas retornou
-`IDEDistribution.DistributionAppRecordProviderError.missingApp`. A consulta exata
-por `br.com.luisroquette.Resenha` encontrou zero registros. É necessário criar
-o app record no App Store Connect antes de repetir o mesmo upload.
+O upload inicial autenticou no App Store Connect e recebeu HTTP 200, mas retornou
+`IDEDistribution.DistributionAppRecordProviderError.missingApp`. Esse estado foi
+superado pela submissão posterior do build 1 e não descreve o gate atual.

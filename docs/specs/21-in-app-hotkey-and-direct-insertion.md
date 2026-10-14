@@ -1,10 +1,10 @@
 # SPEC-021 — Atalho livre no app e inserção direta
 
-Status: implementado; distribuição definida pela SPEC-022
+Status: implementado no canal Developer ID; coexistência definida pela Emenda 004
 
 ## Decisão
 
-O Resenha volta a ser distribuído diretamente, fora da Mac App Store. O usuário grava o atalho global dentro do próprio app, inclusive uma tecla modificadora isolada como **Option direita**. Ao soltar o atalho, o texto é colado no campo que estava ativo por meio de um `Command-V` sintético.
+No DMG Developer ID, o usuário grava o atalho global dentro do próprio app, inclusive uma tecla modificadora isolada como **Option direita**. Ao soltar o atalho, o texto é colado no campo que estava ativo por meio de um `Command-V` sintético. Este contrato não se aplica ao build sandboxed da Mac App Store.
 
 ## Requisitos
 
@@ -19,7 +19,7 @@ O Resenha volta a ser distribuído diretamente, fora da Mac App Store. O usuári
 
 ## Segurança e distribuição
 
-- O App Sandbox é removido porque a inserção direta exige Acessibilidade e postagem de eventos.
+- O bundle Developer ID não usa App Sandbox porque a inserção direta exige Acessibilidade e postagem de eventos.
 - O app continua com Hardened Runtime, transcrição local, áudio temporário e sem analytics.
 - O Serviço do macOS deixa de ser o caminho primário e não é registrado no bundle direto, evitando dupla inserção.
 

@@ -1,11 +1,12 @@
 # Resenha
 
-**Fale. O Resenha escreve.** Ditado push-to-talk nativo para macOS, gratuito,
+**Fale. O Resenha escreve.** Ditado nativo para macOS, gratuito,
 local e de código aberto. Requer Apple Silicon e macOS 14 ou posterior.
 
-Segure o atalho, fale e solte. O Resenha grava só enquanto a combinação está
-pressionada, transcreve com whisper.cpp no próprio Mac e devolve o texto ao
-campo ativo com a permissão de Acessibilidade.
+Na Mac App Store, pressione `Command + Shift + E` em um campo de texto, fale e
+clique em **Concluir** no painel. O Serviço nativo devolve a transcrição ao
+campo ativo. Na distribuição direta, segure o atalho escolhido, fale e solte;
+essa versão usa Acessibilidade. Ambas transcrevem com whisper.cpp no próprio Mac.
 
 ## O que já funciona
 
@@ -13,7 +14,8 @@ campo ativo com a permissão de Acessibilidade.
 - Whisper embarcado, acelerado por Metal em Apple Silicon; nenhuma instalação de Python.
 - Áudio transitório, clipboard imediato e últimos 10 textos locais e opcionais.
 - HUD compacto com nível real do microfone, sons configuráveis e feedback de erro.
-- Atalho livre configurado dentro do app, inclusive Option direita isolada.
+- Na distribuição direta, atalho livre configurado dentro do app, inclusive
+  Option direita isolada. Na Mac App Store, Serviço com `Command + Shift + E`.
 - Sem conta, anúncios, analytics, backend ou chave de API.
 
 ## Privacidade
@@ -38,9 +40,9 @@ xcodegen generate
 open build/Build/Products/Debug/Resenha.app
 ```
 
-O target `WhisperKey` gera um único app de distribuição direta com bundle ID
-`br.com.luisroquette.Resenha`. Contribuidores podem selecionar seu próprio
-Development Team localmente sem alterar o código versionado.
+O mesmo código gera dois canais do produto: `WhisperKey`/`Release` para o DMG
+Developer ID e `ResenhaAppStore`/`AppStore` para a loja. Ambos usam o bundle ID
+`br.com.luisroquette.Resenha`; Debug usa uma identidade isolada.
 
 ## Gerar o DMG oficial
 
@@ -59,16 +61,17 @@ Gatekeeper. Cada artefato recebe um arquivo `.sha256` correspondente.
 ## Arquitetura
 
 ```text
-Atalho global escolhido no Resenha
+Atalho global (DMG) ou Serviço do macOS (App Store)
   → AVFoundation (PCM mono, 16 kHz)
   → whisper.cpp + Metal
   → pós-processamento determinístico
   → NSPasteboard + Command-V no campo ativo
 ```
 
-A inserção usa Acessibilidade para devolver o foco ao aplicativo original e
-simular `Command + V`. Microfone, Monitoramento de Entrada e Acessibilidade são
-explicados e solicitados separadamente.
+No DMG, a inserção usa Acessibilidade para devolver o foco ao aplicativo original
+e simular `Command + V`. Na loja, o editor recebe o texto pelo Serviço nativo
+`Ditar com Resenha`; Acessibilidade não é solicitada. Ambos deixam uma cópia de
+recuperação no clipboard.
 
 ## Desenvolvimento orientado por especificação
 

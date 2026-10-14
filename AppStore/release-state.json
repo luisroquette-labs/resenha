@@ -1,0 +1,56 @@
+{
+  "previousSubmission": {
+    "build": 1,
+    "eligibleForRelease": false,
+    "releaseModeObserved": "AFTER_APPROVAL",
+    "reason": "Archived before the corrected macOS Service contract",
+    "statusObserved": "REMOVED",
+    "version": "1.0.0"
+  },
+  "remoteMutationRequiresOwnerApproval": true,
+  "candidate": {
+    "minimumBuild": 6,
+    "sourceCommit": "2302a707ac902f138c1386c7fa150b50287a01e8",
+    "version": "1.0.0"
+  },
+  "validationLimits": [
+    "Store-distributed NSServices shortcut and text return were not physically tested; owner requested submission without TestFlight"
+  ],
+  "currentVersion": {
+    "version": "1.0",
+    "statusObserved": "WAITING_FOR_REVIEW",
+    "releaseModeObserved": "MANUAL",
+    "build": 6,
+    "buildDeliveryID": "5da93b94-bb83-4a70-a1ff-31bb2e5f5264",
+    "uploadedAt": "2026-10-14T14:39-03:00",
+    "screenshots": "10/10 pt-BR APP_DESKTOP processed in order",
+    "metadata": "Promotional text, description, review notes and audio-input justification saved",
+    "internalTest": {
+      "group": "Teste interno Luis",
+      "build": 5,
+      "testerStatusObserved": "INVITED",
+      "automaticDistribution": false
+    },
+    "submittedForReview": true,
+    "submittedAt": "2026-10-14T14:42-03:00",
+    "reviewSubmissionID": "1a459345-640e-4dea-b6e3-7e8585b34c7c"
+  },
+  "submitted": {
+    "build": 2,
+    "reviewDate": "2026-10-08",
+    "rejectionGuideline": "2.4.5(v)",
+    "eligibleForRelease": false,
+    "rejectionReason": "Input Monitoring requested by the Mac App Store build",
+    "upload": {
+      "uploadedAt": "2026-10-04T12:26:13-03:00",
+      "deliveryID": "0dfd8664-8693-4a51-b44e-24548a3b8b9d",
+      "packageSHA256": "dc72f52695893053d0bf6326fe0ef4fad887392c833e30682548515884339df4",
+      "statusObserved": "SUBMITTED_TO_REVIEW",
+      "build": 2
+    },
+    "releaseModeObserved": "MANUAL",
+    "version": "1.0.0",
+    "statusObserved": "REJECTED",
+    "submittedAt": "2026-10-04T12:52:00-03:00"
+  }
+}

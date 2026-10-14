@@ -39,9 +39,13 @@ struct WhisperPaths: Sendable {
         let modelDirectory = home == defaultHome
             ? Self.modelDirectory
             : home.appendingPathComponent("Library/Application Support/WhisperKey/Models")
+        #if DEBUG
+        let debugOverride = environment["WHISPER_MODEL_PATH"].map(URL.init(fileURLWithPath:))
+        #else
+        let debugOverride: URL? = nil
+        #endif
         let modelCandidates = [
-            environment["WHISPER_MODEL_PATH"].map(URL.init(fileURLWithPath:)),
-            modelDirectory.appendingPathComponent("ggml-large-v3-turbo-q5_0.bin"),
+            debugOverride,
             modelDirectory.appendingPathComponent("ggml-small-q5_1.bin")
         ].compactMap { $0 }
         guard let model = modelCandidates.first(where: { FileManager.default.fileExists(atPath: $0.path) }) else {
@@ -52,23 +56,26 @@ struct WhisperPaths: Sendable {
 }
 
 struct WhisperTranscriber: Sendable {
-    static let maximumRuntime: TimeInterval = 10 * 60
     private static let engine = EmbeddedWhisperEngine()
 
     func transcribe(
         audioURL: URL,
+        modelURL: URL,
         language: TranscriptionLanguage = .portuguese,
-        glossaryText: String = TranscriptionGlossary.defaultText
+        glossaryText: String = TranscriptionGlossary.defaultText,
+        cancellationToken: WhisperCancellationToken? = nil
     ) throws -> String {
-        let paths = try WhisperPaths.resolve()
         let glossary = TranscriptionGlossary(text: glossaryText)
         let samples = try Self.readSamples(from: audioURL)
+        let token = cancellationToken ?? WhisperCancellationToken(
+            maximumRuntime: ResenhaRuntimeLimits.maximumInferenceDuration
+        )
         let raw = try Self.engine.transcribe(
             samples: samples,
-            model: paths.model,
+            model: modelURL,
             language: language.rawValue,
             prompt: glossary.prompt,
-            maximumRuntime: Self.maximumRuntime
+            cancellationToken: token
         )
         let transcript = TranscriptPostprocessor.process(raw, glossary: glossary)
         guard !transcript.isEmpty else { throw WhisperError.emptyTranscript }
@@ -89,13 +96,51 @@ struct WhisperTranscriber: Sendable {
     }
 }
 
-private final class EmbeddedWhisperEngine: @unchecked Sendable {
+final class EmbeddedWhisperEngine: @unchecked Sendable {
+    typealias ContextLoader = @Sendable (String) -> OpaquePointer?
+    typealias ContextReleaser = @Sendable (OpaquePointer) -> Void
+
+    struct LifecycleSnapshot: Equatable {
+        let hasContext: Bool
+        let modelPath: String?
+    }
+
     private let lock = NSLock()
+    private let cleanupQueue = DispatchQueue(label: "br.com.luisroquette.Resenha.whisper-cleanup")
+    private let idleLifetime: TimeInterval
+    private let contextLoader: ContextLoader
+    private let contextReleaser: ContextReleaser
     private var context: OpaquePointer?
     private var modelPath: String?
+    private var unloadWorkItem: DispatchWorkItem?
+    private var unloadGate = WhisperContextUnloadGate()
+    private var memoryPressureSource: DispatchSourceMemoryPressure?
+
+    init(
+        idleLifetime: TimeInterval = ResenhaRuntimeLimits.whisperContextIdleLifetime,
+        monitorsMemoryPressure: Bool = true,
+        contextLoader: @escaping ContextLoader = { path in
+            EmbeddedWhisperEngine.loadWhisperContext(path: path)
+        },
+        contextReleaser: @escaping ContextReleaser = { whisper_free($0) }
+    ) {
+        self.idleLifetime = max(0, idleLifetime)
+        self.contextLoader = contextLoader
+        self.contextReleaser = contextReleaser
+        guard monitorsMemoryPressure else { return }
+        let source = DispatchSource.makeMemoryPressureSource(
+            eventMask: [.warning, .critical],
+            queue: cleanupQueue
+        )
+        source.setEventHandler { [weak self] in self?.handleMemoryPressure() }
+        source.resume()
+        memoryPressureSource = source
+    }
 
     deinit {
-        if let context { whisper_free(context) }
+        memoryPressureSource?.cancel()
+        unloadWorkItem?.cancel()
+        lock.withLock { releaseContextLocked() }
     }
 
     func transcribe(
@@ -103,54 +148,80 @@ private final class EmbeddedWhisperEngine: @unchecked Sendable {
         model: URL,
         language: String,
         prompt: String,
-        maximumRuntime: TimeInterval
+        cancellationToken: WhisperCancellationToken
     ) throws -> String {
-        lock.lock()
-        defer { lock.unlock() }
-        if Task.isCancelled { throw CancellationError() }
-        let startedAt = Date()
-        let context = try loadContext(model: model)
-        var params = whisper_full_default_params(WHISPER_SAMPLING_BEAM_SEARCH)
-        params.n_threads = Int32(max(2, min(8, ProcessInfo.processInfo.activeProcessorCount - 2)))
-        params.translate = false
-        params.no_context = true
-        params.no_timestamps = true
-        params.print_special = false
-        params.print_progress = false
-        params.print_realtime = false
-        params.print_timestamps = false
-        params.suppress_blank = true
-        params.beam_search.beam_size = 5
+        try withContext(model: model) { context in
+            if Task.isCancelled {
+                cancellationToken.cancel()
+                throw CancellationError()
+            }
+            var params = whisper_full_default_params(WHISPER_SAMPLING_BEAM_SEARCH)
+            params.n_threads = Int32(max(2, min(8, ProcessInfo.processInfo.activeProcessorCount - 2)))
+            params.translate = false
+            params.no_context = true
+            params.no_timestamps = true
+            params.print_special = false
+            params.print_progress = false
+            params.print_realtime = false
+            params.print_timestamps = false
+            params.suppress_blank = true
+            params.beam_search.beam_size = 5
+            params.abort_callback = { rawToken in
+                guard let rawToken else { return false }
+                let token = Unmanaged<WhisperCancellationToken>.fromOpaque(rawToken).takeUnretainedValue()
+                let taskIsCancelled = withUnsafeCurrentTask { $0?.isCancelled == true }
+                return token.abortReason(taskIsCancelled: taskIsCancelled) != nil
+            }
+            params.abort_callback_user_data = Unmanaged.passUnretained(cancellationToken).toOpaque()
 
-        let status = language.withCString { languagePointer in
-            prompt.withCString { promptPointer in
-                params.language = languagePointer
-                params.initial_prompt = prompt.isEmpty ? nil : promptPointer
-                return samples.withUnsafeBufferPointer { buffer in
-                    whisper_full(context, params, buffer.baseAddress, Int32(buffer.count))
+            let status = language.withCString { languagePointer in
+                prompt.withCString { promptPointer in
+                    params.language = languagePointer
+                    params.initial_prompt = prompt.isEmpty ? nil : promptPointer
+                    return samples.withUnsafeBufferPointer { buffer in
+                        whisper_full(context, params, buffer.baseAddress, Int32(buffer.count))
+                    }
                 }
             }
-        }
-        if Task.isCancelled { throw CancellationError() }
-        guard !WhisperRuntimePolicy.hasTimedOut(
-            startedAt: startedAt,
-            now: Date(),
-            maximumRuntime: maximumRuntime
-        ) else { throw WhisperError.timedOut }
-        guard status == 0 else { throw WhisperError.failed(status, "embedded whisper.cpp inference failed") }
+            switch cancellationToken.abortReason(taskIsCancelled: Task.isCancelled) {
+            case .cancelled: throw CancellationError()
+            case .timedOut: throw WhisperError.timedOut
+            case nil: break
+            }
+            guard status == 0 else { throw WhisperError.failed(status, "embedded whisper.cpp inference failed") }
 
-        return (0..<whisper_full_n_segments(context)).compactMap { index in
-            whisper_full_get_segment_text(context, index).map(String.init(cString:))
-        }.joined()
+            return (0..<whisper_full_n_segments(context)).compactMap { index in
+                whisper_full_get_segment_text(context, index).map(String.init(cString:))
+            }.joined()
+        }
+    }
+
+    func withContext<Result>(
+        model: URL,
+        _ body: (OpaquePointer) throws -> Result
+    ) throws -> Result {
+        lock.lock()
+        beginUseLocked()
+        defer {
+            scheduleIdleUnloadLocked()
+            lock.unlock()
+        }
+        let context = try loadContext(model: model)
+        return try body(context)
+    }
+
+    var lifecycleSnapshot: LifecycleSnapshot {
+        lock.withLock { LifecycleSnapshot(hasContext: context != nil, modelPath: modelPath) }
+    }
+
+    func handleMemoryPressure() {
+        unloadContext()
     }
 
     private func loadContext(model: URL) throws -> OpaquePointer {
         if let context, modelPath == model.path { return context }
-        if let context { whisper_free(context) }
-        var parameters = whisper_context_default_params()
-        parameters.use_gpu = true
-        parameters.flash_attn = true
-        guard let loaded = model.path.withCString({ whisper_init_from_file_with_params($0, parameters) }) else {
+        if let context { contextReleaser(context) }
+        guard let loaded = contextLoader(model.path) else {
             context = nil
             modelPath = nil
             throw WhisperError.modelLoadFailed(model.path)
@@ -159,11 +230,43 @@ private final class EmbeddedWhisperEngine: @unchecked Sendable {
         modelPath = model.path
         return loaded
     }
-}
 
-enum WhisperRuntimePolicy {
-    static func hasTimedOut(startedAt: Date, now: Date, maximumRuntime: TimeInterval) -> Bool {
-        now.timeIntervalSince(startedAt) >= max(0, maximumRuntime)
+    private func beginUseLocked() {
+        unloadWorkItem?.cancel()
+        unloadWorkItem = nil
+        unloadGate.beginUse()
+    }
+
+    private func scheduleIdleUnloadLocked() {
+        let generation = unloadGate.scheduleUnload()
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.unloadContext(generation: generation)
+        }
+        unloadWorkItem = workItem
+        cleanupQueue.asyncAfter(deadline: .now() + idleLifetime, execute: workItem)
+    }
+
+    private func unloadContext(generation: UInt64? = nil) {
+        lock.withLock {
+            if let generation, !unloadGate.permitsUnload(generation: generation) { return }
+            unloadGate.invalidate()
+            unloadWorkItem?.cancel()
+            unloadWorkItem = nil
+            releaseContextLocked()
+        }
+    }
+
+    private func releaseContextLocked() {
+        if let context { contextReleaser(context) }
+        context = nil
+        modelPath = nil
+    }
+
+    private static func loadWhisperContext(path: String) -> OpaquePointer? {
+        var parameters = whisper_context_default_params()
+        parameters.use_gpu = true
+        parameters.flash_attn = true
+        return path.withCString { whisper_init_from_file_with_params($0, parameters) }
     }
 }
 

@@ -1,20 +1,18 @@
 # Notas para a equipe de revisão
 
-> Arquivo histórico: a distribuição pela Mac App Store foi substituída pela distribuição direta em 03/10/2026. Estas notas não descrevem o bundle atual.
-
 Resenha é um app de barra de menus. Não há conta, compras ou conteúdo pago.
 
 ## Fluxo principal
 
-1. Abra o Resenha e conceda Microfone e Monitoramento de Entrada.
+1. Abra o Resenha e conceda apenas Microfone.
 2. Clique em “Baixar” para instalar o modelo local verificado de 181 MB.
-3. Em um campo de texto, mantenha `Control + Option + Espaço` pressionado.
-4. Fale e solte a barra de espaço.
+3. Em um campo de texto, pressione `Command + Shift + E` para iniciar.
+4. Fale e clique em “Concluir” no painel do Resenha.
 5. Aguarde a transcrição ser devolvida ao campo pelo Serviço “Ditar com Resenha”.
 
-O atalho é um `NSServices` key equivalent e pode ser alterado em Ajustes do
-Sistema → Teclado → Atalhos de Teclado → Serviços. O app usa um event tap
-`listenOnly` apenas para detectar a soltura do atalho. Não injeta eventos.
+O atalho é um `NSServices` key equivalent gerenciado pelo macOS. O app não
+registra um atalho global, não observa teclas, não pede Monitoramento de Entrada
+e não injeta eventos.
 
 ## Rede e privacidade
 

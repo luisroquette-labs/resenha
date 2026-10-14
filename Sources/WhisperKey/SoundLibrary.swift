@@ -139,6 +139,17 @@ enum ResenhaSoundCatalog {
         all.filter { $0.category == category }
     }
 
+    static func search(_ query: String, in category: ResenhaSoundCategory? = nil) -> [ResenhaSound] {
+        let candidates = category.map(sounds(in:)) ?? all
+        let normalizedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedQuery.isEmpty else { return candidates }
+        return candidates.filter { sound in
+            sound.name.localizedStandardContains(normalizedQuery)
+                || sound.category.title.localizedStandardContains(normalizedQuery)
+                || String(format: "%02d", sound.id).localizedStandardContains(normalizedQuery)
+        }
+    }
+
     private static func sound(
         _ id: Int,
         _ name: String,

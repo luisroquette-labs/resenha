@@ -62,7 +62,7 @@ Acceptance: deterministic tests cover nonfinite input, clamping, monotonic scale
 
 ## Placement and lifecycle
 
-Store 1.0 does not read another application's window through Accessibility. Retain the chosen display through the session; use the last valid external target mapping when available, then main/first. Exact target-window placement is deliberately not promised without a public sandbox-safe geometry source. Standalone feedback uses the current external app or latest known external target with the same fallback. Pointer position does not select the display.
+Store 1.0 does not read another application's window through Accessibility. It performs a best-effort, metadata-only `CGWindowListCopyWindowInfo` query for the frontmost on-screen layer-zero window owned by the target PID; it neither captures pixels nor requests Screen Recording. Quartz top-left coordinates are converted to AppKit coordinates before screen intersection. If metadata is absent or restricted, retain the last valid display for that PID, then use main/first. Exact placement is therefore best effort, not a promise. Standalone feedback uses the current external app or latest known external target with the same fallback. Pointer position does not select the display.
 
 Refresh visibleFrame on presentation/display changes; recover from disconnected displays. Center horizontally, prefer visibleFrame.minY + 88 and clamp every edge with a 12-point margin, including negative coordinates. Preserve click-through, hidesOnDeactivate=false, canJoinAllSpaces/fullScreenAuxiliary and one physical panel.
 

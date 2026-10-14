@@ -28,6 +28,7 @@ final class FloatingPanelController: NSObject {
     private var screenSelection = PanelScreenSelection()
     private let clock: () -> TimeInterval
     private(set) var selectedScreenID: UInt32?
+    var onFinishRecording: (() -> Void)?
     var isVisible: Bool { panel.isVisible }
     var status: FloatingStatus { model.status }
     var frame: CGRect { panel.frame }
@@ -55,6 +56,7 @@ final class FloatingPanelController: NSObject {
         invalidateDismissal()
         self.target = target
         model.show(status, now: clock())
+        panel.ignoresMouseEvents = !(status == .listening && onFinishRecording != nil)
         selectTargetScreen(target)
         positionPanel()
         panel.orderFrontRegardless()
@@ -117,7 +119,10 @@ final class FloatingPanelController: NSObject {
         panel.hidesOnDeactivate = false
         panel.ignoresMouseEvents = true
         panel.isReleasedWhenClosed = false
-        panel.contentView = NSHostingView(rootView: FloatingStatusView(model: model))
+        let finishRecording: (() -> Void)? = onFinishRecording == nil ? nil : { [weak self] in
+            self?.onFinishRecording?()
+        }
+        panel.contentView = NSHostingView(rootView: FloatingStatusView(model: model, finishRecording: finishRecording))
         return panel
     }
 
@@ -158,7 +163,11 @@ final class FloatingPanelController: NSObject {
     }
 
     private func focusedWindowFrame(pid: pid_t?) -> CGRect? {
-        nil
+        guard let pid else { return nil }
+        let primaryTop = NSScreen.screens
+            .first(where: { screenID($0) == CGMainDisplayID() })?
+            .frame.maxY ?? NSScreen.main?.frame.maxY ?? 0
+        return TargetWindowResolver.currentFrame(for: pid, primaryScreenTop: primaryTop)
     }
 
     @objc private func screensChanged() {

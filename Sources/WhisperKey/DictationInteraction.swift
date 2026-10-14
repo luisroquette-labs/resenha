@@ -17,9 +17,9 @@ struct DictationInteraction {
     }
 
     mutating func press(phase: DictationPhase, targetIsSelf: Bool) -> Bool {
-        guard !isPressed else { return false }
+        guard !isPressed, canStart(phase: phase, targetIsSelf: targetIsSelf) else { return false }
         isPressed = true
-        return canStart(phase: phase, targetIsSelf: targetIsSelf)
+        return true
     }
 
     mutating func release() { isPressed = false }
