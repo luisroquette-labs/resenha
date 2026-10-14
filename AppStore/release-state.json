@@ -13,16 +13,16 @@
     "sourceCommit": "2302a707ac902f138c1386c7fa150b50287a01e8",
     "version": "1.0.0"
   },
-  "requiredBeforeSubmission": [
-    "Physical Services shortcut and text-return check on a clean App Store build"
+  "validationLimits": [
+    "Store-distributed NSServices shortcut and text return were not physically tested; owner requested submission without TestFlight"
   ],
   "currentVersion": {
     "version": "1.0",
-    "statusObserved": "PREPARE_FOR_SUBMISSION",
+    "statusObserved": "WAITING_FOR_REVIEW",
     "releaseModeObserved": "MANUAL",
-    "build": 5,
-    "buildDeliveryID": "60435478-68b3-4c5d-b42a-c60d0513a1dd",
-    "uploadedAt": "2026-10-14T13:06-03:00",
+    "build": 6,
+    "buildDeliveryID": "5da93b94-bb83-4a70-a1ff-31bb2e5f5264",
+    "uploadedAt": "2026-10-14T14:39-03:00",
     "screenshots": "10/10 pt-BR APP_DESKTOP processed in order",
     "metadata": "Promotional text, description, review notes and audio-input justification saved",
     "internalTest": {
@@ -31,7 +31,9 @@
       "testerStatusObserved": "INVITED",
       "automaticDistribution": false
     },
-    "submittedForReview": false
+    "submittedForReview": true,
+    "submittedAt": "2026-10-14T14:42-03:00",
+    "reviewSubmissionID": "1a459345-640e-4dea-b6e3-7e8585b34c7c"
   },
   "submitted": {
     "build": 2,
