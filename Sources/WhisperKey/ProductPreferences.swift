@@ -727,6 +727,7 @@ private struct AboutSettingsPane: View {
                     Label("Áudio e texto processados neste Mac", systemImage: "lock.shield.fill")
                     Label("Software livre e sem conta", systemImage: "chevron.left.forwardslash.chevron.right")
                     Text("Versão \(version)").foregroundStyle(.secondary)
+                    Link("Política de privacidade", destination: URL(string: "https://luisroquette-labs.github.io/resenha/privacy/")!)
             }
             .padding(.vertical, 18)
             .frame(maxWidth: .infinity)

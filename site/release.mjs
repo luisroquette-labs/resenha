@@ -9,14 +9,14 @@ const copy = Object.freeze({
 export const releaseState = Object.freeze({
   macos: Object.freeze({ state: 'published', platform: 'macos', version: '1.0.0',
     architecture: 'Apple Silicon (arm64)', minimumOS: 'macOS 14+',
-    url: 'https://github.com/luisroquette/resenha/releases/download/v1.0.0/Resenha-1.0.0-arm64.dmg',
+    url: 'https://github.com/luisroquette-labs/resenha/releases/download/v1.0.0/Resenha-1.0.0-arm64.dmg',
     evidence: Object.freeze({ channel: 'macos',
-      url: 'https://github.com/luisroquette/resenha/releases/download/v1.0.0/Resenha-1.0.0-arm64.dmg',
+      url: 'https://github.com/luisroquette-labs/resenha/releases/download/v1.0.0/Resenha-1.0.0-arm64.dmg',
       verifiedAt: '2026-10-04T00:35:16Z', artifact: Object.freeze({ platform: 'macos', version: '1.0.0',
         sha256: '9fc0728419c8c2ca4feb0631667a4ce8cdf88cfd894c821b3f82b98533056985',
         notarizationId: 'e3471859-6fe0-4166-8c6e-bcb723afdab3', notarizationStatus: 'Accepted' }) }) }),
-  source: Object.freeze({ state: 'published', url: 'https://github.com/luisroquette/resenha',
-    evidence: Object.freeze({ channel: 'source', url: 'https://github.com/luisroquette/resenha',
+  source: Object.freeze({ state: 'published', url: 'https://github.com/luisroquette-labs/resenha',
+    evidence: Object.freeze({ channel: 'source', url: 'https://github.com/luisroquette-labs/resenha',
       verifiedAt: '2026-10-03T02:30:00Z' }) }),
   store: Object.freeze({ state: 'planned', url: null, evidence: null }),
 });

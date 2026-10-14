@@ -36,5 +36,5 @@ usuário ao concluir um ditado.
 ## Contato
 
 Questões de privacidade e segurança podem ser abertas publicamente em
-https://github.com/luisroquette/resenha/issues. Não inclua transcrições ou
+https://github.com/luisroquette-labs/resenha/issues. Não inclua transcrições ou
 informações pessoais em uma issue pública.

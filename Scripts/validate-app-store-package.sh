@@ -26,6 +26,8 @@ keywords="$(awk '/^## Palavras-chave$/{getline; getline; print; exit}' "$metadat
 (( ${#promotional} <= 170 )) || fail "texto promocional excede 170 caracteres"
 (( ${#keywords} <= 100 )) || fail "palavras-chave excedem 100 caracteres"
 [[ "$keywords" != *" "* ]] || fail "palavras-chave contêm espaços desperdiçados"
+privacy_url="$(sed -n 's/^- Privacidade: //p' "$metadata")"
+[[ "$privacy_url" == "https://luisroquette-labs.github.io/resenha/privacy/" ]] || fail "URL de privacidade nos metadados divergente"
 pass "limites de metadados da loja"
 
 [[ "$(find "$screenshots" -maxdepth 1 -name '*.png' | wc -l | tr -d ' ')" == 10 ]] || fail "esperadas 10 screenshots"
@@ -84,6 +86,8 @@ for notice in THIRD_PARTY_NOTICES.md LICENSE-whisper.cpp.txt LICENSE-OpenAI-Whis
 done
 grep -a -F -q 'WHISPER_MODEL_PATH' "$app/Contents/MacOS/Resenha" \
   && fail "override de modelo presente no binário Release"
+grep -a -F -q "$privacy_url" "$app/Contents/MacOS/Resenha" \
+  || fail "política de privacidade ausente do binário"
 pass "archive $archive_version ($archive_build), source ${archive_commit[1,12]}, arm64, assinado e com privacy manifest"
 
 print "Pacote da App Store validado."

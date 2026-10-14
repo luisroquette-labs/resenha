@@ -8,7 +8,7 @@
 - SKU: `resenha-macos-1`
 - Plataforma: macOS
 - Versão: `1.0.0`
-- Build candidato mínimo: `2` (`1` está obsoleto e não pode ser liberado)
+- Build candidato mínimo: `4` (`2` foi rejeitado; `3` não inclui o link de privacidade no app)
 - Preço: grátis
 - Disponibilidade: todos os territórios elegíveis
 - Lançamento: manual após aprovação; confirmar no App Store Connect antes de submeter
@@ -32,13 +32,13 @@
 - Criptografia não isenta: não; somente TLS fornecido pelo sistema para baixar o modelo
 - Conteúdo de terceiros: não exibe catálogo ou mídia de terceiros; whisper.cpp e o modelo Whisper são componentes locais cobertos pelas licenças documentadas em `THIRD_PARTY_NOTICES.md`
 - IDFA, analytics, crash SDK e logging remoto: ausentes
-- Política: https://luisroquette.github.io/resenha/privacy/
+- Política: https://luisroquette-labs.github.io/resenha/privacy/
 
 ## URLs e contato de revisão
 
-- Marketing: https://luisroquette.github.io/resenha/
-- Suporte: https://github.com/luisroquette/resenha/issues
-- Código-fonte: https://github.com/luisroquette/resenha
+- Marketing: https://luisroquette-labs.github.io/resenha/
+- Suporte: https://github.com/luisroquette-labs/resenha/issues
+- Código-fonte: https://github.com/luisroquette-labs/resenha
 - Contato, telefone e e-mail de revisão: preencher com os dados verificados da conta, sem publicar no repositório
 
 ## Ativos

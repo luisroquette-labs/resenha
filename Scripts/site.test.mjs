@@ -94,7 +94,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
   });
   test('CK-7/15: published DMG and source resolve while retired Store fails closed', () => {
     assert.equal(resolveDestination('source', releaseState.source).active, true);
-    assert.equal(resolveDestination('source', releaseState.source).href, 'https://github.com/luisroquette/resenha');
+    assert.equal(resolveDestination('source', releaseState.source).href, 'https://github.com/luisroquette-labs/resenha');
     assert.equal(resolveDestination('macos', releaseState.macos).active, true);
     assert.match(resolveDestination('macos', releaseState.macos).href, /Resenha-1\.0\.0-arm64\.dmg$/u);
     assert.equal(releaseState.store.url, null);
@@ -257,15 +257,15 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
         assert.equal((html.match(/data-release-channel="macos"/gu) ?? []).length, 1);
         assert.ok((html.match(/data-release-channel="source"/gu) ?? []).length >= 1);
         assert.doesNotMatch(html, /href="(?:|#|https?:\/\/(?:github\.com|apps\.apple\.com)[^"]*)"/u);
-        assert.match(html, /<link rel="canonical" href="https:\/\/luisroquette\.github\.io\/resenha\/">/u);
-        assert.match(html, /property="og:image" content="https:\/\/luisroquette\.github\.io\/resenha\/assets\/social\/resenha-og\.png"/u);
+        assert.match(html, /<link rel="canonical" href="https:\/\/luisroquette-labs\.github\.io\/resenha\/">/u);
+        assert.match(html, /property="og:image" content="https:\/\/luisroquette-labs\.github\.io\/resenha\/assets\/social\/resenha-og\.png"/u);
         assert.match(html, /name="twitter:card" content="summary_large_image"/u);
         const schemaMatch = html.match(/<script type="application\/ld\+json">\s*([\s\S]*?)\s*<\/script>/u);
         const schema = JSON.parse(schemaMatch?.[1] ?? 'null');
         assert.equal(schema['@type'], 'SoftwareApplication');
         assert.equal(schema.name, 'Resenha');
         assert.equal(schema.isAccessibleForFree, true);
-        assert.equal(schema.url, 'https://luisroquette.github.io/resenha/');
+        assert.equal(schema.url, 'https://luisroquette-labs.github.io/resenha/');
         assert.ok(!('aggregateRating' in schema));
         assert.equal((await get(preview.origin, prefix + 'googleb0847bf7435d170c.html')).body.trim(), 'google-site-verification: googleb0847bf7435d170c.html');
         assert.match(html, /analytics\.mjs\?v=20261004-1/u);
@@ -324,7 +324,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
         assert.ok((comparison.body.match(/data-reveal/gu) ?? []).length >= 5);
         const robots = await get(preview.origin, prefix + 'robots.txt');
         assert.equal(robots.status, 200);
-        assert.match(robots.body, /Sitemap: https:\/\/luisroquette\.github\.io\/resenha\/sitemap\.xml/u);
+        assert.match(robots.body, /Sitemap: https:\/\/luisroquette-labs\.github\.io\/resenha\/sitemap\.xml/u);
         const sitemap = await get(preview.origin, prefix + 'sitemap.xml');
         assert.equal(sitemap.status, 200);
         assert.match(sitemap.body, /alternativa-wispr-flow/u);
