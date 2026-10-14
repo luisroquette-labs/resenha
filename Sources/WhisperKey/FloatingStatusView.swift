@@ -22,8 +22,10 @@ enum FloatingStatus: Equatable {
 
     var secondary: String? {
         switch self {
-        case .ready: "Segure seu atalho para ditar"
-        case .listening: "Solte o atalho para concluir"
+        case .ready: ResenhaDistributionChannel.current.usesSandboxedTextService
+            ? "Use Command + Shift + E para ditar" : "Segure seu atalho para ditar"
+        case .listening: ResenhaDistributionChannel.current.usesSandboxedTextService
+            ? "Clique em Concluir para transcrever" : "Solte o atalho para concluir"
         case .failure: "Abra o menu do Resenha para obter ajuda"
         default: nil
         }
@@ -57,6 +59,7 @@ final class FloatingPanelModel: ObservableObject {
 
 struct FloatingStatusView: View {
     @ObservedObject var model: FloatingPanelModel
+    var finishRecording: (() -> Void)? = nil
     // Internal capture overrides; production uses the native environment values below.
     var fixtureContrast: ColorSchemeContrast? = nil
     var fixtureReduceTransparency: Bool? = nil
@@ -80,7 +83,7 @@ struct FloatingStatusView: View {
         let maximumWidth = max(0, available.width - 24)
         if status == .listening {
             return CGSize(
-                width: min(accessibilityLayout ? 420 : 340, maximumWidth),
+                width: min(accessibilityLayout || ResenhaDistributionChannel.current.usesSandboxedTextService ? 420 : 340, maximumWidth),
                 height: min(accessibilityLayout ? 128 : 72, max(0, available.height - 24))
             )
         }
@@ -128,11 +131,18 @@ struct FloatingStatusView: View {
         let resolvedDynamicTypeSize = fixtureDynamicTypeSize ?? dynamicTypeSize
         Group {
             if model.status == .listening {
-                RecordingWaveformView(
-                    meter: model.recording,
-                    fixtureReduceMotion: fixtureReduceMotion,
-                    accessibilityLayout: resolvedDynamicTypeSize.isAccessibilitySize
-                )
+                HStack(spacing: 12) {
+                    RecordingWaveformView(
+                        meter: model.recording,
+                        fixtureReduceMotion: fixtureReduceMotion,
+                        accessibilityLayout: resolvedDynamicTypeSize.isAccessibilitySize
+                    )
+                    if let finishRecording {
+                        Button("Concluir", action: finishRecording)
+                            .buttonStyle(.borderedProminent)
+                            .accessibilityHint("Encerra a gravação e insere a transcrição no campo de texto")
+                    }
+                }
             } else { statusContent }
         }
         .dynamicTypeSize(resolvedDynamicTypeSize)
@@ -156,7 +166,7 @@ struct FloatingStatusView: View {
                 )
         }
         .padding(4)
-        .accessibilityElement(children: .ignore)
+        .accessibilityElement(children: finishRecording == nil ? .ignore : .contain)
         .accessibilityLabel(model.status.accessibilityLabel)
     }
 

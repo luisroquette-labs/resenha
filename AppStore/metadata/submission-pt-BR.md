@@ -8,7 +8,7 @@
 - SKU: `resenha-macos-1`
 - Plataforma: macOS
 - Versão: `1.0.0`
-- Build candidato mínimo: `4` (`2` foi rejeitado; `3` não inclui o link de privacidade no app)
+- Build candidato mínimo: `5` (`2` foi rejeitado; `3` não inclui o link de privacidade no app; `4` não tem o botão Concluir)
 - Preço: grátis
 - Disponibilidade: todos os territórios elegíveis
 - Lançamento: manual após aprovação; confirmar no App Store Connect antes de submeter

@@ -32,7 +32,7 @@
   },
   "candidate": {
     "version": "1.0.0",
-    "minimumBuild": 4,
+    "minimumBuild": 5,
     "sourceCommit": "9ca906c6d4c0d7719043fec0b10f3ae6dbe1730e"
   }
 }

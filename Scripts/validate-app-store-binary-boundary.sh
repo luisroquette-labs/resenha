@@ -22,8 +22,8 @@ if [[ -n "$forbidden_symbol" ]]; then
   print -u2 "FALHOU: API proibida no binário App Store: $forbidden_symbol"
   exit 1
 fi
-if ! print -r -- "$symbols" | awk '$NF == "_RegisterEventHotKey" { found = 1 } END { exit !found }'; then
-  print -u2 "FALHOU: atalho registrado ausente do binário App Store"
+if print -r -- "$symbols" | awk '$NF == "_RegisterEventHotKey" { found = 1 } END { exit !found }'; then
+  print -u2 "FALHOU: API proibida no binário App Store: _RegisterEventHotKey"
   exit 1
 fi
 
@@ -50,4 +50,4 @@ if [[ -n "$forbidden_string" ]]; then
   exit 1
 fi
 
-print "PASS: binário App Store com atalho registrado, sem monitoramento de entrada, Accessibility ou postagem sintética"
+print "PASS: binário App Store usa somente o Serviço, sem atalho global, monitoramento de entrada, Accessibility ou postagem sintética"

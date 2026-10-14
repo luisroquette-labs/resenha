@@ -22,7 +22,9 @@ private extension RequiredPermission {
 
     var onboardingPurpose: String {
         switch self {
-        case .microphone: "Captura sua voz enquanto a tecla estiver pressionada."
+        case .microphone: ResenhaDistributionChannel.current.usesSandboxedTextService
+            ? "Captura sua voz até você clicar em Concluir."
+            : "Captura sua voz enquanto a tecla estiver pressionada."
         #if !RESENHA_APP_STORE
         case .inputMonitoring: "Detecta o atalho escolhido mesmo em outros aplicativos."
         case .accessibility: "Insere a transcrição no campo em que você estava digitando."

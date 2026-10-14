@@ -215,15 +215,18 @@ struct ProductSettingsView: View {
     @ObservedObject var preferences: ProductPreferences
     @State private var selection = ProductSettingsSection.general
     private let soundPresentation: SoundLibraryPresentation
+    private let isStore: Bool
 
     init(
         preferences: ProductPreferences,
         initialSection: ProductSettingsSection = .general,
-        soundPresentation: SoundLibraryPresentation = .init()
+        soundPresentation: SoundLibraryPresentation = .init(),
+        isStore: Bool = ResenhaDistributionChannel.current.usesSandboxedTextService
     ) {
         self.preferences = preferences
         _selection = State(initialValue: initialSection)
         self.soundPresentation = soundPresentation
+        self.isStore = isStore
     }
 
     var body: some View {
@@ -282,7 +285,7 @@ struct ProductSettingsView: View {
 
                 Group {
                     switch selection {
-                    case .general: GeneralSettingsPane(preferences: preferences)
+                case .general: GeneralSettingsPane(preferences: preferences, isStore: isStore)
                     case .shortcut: ShortcutSettingsPane(preferences: preferences)
                     case .sounds: SoundLibrarySettingsPane(
                         preferences: preferences,
@@ -605,6 +608,7 @@ final class ProductSettingsWindowController {
 
 private struct GeneralSettingsPane: View {
     @ObservedObject var preferences: ProductPreferences
+    let isStore: Bool
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var loginError: String?
 
@@ -620,7 +624,16 @@ private struct GeneralSettingsPane: View {
                 if let loginError { Text(loginError).font(.callout).foregroundStyle(ResenhaTheme.warning) }
             }
                 ResenhaRuleSection("Durante o ditado") {
-                    ResenhaToggleRow("Mostrar o HUD", detail: "O ditado funciona mesmo com o HUD oculto.", isOn: $preferences.showsHUD)
+                    if isStore {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Painel de ditado")
+                            Text("Sempre visível para usar Concluir.")
+                                .font(.callout).foregroundStyle(.secondary)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    } else {
+                        ResenhaToggleRow("Mostrar o HUD", detail: "O ditado funciona mesmo com o HUD oculto.", isOn: $preferences.showsHUD)
+                    }
                     Divider()
                     ResenhaToggleRow("Sons de funcionamento", detail: "Abertura, início e fim da gravação.", isOn: $preferences.soundsEnabled)
                     Divider()
@@ -648,11 +661,18 @@ private struct ShortcutSettingsPane: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
-            ResenhaPageHeader(eyebrow: "Push to talk", title: "Atalho", subtitle: "Uma combinação global, disponível em qualquer aplicativo.")
-                ResenhaRuleSection("Pressione e segure para falar") {
+            ResenhaPageHeader(
+                eyebrow: ResenhaDistributionChannel.current.usesSandboxedTextService ? "Ditado" : "Push to talk",
+                title: "Atalho",
+                subtitle: ResenhaDistributionChannel.current.usesSandboxedTextService
+                    ? "Inicie o ditado em um campo de texto."
+                    : "Uma combinação global, disponível em qualquer aplicativo."
+            )
+                ResenhaRuleSection(ResenhaDistributionChannel.current.usesSandboxedTextService
+                    ? "Iniciar o ditado" : "Pressione e segure para falar") {
                     if ResenhaDistributionChannel.current.usesSandboxedTextService {
                         LabeledContent("Atalho do Serviço", value: ResenhaServiceShortcut.displayName)
-                        Text("Na versão da App Store, use este atalho para iniciar e concluir o ditado.")
+                        Text("No campo de texto, use este atalho para iniciar. Fale e clique em Concluir no painel.")
                             .font(.callout).foregroundStyle(.secondary)
                     } else {
                         LabeledContent("Atalho atual", value: preferences.shortcut.displayName)

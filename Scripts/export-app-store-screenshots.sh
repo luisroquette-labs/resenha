@@ -18,7 +18,7 @@ mark="$project_root/AppStore/brand/mark/resenha-mark-ink-1024.png"
 test -f "$mark" || { print -u2 "Marca ausente: $mark"; exit 1; }
 
 required=(
-  hud-listening-light.png
+  hud-store-listening-light.png
   hud-transcribing-light.png
   hud-inserting-light.png
   hud-failure-light.png
@@ -104,7 +104,7 @@ function settings_shot() {
 # 01 — real HUD over a neutral writing surface. The product UI is never redrawn.
 canvas "$work_root/hero-base.png"
 brand_header "$work_root/hero-base.png" "$work_root/hero-brand.png"
-add_title "$work_root/hero-brand.png" 'Fale. Solte. Continue.' 'Ditado local no campo em que você já está escrevendo.' "$work_root/hero-title.png"
+add_title "$work_root/hero-brand.png" 'Fale. Conclua. Continue.' 'Ditado local no campo em que você já está escrevendo.' "$work_root/hero-title.png"
 magick "$work_root/hero-title.png" \
   -fill '#fbfaf5' -stroke '#cbcfc5' -strokewidth 3 -draw 'roundrectangle 300,650 2580,1640 50,50' \
   -fill '#eff0e9' -stroke none -draw 'roundrectangle 300,650 2580,760 50,50' \
@@ -112,10 +112,10 @@ magick "$work_root/hero-title.png" \
   -fill '#527d72' -font "$font_body" -pointsize 33 -weight 600 -annotate +430+922 'MENSAGEM' \
   -fill '#1b1d1b' -font "$font_serif" -pointsize 68 -annotate +430+1060 'Éric, avise ao Luís que a COESA atualizou o README' \
   -annotate +430+1155 'da Resenha e rodou o benchmark do whisper.cpp.' \
-  \( "$fixture_root/hud-listening-light.png" -resize 1080x229 \
+  \( "$fixture_root/hud-store-listening-light.png" -resize 1080x229 \
      \( +clone -background '#11151155' -shadow 40x16+0+18 \) +swap -background none -layers merge +repage \) \
   -gravity south -geometry +0+95 -composite \
-  "$output_root/01-fale-solte-continue.png"
+  "$output_root/01-fale-conclua-continue.png"
 
 # 02 — the actual HUD state machine.
 canvas "$work_root/flow-base.png"
@@ -125,7 +125,7 @@ magick "$work_root/flow-title.png" \
   -fill '#527d72' -font "$font_body" -pointsize 33 -weight 700 -annotate +260+770 '01  OUVINDO' \
   -annotate +260+1110 '02  TRANSCREVENDO' \
   -annotate +260+1450 '03  INSERINDO' \
-  \( "$fixture_root/hud-listening-light.png" -resize 1260x267 \) -geometry +930+620 -composite \
+  \( "$fixture_root/hud-store-listening-light.png" -resize 1260x267 \) -geometry +930+620 -composite \
   \( "$fixture_root/hud-transcribing-light.png" -resize 1260x267 \) -geometry +930+960 -composite \
   \( "$fixture_root/hud-inserting-light.png" -resize 1260x267 \) -geometry +930+1300 -composite \
   "$output_root/02-tres-estados.png"

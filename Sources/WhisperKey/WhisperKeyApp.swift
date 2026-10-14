@@ -84,7 +84,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         observeCoordinator(DictationCoordinator(
             permissions: permissions,
             panel: panel,
-            showsHUD: { [weak preferences] in preferences?.showsHUD ?? true },
+            showsHUD: { [weak preferences] in
+                ResenhaDistributionChannel.current.usesSandboxedTextService || (preferences?.showsHUD ?? true)
+            },
             soundsEnabled: { [weak preferences] in preferences?.soundsEnabled ?? true },
             language: { [weak preferences] in preferences?.transcriptionLanguage ?? .portuguese },
             glossaryText: { [weak preferences] in preferences?.transcriptionGlossary ?? TranscriptionGlossary.defaultText },
@@ -105,6 +107,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
         ))
         if ResenhaDistributionChannel.current.usesSandboxedTextService {
+            panel.onFinishRecording = { [weak self] in self?.handleHotkeyRelease() }
             serviceProvider.beginDictation = { [weak self] in
                 self?.beginServiceDictation() ?? false
             }
@@ -168,17 +171,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return started
     }
 
-    func beginServiceDictation(
-        pressedKeyCodes: [Int64]? = nil,
-        targetIsSelf: Bool? = nil
-    ) -> Bool {
-        guard verifiedModelURLProvider() != nil else { return false }
-        guard hotkey.armServiceRelease(pressedKeyCodes: pressedKeyCodes) else { return false }
-        guard handleHotkeyPress(targetIsSelf: targetIsSelf) else {
-            hotkey.disarmServiceRelease()
-            return false
-        }
-        return true
+    func beginServiceDictation(targetIsSelf: Bool? = nil) -> Bool {
+        handleHotkeyPress(targetIsSelf: targetIsSelf)
     }
 
     func handleHotkeyRelease() {

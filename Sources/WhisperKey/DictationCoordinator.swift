@@ -63,7 +63,10 @@ struct DictationErrorPresentation: Equatable {
         case WhisperError.timedOut:
             self.init(title: "Transcrição demorou demais", diagnostic: nil, recovery: "O processo local foi encerrado. Tente novamente com um áudio menor.")
         case WhisperError.emptyTranscript, TextInjectionError.emptyText:
-            self.init(title: "Nenhuma fala detectada", diagnostic: nil, recovery: "Segure seu atalho, fale e solte.")
+            self.init(title: "Nenhuma fala detectada", diagnostic: nil,
+                recovery: ResenhaDistributionChannel.current.usesSandboxedTextService
+                    ? "Use Command + Shift + E, fale e clique em Concluir."
+                    : "Segure seu atalho, fale e solte.")
         case WhisperError.invalidAudio:
             self.init(title: "Áudio inválido", diagnostic: nil, recovery: "Confira o microfone e tente novamente.")
         case TextInjectionError.clipboardUnavailable:

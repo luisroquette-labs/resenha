@@ -12,10 +12,10 @@ key_equivalent="$(plutil -extract NSServices.0.NSKeyEquivalent.default raw "$inf
 [[ ${#key_equivalent} == 1 ]] || fail "NSKeyEquivalent deve conter um caractere"
 [[ "$key_equivalent" == "${key_equivalent:u}" ]] || fail "atalho padrão precisa incluir Shift"
 [[ "$key_equivalent" == E ]] || fail "atalho documentado e Info.plist divergiram"
-rg -q 'solte a tecla `E`' "$project_root/AppStore/review-notes-pt-BR.md" \
-    || fail "notas de revisão não orientam a soltura da tecla E"
-if rg -q 'solte a barra de espaço' "$project_root/AppStore/review-notes-pt-BR.md"; then
-    fail "notas de revisão ainda pedem a soltura da barra de espaço"
+rg -q 'clique em “Concluir”' "$project_root/AppStore/review-notes-pt-BR.md" \
+    || fail "notas de revisão não orientam o botão Concluir"
+if rg -q 'solte a tecla|mantenha.*pressionad|RegisterEventHotKey' "$project_root/AppStore/review-notes-pt-BR.md"; then
+    fail "notas de revisão ainda descrevem o fluxo antigo"
 fi
 pass "Serviço usa NSKeyEquivalent válido: Command + Shift + E"
 

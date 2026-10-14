@@ -49,7 +49,7 @@ final class ResenhaServiceProvider: NSObject {
 
         logger.notice("Sandboxed text service request started")
         guard beginDictation?() == true else {
-            error.pointee = "O Resenha não conseguiu iniciar o ditado. Pressione e segure o atalho do Serviço."
+            error.pointee = "O Resenha não conseguiu iniciar o ditado. Verifique o modelo de voz e tente o Serviço novamente."
             return
         }
 

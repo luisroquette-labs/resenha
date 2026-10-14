@@ -54,7 +54,7 @@ if [[ "$negative_only" == 1 ]]; then
     local log="$work_root/forbidden-$symbol.log"
     print "extern int $symbol(void *, void *, void **);" > "$source"
     print "int main(void) { return $symbol(0, 0, 0); }" >> "$source"
-    xcrun clang "$source" -framework ApplicationServices -o "$binary"
+    xcrun clang "$source" -framework ApplicationServices -framework Carbon -o "$binary"
     if "$binary_boundary_validator" "$binary" >"$log" 2>&1; then
       print -u2 "FALHOU: validador aceitou símbolo $symbol"
       exit 1
@@ -70,20 +70,16 @@ if [[ "$negative_only" == 1 ]]; then
   assert_ax_symbol_rejected CGEventTapCreate
   assert_ax_symbol_rejected CGPreflightListenEventAccess
   assert_ax_symbol_rejected CGRequestListenEventAccess
+  assert_ax_symbol_rejected RegisterEventHotKey
 
   clean_source="$work_root/clean.c"
   clean_binary="$work_root/clean"
   cat > "$clean_source" <<'EOF'
-#include <Carbon/Carbon.h>
-int main(void) {
-  EventHotKeyRef hotkey = NULL;
-  EventHotKeyID identifier = { 'RSNH', 1 };
-  return RegisterEventHotKey(kVK_ANSI_E, cmdKey | shiftKey, identifier, GetApplicationEventTarget(), 0, &hotkey);
-}
+int main(void) { return 0; }
 EOF
-  xcrun clang "$clean_source" -framework Carbon -o "$clean_binary"
+  xcrun clang "$clean_source" -o "$clean_binary"
   "$binary_boundary_validator" "$clean_binary" >"$work_root/clean.log"
-  grep -q 'PASS: binário App Store com atalho registrado' "$work_root/clean.log" || {
+  grep -q 'PASS: binário App Store usa somente o Serviço' "$work_root/clean.log" || {
     print -u2 "FALHOU: fixture limpa não produziu o aceite esperado"
     exit 1
   }

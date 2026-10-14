@@ -458,7 +458,8 @@ final class WhisperKeyTests: XCTestCase {
                     initialSection: section,
                     soundPresentation: section == .sounds
                         ? SoundLibraryPresentation(searchText: "ressonância")
-                        : .init()
+                        : .init(),
+                    isStore: section == .general
                 ).environment(\.colorScheme, scheme))
                 view.frame = CGRect(x: 0, y: 0, width: 760, height: 560)
                 view.appearance = NSAppearance(named: scheme == .dark ? .darkAqua : .aqua)
@@ -615,7 +616,7 @@ final class WhisperKeyTests: XCTestCase {
     }
 
     @MainActor
-    func testAppConfiguresServiceReleaseWithoutDirectPressRoute() {
+    func testAppConfiguresServiceWithoutDirectPressRoute() {
         let app = AppDelegate()
         XCTAssertFalse(app.isHotkeyRoutingConfigured)
         app.configureHotkeyRouting()
@@ -623,7 +624,7 @@ final class WhisperKeyTests: XCTestCase {
     }
 
     @MainActor
-    func testSelfTargetServiceAdmissionRejectsAndNextExternalRequestSucceeds() async {
+    func testSelfTargetServiceAdmissionRejectsAndNextExternalRequestSucceeds() {
         let hotkey = HotkeyMonitor()
         var startAttempts = 0
         let app = AppDelegate(hotkey: hotkey, verifiedModelURL: {
@@ -633,30 +634,19 @@ final class WhisperKeyTests: XCTestCase {
             return true
         }
         app.configureHotkeyRouting()
-        let routedRelease = hotkey.onRelease
-        let releaseDelivered = expectation(description: "matching release reaches AppDelegate")
-        hotkey.onRelease = {
-            routedRelease?()
-            releaseDelivered.fulfill()
-        }
-
-        hotkey.process(eventType: .keyDown, keyCode: 14)
-        XCTAssertFalse(app.beginServiceDictation(pressedKeyCodes: [14], targetIsSelf: true))
+        XCTAssertFalse(app.beginServiceDictation(targetIsSelf: true))
         XCTAssertFalse(app.interaction.isPressed)
         XCTAssertEqual(startAttempts, 0, "A self-originated request must not reach capture")
 
-        hotkey.process(eventType: .keyUp, keyCode: 14)
-        hotkey.process(eventType: .keyDown, keyCode: 14)
-        XCTAssertTrue(app.beginServiceDictation(pressedKeyCodes: [14], targetIsSelf: false))
+        XCTAssertTrue(app.beginServiceDictation(targetIsSelf: false))
         XCTAssertTrue(app.interaction.isPressed)
         XCTAssertEqual(startAttempts, 1)
-        hotkey.process(eventType: .keyUp, keyCode: 14)
-        await fulfillment(of: [releaseDelivered], timeout: 0.5)
+        app.handleHotkeyRelease()
         XCTAssertFalse(app.interaction.isPressed)
     }
 
     @MainActor
-    func testServiceRequestRejectsThenRecoversThroughAppAdmissionAndExactRelease() {
+    func testServiceRequestRejectsThenRecoversThroughFinishAction() {
         let hotkey = HotkeyMonitor()
         var startAttempts = 0
         let app = AppDelegate(hotkey: hotkey, verifiedModelURL: {
@@ -667,22 +657,19 @@ final class WhisperKeyTests: XCTestCase {
         }
         app.configureHotkeyRouting()
         let provider = ResenhaServiceProvider(timing: .init(timeout: 0.5, pollInterval: 0.002))
-        var unrelatedReleasePreservedPress = false
+        var finishActionEndedPress = false
         provider.beginDictation = {
-            let started = app.beginServiceDictation(pressedKeyCodes: [0, 14], targetIsSelf: false)
+            let started = app.beginServiceDictation(targetIsSelf: false)
             if started {
                 DispatchQueue.main.async {
-                    hotkey.process(eventType: .keyUp, keyCode: 0)
-                    unrelatedReleasePreservedPress = app.interaction.isPressed
-                    hotkey.process(eventType: .keyUp, keyCode: 14)
+                    app.handleHotkeyRelease()
+                    finishActionEndedPress = !app.interaction.isPressed
                     DispatchQueue.main.async { provider.complete(with: "recuperado") }
                 }
             }
             return started
         }
 
-        hotkey.process(eventType: .keyDown, keyCode: 0)
-        hotkey.process(eventType: .keyDown, keyCode: 14)
         let rejected = NSPasteboard(name: .init("ResenhaServiceRejected.\(UUID().uuidString)"))
         defer { rejected.releaseGlobally() }
         var rejectedError: NSString?
@@ -691,15 +678,13 @@ final class WhisperKeyTests: XCTestCase {
         XCTAssertFalse(app.interaction.isPressed, "A rejected admission must roll back before the next request")
         XCTAssertFalse(provider.isServing)
 
-        hotkey.process(eventType: .keyUp, keyCode: 14)
-        hotkey.process(eventType: .keyDown, keyCode: 14)
         let recovered = NSPasteboard(name: .init("ResenhaServiceAppRecovery.\(UUID().uuidString)"))
         defer { recovered.releaseGlobally() }
         var recoveryError: NSString?
         provider.dictate(recovered, userData: nil, error: &recoveryError)
         XCTAssertNil(recoveryError)
         XCTAssertEqual(recovered.string(forType: .string), "recuperado")
-        XCTAssertTrue(unrelatedReleasePreservedPress)
+        XCTAssertTrue(finishActionEndedPress)
         XCTAssertFalse(app.interaction.isPressed)
         XCTAssertEqual(startAttempts, 2)
     }
@@ -1667,7 +1652,7 @@ final class WhisperKeyTests: XCTestCase {
     }
 
     @MainActor
-    func testRecordingDeadlineWithoutKeyUpAllowsNextServiceStart() {
+    func testRecordingDeadlineAllowsNextServiceStart() {
         let hotkey = HotkeyMonitor()
         var startAttempts = 0
         let app = AppDelegate(hotkey: hotkey, verifiedModelURL: {
@@ -1683,16 +1668,13 @@ final class WhisperKeyTests: XCTestCase {
         app.observeCoordinator(coordinator)
         app.configureHotkeyRouting()
 
-        hotkey.process(eventType: .keyDown, keyCode: 14)
-        XCTAssertTrue(app.beginServiceDictation(pressedKeyCodes: [14], targetIsSelf: false))
+        XCTAssertTrue(app.beginServiceDictation(targetIsSelf: false))
         XCTAssertTrue(app.interaction.isPressed)
 
         coordinator.onRecordingDeadline?()
 
         XCTAssertFalse(app.interaction.isPressed)
-        XCTAssertFalse(hotkey.interruptServiceRelease(), "The deadline terminal edge must disarm the old release")
-        hotkey.process(eventType: .keyDown, keyCode: 14)
-        XCTAssertTrue(app.beginServiceDictation(pressedKeyCodes: [14], targetIsSelf: false))
+        XCTAssertTrue(app.beginServiceDictation(targetIsSelf: false))
         XCTAssertTrue(app.interaction.isPressed)
         XCTAssertEqual(startAttempts, 2)
         coordinator.onRecordingDeadline?()
@@ -1736,6 +1718,18 @@ final class WhisperKeyTests: XCTestCase {
                 view.cacheDisplay(in: view.bounds, to: bitmap)
                 let data = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
                 try data.write(to: directory.appendingPathComponent("hud-\(name)-\(appearance).png"))
+                if name == "listening", appearance == "light" {
+                    let storeSize = CGSize(width: 420, height: 72)
+                    let storeView = NSHostingView(rootView: FloatingStatusView(model: model, finishRecording: {})
+                        .environment(\.colorScheme, scheme))
+                    storeView.frame = CGRect(origin: .zero, size: storeSize)
+                    storeView.appearance = .init(named: .aqua)
+                    storeView.layoutSubtreeIfNeeded()
+                    let storeBitmap = try XCTUnwrap(storeView.bitmapImageRepForCachingDisplay(in: storeView.bounds))
+                    storeView.cacheDisplay(in: storeView.bounds, to: storeBitmap)
+                    let storeData = try XCTUnwrap(storeBitmap.representation(using: .png, properties: [:]))
+                    try storeData.write(to: directory.appendingPathComponent("hud-store-listening-light.png"))
+                }
             }
         }
     }

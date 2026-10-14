@@ -369,16 +369,15 @@ final class LocalIntegrityTests: XCTestCase {
         }
         app.configureHotkeyRouting()
 
-        hotkey.process(eventType: .keyDown, keyCode: 14)
-        XCTAssertFalse(app.beginServiceDictation(pressedKeyCodes: [14], targetIsSelf: false))
+        XCTAssertFalse(app.beginServiceDictation(targetIsSelf: false))
         state = .failed("invalid")
-        XCTAssertFalse(app.beginServiceDictation(pressedKeyCodes: [14], targetIsSelf: false))
+        XCTAssertFalse(app.beginServiceDictation(targetIsSelf: false))
         XCTAssertEqual(starts, 0)
 
         state = .ready(verified)
-        XCTAssertTrue(app.beginServiceDictation(pressedKeyCodes: [14], targetIsSelf: false))
+        XCTAssertTrue(app.beginServiceDictation(targetIsSelf: false))
         XCTAssertEqual(starts, 1)
-        hotkey.process(eventType: .keyUp, keyCode: 14)
+        app.handleHotkeyRelease()
     }
 }
 
