@@ -9,8 +9,8 @@
   },
   "remoteMutationRequiresOwnerApproval": true,
   "candidate": {
-    "minimumBuild": 5,
-    "sourceCommit": "bbf4f5f4006f40e1c688aa23a7039b150aad8306",
+    "minimumBuild": 6,
+    "sourceCommit": "2302a707ac902f138c1386c7fa150b50287a01e8",
     "version": "1.0.0"
   },
   "requiredBeforeSubmission": [
