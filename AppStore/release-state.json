@@ -31,7 +31,7 @@
   },
   "candidate": {
     "version": "1.0.0",
-    "minimumBuild": 3,
-    "sourceCommit": "187a7e3071cf50b968b1d0e882a54260f6c04056"
+    "minimumBuild": 4,
+    "sourceCommit": "9ca906c6d4c0d7719043fec0b10f3ae6dbe1730e"
   }
 }
