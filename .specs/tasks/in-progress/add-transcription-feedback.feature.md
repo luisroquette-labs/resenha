@@ -64,10 +64,10 @@ Permitir que quem dita no Resenha avalie rapidamente o resultado no HUD e ensine
 
 **Regular Checks:**
 
-- [ ] CK-1–CK-10: executar `~/.local/bin/mac-gate xcodebuild -project WhisperKey.xcodeproj -scheme WhisperKey -destination 'platform=macOS' -derivedDataPath build test`, conforme README e SPEC-008; preparar framework embarcado e projeto Xcode pelas instruções existentes se ausentes. Não executar `next build` nem inventar script npm para o app nativo.
-- [ ] CK-4–CK-8: revisar diff e testes de preferências/glossário para limites, preservação de dados, ausência de persistência de rascunho e ausência de chamadas de rede/telemetria introduzidas.
+- [X] CK-1–CK-10: executar `~/.local/bin/mac-gate xcodebuild -project WhisperKey.xcodeproj -scheme WhisperKey -destination 'platform=macOS' -derivedDataPath build test`, conforme README e SPEC-008; preparar framework embarcado e projeto Xcode pelas instruções existentes se ausentes. Não executar `next build` nem inventar script npm para o app nativo.
+- [X] CK-4–CK-8: revisar diff e testes de preferências/glossário para limites, preservação de dados, ausência de persistência de rascunho e ausência de chamadas de rede/telemetria introduzidas.
 - [ ] CK-1–CK-3, CK-7, CK-9–CK-10: validar app real em TextEdit, incluindo teclado, VoiceOver, gravação seguinte, clipboard e foco; registrar ambiente, commit, resultado e limitações em evidência de teste, sem conteúdo pessoal.
-- [ ] CK-10: executar `~/.local/bin/mac-gate node --test Scripts/site.test.mjs` somente se o diff atingir site/scripts cobertos pelo workflow existente. O workflow de site e eventual preview do site não provam comportamento do app nativo.
+- [X] CK-10: executar `~/.local/bin/mac-gate node --test Scripts/site.test.mjs` somente se o diff atingir site/scripts cobertos pelo workflow existente. O workflow de site e eventual preview do site não provam comportamento do app nativo.
 
 **Rubric:**
 
@@ -212,10 +212,10 @@ Test Cases to Cover:
 **Definition of Done:**
 
 - [ ] CK-1–CK-10 demonstrados por casos acima; nenhuma regra é aprendida antes da confirmação e nenhum dado pessoal adicional é persistido ou enviado.
-- [ ] Cenário “Coisa Energia” → “COESA Energia” provado com regra persistida e próxima saída corrigida, preservando entradas anteriores e texto já inserido.
-- [ ] Gates locais aplicáveis verdes via mac-gate; erros conhecidos corrigidos sem afrouxar checks, dependências ou privacidade.
+- [X] Cenário “Coisa Energia” → “COESA Energia” provado com regra persistida e próxima saída corrigida, preservando entradas anteriores e texto já inserido.
+- [X] Gates locais aplicáveis verdes via mac-gate; erros conhecidos corrigidos sem afrouxar checks, dependências ou privacidade.
 - [ ] Evidência física datada por commit cobre ditado, foco, teclado e VoiceOver; itens não executados são declarados como pendência, nunca como sucesso.
-- [ ] Spec, testes e documentação de uso/privacidade refletem o fluxo final; revisão do diff confirma escopo limitado e ausência de API paga, analytics ou novo serviço.
+- [X] Spec, testes e documentação de uso/privacidade refletem o fluxo final; revisão do diff confirma escopo limitado e ausência de API paga, analytics ou novo serviço.
 
 ## Architecture Overview
 
