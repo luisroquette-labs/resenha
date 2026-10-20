@@ -10,16 +10,19 @@ title: Add local transcription feedback and correction learning
 
 > Refinamento normativo após teste do piloto: like/dislike não podem ocupar um cartão grande nem permanecer indefinidamente. Devem emergir como detalhes sutis do mesmo HUD de voz ao terminar a transcrição e desaparecer sozinhos após um intervalo curto. A versão instalada deve ser atualizada para tornar o fluxo testável.
 
+> Refinamento normativo da Phase 5: uma correção ambígua não pode virar substituição global. O caso “rosto” → “Hostel” deve conservar “rosto” em “meu rosto ficou vermelho” e aplicar “Hostel” apenas quando o contexto indicar hospedagem. O beta pode usar Jev 1.14 pela OpenRouter Decisions API somente com opt-in, chave nova guardada no Keychain, escopo de dados e teto de custo explicitamente aprovados.
+
 ### Requirements
 
 - Após uma transcrição concluída, exibir ações rápidas de aprovação e reprovação no HUD.
 - Exibir essas ações como dois controles discretos dentro do mesmo HUD de processamento, sem cartão, título ou oferta visual separada, e dispensá-las automaticamente após 4 segundos.
 - Aprovação encerra o feedback sem persistir conteúdo adicional.
 - Reprovação abre uma correção curta com os campos “Saiu como” e “Correto é”.
-- Salvar uma correção confirmada adiciona uma regra local no formato já suportado pelo glossário.
-- A próxima transcrição deve aplicar a correção aprendida.
-- Áudio, transcrição e feedback não podem ser enviados a servidores ou APIs externas.
-- Não adicionar analytics, login, dependência ou API paga.
+- Salvar uma correção confirmada cria uma correção contextual por padrão; não adiciona automaticamente uma substituição global ao glossário.
+- Termos simples do glossário e substituições globais legadas continuam locais; uma correção contextual só é aplicada quando uma decisão tipada aprovada considerar o contexto suficiente.
+- Sem opt-in, chave válida, rede, orçamento, resposta válida ou confiança mínima, manter o texto original; nunca reescrever texto já inserido.
+- Áudio, histórico completo, aplicativo de destino e dados pessoais não podem ser enviados. O beta remoto permanece desligado até a decisão explícita sobre o recorte textual e o teto de custo.
+- Não adicionar analytics, login ou dependência; não usar nem persistir a chave exposta na conversa.
 
 ## Description
 
@@ -29,16 +32,18 @@ Permitir que quem dita no Resenha avalie rapidamente o resultado no HUD e ensine
 
 - Like e dislike compactos após uma transcrição concluída e não vazia, associados ao resultado atual e incorporados à mesma superfície/posição do HUD de processamento.
 - Formulário curto com “Saiu como”, “Correto é”, salvar e cancelar; validação e confirmação local clara.
-- Regra explícita no glossário existente, preservando as demais entradas, seus limites e a compatibilidade com edição nas preferências.
-- Aplicação determinística da regra em transcrições seguintes, persistência entre aberturas e operação acessível por teclado e VoiceOver.
+- Correção contextual local separada do glossário determinístico, com exemplo rotulado salvo apenas após confirmação e controles para listar/apagar.
+- Aplicação contextual antes da inserção, com escolha tipada `manterOriginal`/`aplicarCorrecao`, confiança mínima, timeout e fallback local.
+- Glossário determinístico existente preservado para termos inequívocos e regras legadas, sem migração ou reclassificação silenciosa.
 - Proteção contra confirmação duplicada, callbacks obsoletos e perda silenciosa de regras; preservação da inserção, clipboard e política opcional de histórico.
 
 ### Scope Excluded
 
 - Retreinamento do modelo, aprendizado por like/dislike sem confirmação, interpretação de instruções em texto livre e avaliação automática de qualidade.
 - Reescrita retroativa de texto já inserido em outro aplicativo ou de transcrições anteriores.
-- Conta, sincronização, servidor, API, analytics, novas dependências e serviços pagos.
+- Conta, sincronização, backend próprio, analytics e novas dependências. O único serviço remoto prospectivo é o Jev 1.14 pela OpenRouter Decisions API, opt-in e condicionado à aprovação de dados/custo.
 - Histórico persistente de notas, áudio ou conteúdo de feedback separado do glossário.
+- Modelo geral de previsão de próxima palavra, leitura de tela, envio do histórico completo, retreinamento e alteração retroativa de texto já inserido.
 
 ### User Scenarios
 
@@ -227,6 +232,42 @@ Test Cases to Cover:
 - [ ] Evidência física datada por commit cobre ditado, foco, teclado e VoiceOver; itens não executados são declarados como pendência, nunca como sucesso.
 - [X] Spec, testes e documentação de uso/privacidade refletem o fluxo compacto e temporizado final; revisão do diff confirma escopo limitado e ausência de API paga, analytics ou novo serviço.
 
+## Phase 5 addendum — correções contextuais com Jev
+
+Este addendum substitui, apenas para correções novas criadas pelo formulário, a promessa anterior de anexar sempre `forma ouvida = forma final` ao glossário. Linhas já existentes no glossário continuam determinísticas e não são migradas. O beta seguro trata toda nova correção do feedback como contextual por padrão; o usuário ainda pode manter termos inequívocos e regras globais pela edição explícita do “Vocabulário pessoal”.
+
+Jev 1.14 é usado como classificador de escolha estruturada, não como reescritor livre nem como mecanismo geral de “próxima palavra”. Para cada ocorrência candidata, a resposta aceita contém somente a escolha tipada `manterOriginal` ou `aplicarCorrecao` e uma probabilidade/confiança finita. O endpoint prospectivo é `POST /api/alpha/decisions`; preço informado em 20/10/2026: **US$ 0,042 por milhão de tokens de entrada e saída grátis**. Confirmar contrato/model ID e preço vigentes antes da implementação, sem chamada paga durante planejamento ou testes automatizados.
+
+### Acceptance criteria adicionais
+
+| ID | Question | Category | Importance |
+| --- | --- | --- | --- |
+| CK-12 | Nova correção “rosto” → “Hostel” fica em armazenamento contextual separado e não cria uma linha global no glossário; regras legadas continuam intactas? | hard_rule | essential |
+| CK-13 | Antes da inserção, cada ocorrência ambígua recebe somente uma decisão tipada manter/aplicar; `aplicarCorrecao` exige confiança `>= 0,90`, correspondência exata do par e resposta válida? | hard_rule | essential |
+| CK-14 | Opt-out, chave ausente, offline, timeout total de 900 ms, HTTP/decoding/model error, orçamento esgotado, confiança baixa ou mais de três ocorrências candidatas mantêm o original, sem retry e sem bloquear o próximo ditado? | hard_rule | essential |
+| CK-15 | O opt-in mostra o dado exato que pode sair do Mac; nunca envia áudio, histórico, clipboard, app de destino, identificadores ou transcrição completa, e permite apagar chave, exemplos e correções locais? | hard_rule | essential |
+| CK-16 | Um corpus sintético rotulado prova os dois sentidos de pelo menos cinco pares ambíguos, incluindo “rosto” corporal → manter e contexto de hospedagem → aplicar “Hostel”, sem rede nos testes? | hard_rule | essential |
+
+### Arquitetura mínima e reversível
+
+1. `TranscriptionGlossary` permanece responsável apenas por termos inequívocos e regras globais existentes. `saveTranscriptionCorrection` deixa de ser o destino de Save do formulário; o fluxo novo valida o mesmo par e grava um `ContextualCorrection` versionado, limitado, em storage local separado. Nenhuma regra existente é apagada, migrada ou reinterpretada.
+2. `DictationCompletion` carrega a transcrição somente em memória até o feedback expirar. Ao salvar, localizar a forma ouvida e persistir no máximo a frase rotulada que a contém, junto do par e timestamp; se não houver correspondência, recusar em vez de guardar a transcrição inteira. A lista local terá apagar item/apagar tudo; não alimenta prompt remoto por padrão.
+3. No ditado seguinte, depois do Whisper e do pós-processamento determinístico, mas antes de `stage`/histórico/inserção, detectar ocorrências inteiras das correções contextuais. O resolver recebe no máximo três ocorrências e uma janela limitada à frase atual, com teto adicional de 600 caracteres UTF-8 por decisão. Resolver em paralelo sob um único deadline de 900 ms; sem retry. Aplicar somente a substituição exata aprovada; todo outro resultado conserva o original.
+4. `JevDecisionClient` usa `URLSession.ephemeral`, `POST /api/alpha/decisions`, modelo Jev 1.14 confirmado na implementação e schema fechado. A chave é digitada pelo usuário e guardada no Keychain; nunca entra em fonte, `UserDefaults`, log, fixture, issue ou PR. O modo é desligado por padrão e tem contador/cap mensal local. Desligar ou apagar a chave restaura imediatamente o caminho offline.
+5. O prompt remoto contém somente: idioma, par candidato, frase atual delimitada e escolhas tipadas. Não contém áudio, exemplo salvo, histórico, clipboard, bundle/app de destino, nome do usuário, caminhos, device ID ou texto vizinho fora da frase. Logs registram somente resultado operacional agregado sem texto/chave. Resposta remota nunca altera conteúdo já inserido.
+
+O limite recomendado para o beta é **US$ 0,10/mês** e o recorte recomendado é **somente a frase atual limitada a 600 caracteres**. Ambos permanecem bloqueantes até aprovação explícita do dono. A chave já exposta na conversa deve ser revogada e substituída por outra inserida localmente no app; ela não será testada nem copiada.
+
+### Avaliação e gates da Phase 5
+
+- [ ] Corpus `Tests/Fixtures/contextual-corrections.json` contém casos positivos/negativos balanceados e sem dados reais; um fake determinístico valida parsing, confiança, correspondência e fail-closed sem rede.
+- [ ] Testes de integração cobrem opt-in off, Keychain ausente, timeout, 401/429/5xx, payload inválido, confiança `0,899/0,900`, teto mensal, três/quatro candidatos e cancelamento/tentativa obsoleta.
+- [ ] Teste de regressão prova “Meu rosto ficou vermelho” intacto e “Reservei um rosto perto da estação” → “Reservei um Hostel perto da estação” somente com decisão `aplicarCorrecao` confiante; o texto já inserido nunca muda.
+- [ ] Revisão de privacidade confirma request capturado sem áudio/histórico/identificadores/transcrição inteira; `docs/PRIVACY.md`, SPEC-011, README e declarações de App Store deixam de prometer operação exclusivamente local quando o opt-in for habilitado.
+- [ ] Gate canônico via `mac-gate` fica verde; validação remota real ocorre somente após aprovação explícita de custo/dados, com chave nova, uma chamada delimitada e gasto observado.
+
+**Decisão de produto bloqueante:** autorizar ou rejeitar o beta opt-in que envia somente a frase atual limitada a 600 caracteres, o par corrigido e o idioma ao OpenRouter, com teto de US$ 0,10/mês. Sem essa resposta, a Phase 5 pode implementar e testar apenas contratos locais/fakes, nunca ativar nem chamar o serviço pago.
+
 ## Architecture Overview
 
 ### Strategy and references
@@ -376,6 +417,11 @@ Phase 4 — auréola restaurada e feedback com profundidade
                 [06 orbe + bolhas 3D + regressões]
                                       |
                               review opus
+                                      |
+Phase 5 — correção contextual opt-in e fail-closed
+                [07 storage + Jev resolver + evals]
+                                      |
+                              review opus
 ```
 
 | Step | Phase | Model | Agent | Depends on | Parallel with | Sub-Task File |
@@ -386,8 +432,9 @@ Phase 4 — auréola restaurada e feedback com profundidade
 | 04 — Prova e documentação [DONE] | 2 | sonnet | developer | 03 | None | [.specs/sub-tasks/add-transcription-feedback/04-physical-evidence-and-specs.md](../../sub-tasks/add-transcription-feedback/04-physical-evidence-and-specs.md) |
 | 05 — Feedback compacto e temporizado [DONE] | 3 | opus | developer | 04 | None | [.specs/sub-tasks/add-transcription-feedback/05-compact-timed-feedback.md](../../sub-tasks/add-transcription-feedback/05-compact-timed-feedback.md) |
 | 06 — Auréola animada e bolhas de feedback 3D | 4 | opus | developer | 05 | None | [.specs/sub-tasks/add-transcription-feedback/06-animated-halo-feedback-bubbles.md](../../sub-tasks/add-transcription-feedback/06-animated-halo-feedback-bubbles.md) |
+| 07 — Correções contextuais com Jev | 5 | opus | developer | 06 | None | [.specs/sub-tasks/add-transcription-feedback/07-context-aware-corrections-with-jev.md](../../sub-tasks/add-transcription-feedback/07-context-aware-corrections-with-jev.md) |
 
-Largura máxima real: **2**; caminhos críticos: **01 → 03 → 04 → 05 → 06** e **02 → 03 → 04 → 05 → 06**. 01/02 dividem somente o arquivo XCTest, em regiões diferentes, sem formatação global. 03 depende de ambos os contratos, 04 prova o primeiro candidato, 05 corrige o refinamento visual/temporal observado no uso real e 06 restaura o orbe e aprofunda apenas a apresentação dos controles; não há paralelismo adicional correto. Os passos 05/06 e suas revisões usam opus porque animação, timer, token, geometria, mouse e acessibilidade compartilham o lifecycle do painel; não são somente ajustes cosméticos.
+Largura máxima real: **2**; caminhos críticos: **01 → 03 → 04 → 05 → 06 → 07** e **02 → 03 → 04 → 05 → 06 → 07**. 01/02 dividem somente o arquivo XCTest, em regiões diferentes, sem formatação global. 03 depende de ambos os contratos, 04 prova o primeiro candidato, 05 corrige o refinamento visual/temporal observado, 06 restaura o orbe e 07 substitui o aprendizado global do formulário por um caminho contextual seguro; não há paralelismo adicional correto. O passo 07 e sua revisão usam opus porque alteram persistência, privacidade, custo, latência e o caminho terminal antes da inserção.
 
 ### Phase Overview
 
@@ -478,4 +525,25 @@ Rubrics:
 - Acessibilidade da correção.
 - Project Guidelines Alignment.
 
-O Checklist desta task contém CK-1–CK-11 e nenhum ID HR; não inventar HR. Esta seção distribui os critérios existentes, sem criar IDs adicionais na implementação.
+#### Phase 5 — Correções contextuais opt-in e fail-closed
+
+Steps: 07.
+
+Reviewer model: opus — o passo toca dados pessoais, Keychain, rede paga, persistência versionada, cancelamento e o caminho crítico antes da inserção; teto da escala.
+
+Acceptance Criteria that should be fulfiled: correções novas do formulário deixam de ser substituições globais e passam a ser exemplos contextuais locais. Com o beta desativado ou qualquer falha, a saída original é preservada. Com opt-in, chave nova, orçamento disponível e resposta Jev válida/confiante dentro de 900 ms, apenas a ocorrência exata pode mudar antes de ser inserida. Nenhuma implementação ou chamada real começa antes da decisão bloqueante de dados/custo.
+
+Checklist items:
+- CK-12: storage separado, versionado, apagável e sem migração destrutiva do glossário legado.
+- CK-13: schema tipado, confiança `>= 0,90`, matching exato e aplicação anterior a `stage`/histórico/inserção.
+- CK-14: offline/timeout/HTTP/decoding/custo/cancelamento sempre mantêm original, sem retry ou callback obsoleto.
+- CK-15: opt-in, Keychain, request mínimo, exclusões de dados e documentação de privacidade/App Store.
+- CK-16: corpus sintético rotulado, fake sem rede e caso “rosto”/“Hostel” nos dois sentidos.
+
+Rubrics:
+- Correção contextual e qualidade da decisão.
+- Privacidade, custo e reversibilidade.
+- Continuidade offline e latência.
+- Project Guidelines Alignment.
+
+O Checklist desta task contém CK-1–CK-16 e nenhum ID HR; não inventar HR. CK-12–CK-16 especializam o aprendizado da Phase 5; CK-8 continua integral para o fluxo legado e para opt-out, enquanto o opt-in remoto obedece ao recorte explícito de CK-15.
