@@ -1,5 +1,26 @@
 # Interface refinement — item 1 evidence
 
+## Final compact candidate installed — 20/10/2026, 14:45–14:49 BRT
+
+**Installed revision: `68ddb7c1c89c71d8f4eded078d94c5967749cb21`.** Phase 3 review passed with score 4.53 before replacement. The clean committed candidate passed the canonical gate through `mac-gate`: **82 tests, 0 failures**, finished 14:45:33 BRT. Log `/tmp/resenha-step05-final-sha-gate.log`; result `build/Logs/Test/Test-WhisperKey-2026.10.20_14-45-14--0300.xcresult`. The lock enclosed graceful Resenha quit/reopen for the singleton restriction; no other application was terminated.
+
+The installer first copied the built candidate to a staging directory and verified it with `codesign --verify --deep --strict` and a recursive comparison against the build bundle. It then gracefully quit Resenha, moved the old installed bundle to the recoverable backup below, moved the staged candidate into `/Applications/Resenha.app`, and repeated signature/comparison verification. Its failure trap would move a failed candidate aside and restore the backup; no rollback was needed.
+
+| Installed/backup identity | Verified value |
+|---|---|
+| Running installed executable / PID | `/Applications/Resenha.app/Contents/MacOS/Resenha` / **96641** |
+| Version / build / identifier | `1.0.0` / `1` / `br.com.luisroquette.Resenha` |
+| Installed executable SHA-256 | `c5a4af326d644d2afc7b5d13faa5000004185a9e881ce34b3c80cc164676339a` |
+| Installed implementation dylib SHA-256 | `ac41b4528cc71d15cb0305eb6602f4e914430909c4cad5e3196ece1986acf99e` |
+| Recoverable original bundle | `/Users/luisroquette/Projects/.worktrees/resenha-transcription-feedback/build/install-backups/20261020-68ddb7c/Resenha.app` |
+| Original/backup executable SHA-256 | `2aae6550bbe8a309c8dc0ff5feb4c20212a2aaf9890563f65958b2ded70a695e` |
+
+Candidate and original have identical designated requirements, with identifier `br.com.luisroquette.Resenha` and Apple Development identity `luis roquette (K74FG72F9W)`. Both installed candidate and backup passed strict deep verification. No TCC reset or new permission grant occurred. Read-only native menu inspection found **“Resenha — Pronto”**, **“Segure Option direita para ditar”** and **“Idioma — PT-BR”**; the current menu contract reaches Pronto only with microphone, input monitoring and accessibility ready and hotkey available. System audio inspection confirmed **Microfone (MacBook Pro)** as default input before and after. Existing local `ggml-large-v3-turbo-q5_0.bin` and `ggml-small-q5_1.bin` are present under `~/Library/Application Support/WhisperKey/models`; actual model loading was not exercised by this blocked attempt.
+
+**Physical timing/editor proof: BLOCKED, not PASS.** The specifically authorized local JXA/CoreGraphics/TTS diagnostic was attempted with incremental logging and cleanup. Its first startup exposed the prior helper's real `NSNull count` cause: JavaScript `null` was passed to `NSFileManager.createFile` attributes; an empty `NSDictionary` fixed this before any key or clipboard mutation. The corrected run identified installed PID 96641 and saved the one-item clipboard, but TextEdit did not become/stay frontmost within four seconds. The observed foreground was Chrome before and after; user activity versus executor-driven focus interference was not resolved. The script stopped **before any synthetic key or TTS**, with no dictation, glossary write or feedback action. Log: `/tmp/resenha-physical-68ddb7c-events.jsonl`.
+
+CUA then exposed TextEdit's Open dialog; its New Document action created one blank disposable document. After the interference stop, that exact unmodified, empty `Sem Título` document was closed without saving; no TextEdit document remained. The helper restored its clipboard snapshot, no synthetic key had been held, VoiceOver remained off and system accessibility settings were untouched. Chrome and Terminal were not closed/restarted. The verified requested installation remains running; only transient test state was cleaned up. Live 280 × 64 continuity, approximately-four-second expiration, editor survival, actual VoiceOver/Reduce Motion, insertion and clipboard/focus behavior remain **NOT OBSERVED** on this installed revision; deterministic/fixture results remain separately valid.
+
 ## Compact feedback candidate — 20/10/2026, 14:40 BRT
 
 Step `05-compact-timed-feedback`, pre-review candidate: HEAD `780ef8a6cc14d972c606dd5648f13423488a96d1` plus the source fingerprints below. This is an uncommitted candidate, not a claim that the base SHA already contains this change.
