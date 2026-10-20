@@ -1,4 +1,4 @@
-# 06 — Auréola animada e bolhas de feedback 3D [DONE]
+# 06 — Auréola animada e bolhas de feedback 3D
 
 **Task File:** `.specs/tasks/in-progress/add-transcription-feedback.feature.md`
 **Phase:** 4
@@ -8,7 +8,7 @@
 **Depends on:** 05
 **Parallel with:** None
 
-**Phase review:** 4.66/5 — implementação e gates automatizados aprovados; validação física não executada permanece pendente.
+**Status:** in progress — revisão técnica 4.66/5 e gates automatizados aprovados; validação física **NOT RUN** permanece pendente.
 
 ## Goal
 

@@ -1,24 +1,28 @@
 # Interface refinement — item 1 evidence
 
-## Animated halo and feedback bubbles candidate — 20/10/2026, 19:38–19:43 BRT
+## Animated halo and feedback bubbles Debug candidate — 20/10/2026, 19:45–19:46 BRT
 
-Step `06-animated-halo-feedback-bubbles`, pre-review working candidate: HEAD `2af1cdec9b6627fafff9b389a2953b94eb9cec18` plus the source fingerprints below. This is an uncommitted candidate, not a claim that HEAD or the installed app already contains the visual refinement.
+Step `06-animated-halo-feedback-bubbles`, installed source revision: `1a1a882365c87ea03204b4109138ba5126efb9f9`. This is a locally signed **Debug candidate**, not a release/store build and not physical acceptance evidence.
 
-| Artifact | SHA-256 |
+| Installed/backup identity | Verified value |
 |---|---|
-| `Sources/WhisperKey/FloatingStatusView.swift` | `aae58790ddf3f2782c1a0695e46903a556863998a56d0470a3e74c090e994cbf` |
-| `Sources/WhisperKey/RecordingWaveformView.swift` | `911fee74c4fba2aa634407fc9bc758e645a5131f41f0bf63cf53de70fb7e2cb9` |
-| `Tests/WhisperKeyTests/WhisperKeyTests.swift` | `f9b68e82728aa6fd3e07d8cdfcd541102423ba0ed610c96ceeb0ecb482136f14` |
-| Candidate executable | `0fd46cecf0e5601b2f9b47fb66c7bd602fee88d0f8f5b2e40b3f5ccab2105fb5` |
-| Candidate implementation dylib | `2b523a5f81fa5f8f9efca58a2491d1dcfed86aec1d1549426ce5e19f9369cc17` |
+| Installed bundle | `/Applications/Resenha.app` |
+| Version / build / identifier | `1.0.0` / `1` / `br.com.luisroquette.Resenha` |
+| Installed executable SHA-256 | `457fc29f25d00cade3507bf22a61e60ba2affcf323045ab0786120902a36e3fd` |
+| Installed implementation dylib SHA-256 | `f47f8c6160bce9bc39b423c30f0628aa3873cb06f8a6b7064d127e5048d77e63` |
+| Signing identity | `Apple Development: luis roquette (K74FG72F9W)` |
+| Team ID | `S3YCFYY8SC` |
+| Recoverable previous bundle | `/Users/luisroquette/Projects/.worktrees/resenha-transcription-feedback/build/install-backups/20261020-194623-before-1a1a882/Resenha.app` |
 
-Canonical native gate after Phase 4 review fixes **PASS: 83 tests, 0 failures**, completed 19:43:06 BRT. Command: `~/.local/bin/mac-gate xcodebuild -project WhisperKey.xcodeproj -scheme WhisperKey -destination 'platform=macOS' -derivedDataPath build test`. Result: `build/Logs/Test/Test-WhisperKey-2026.10.20_19-42-47--0300.xcresult`. An earlier attempt compiled and signed but failed before executing tests because the installed singleton app was running (`IDELaunchErrorDomain` Code 20; result `Test-WhisperKey-2026.10.20_19-38-23--0300.xcresult`). Only that installed Resenha instance was quit gracefully; the passing rerun completed and `/Applications/Resenha.app` was reopened unchanged as PID **43159**.
+The installed bundle passed `codesign --verify --deep --strict` and launched as PID **47892** after replacement. The previous bundle was archived before installation; no TCC reset or new permission grant was performed.
+
+Canonical native gate for the exact installed source revision **PASS: 83 tests, 0 failures**. Command: `~/.local/bin/mac-gate xcodebuild -project WhisperKey.xcodeproj -scheme WhisperKey -destination 'platform=macOS' -derivedDataPath build test`. Result: `build/Logs/Test/Test-WhisperKey-2026.10.20_19-45-12--0300.xcresult`.
 
 Deterministic **PASS**: the restored 44-point angular-gradient orb uses the existing finite/clamped meter helpers, including stationary Reduce Motion values. Feedback motion is separately calculable and bounded: 36-point visual circles remain inside 44 × 44 targets, use a 70 ms entry stagger, rest without panel movement, then rise/fade before the controller's unchanged four-second deadline. Reduce Motion keeps offset zero and scale one, retaining only opacity changes. Existing deadline/token/editor regressions remained green; no controller, timer, persistence, network, dependency or project configuration changed.
 
 Fixtures regenerated at 19:39 under `/var/folders/7k/8wtpdcvn5f95c8s36d91t8k40000gn/T/ResenhaTests/ui-fixtures`. `hud-feedback-{light,dark}.png` and `hud-listening-light.png` were inspected: both bubbles are centered, distinct, unclipped and retain highlights/outlines on the 280 × 64 material; the listening fixture shows the orb/halo within the unchanged 340 × 72 capsule beside readable status/timer/waveform. The feedback matrix also generated increased-contrast, reduced-transparency and reduced-motion fixtures at a deterministic one-second resting state. Still images do **not** prove the rise/stagger/fade sequence, live meter response, keyboard focus or VoiceOver.
 
-**Not installed and not physically validated.** The installed application remains the prior compact candidate. Live silence/speech halo response, bubble animation/timing, clicking during the fade, actual OS Reduce Motion/Increase Contrast, keyboard focus, VoiceOver speech, TextEdit continuity and clipboard behavior remain **NOT RUN** for this working candidate. No Chrome/Terminal process, personal data, permission or accessibility setting was changed.
+**Installed, but physical validation is NOT RUN.** Live silence/speech halo response, bubble animation/timing, clicking during the fade, actual OS Reduce Motion/Increase Contrast, keyboard focus, VoiceOver speech, TextEdit continuity and clipboard behavior remain **NOT RUN** for this exact Debug candidate. Installation, signature, launch and automated evidence do not convert any of those checks into PASS. No Chrome/Terminal process, personal data, permission or accessibility setting was changed.
 
 ## Final compact candidate installed — 20/10/2026, 14:45–14:49 BRT
 
