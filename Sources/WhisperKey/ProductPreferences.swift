@@ -94,7 +94,7 @@ struct HotkeyShortcut: RawRepresentable, CaseIterable, Identifiable, Hashable {
 
 @MainActor
 final class ProductPreferences: ObservableObject {
-    static let maximumGlossaryCharacters = 20_000
+    nonisolated static let maximumGlossaryCharacters = 20_000
     private enum Key {
         static let shortcut = "resenha.shortcut"
         static let showsHUD = "resenha.showsHUD"
@@ -105,6 +105,8 @@ final class ProductPreferences: ObservableObject {
         static let readySoundID = "resenha.readySoundID"
     }
     private let defaults: UserDefaults
+    private var updatesGlossaryMemoryOnly = false
+    @Published private(set) var canSaveTranscriptionCorrection = true
     var onShortcutChange: ((HotkeyShortcut) -> Void)?
     var onHUDChange: ((Bool) -> Void)?
     var onHistoryChange: ((Bool) -> Void)?
@@ -139,6 +141,7 @@ final class ProductPreferences: ObservableObject {
     }
     @Published var transcriptionGlossary: String {
         didSet {
+            guard !updatesGlossaryMemoryOnly else { return }
             if transcriptionGlossary.count > Self.maximumGlossaryCharacters {
                 transcriptionGlossary = String(transcriptionGlossary.prefix(Self.maximumGlossaryCharacters))
             }
@@ -150,6 +153,86 @@ final class ProductPreferences: ObservableObject {
     }
     var readySound: ResenhaSound {
         ResenhaSoundCatalog.sound(id: readySoundID) ?? ResenhaSoundCatalog.defaultSound
+    }
+
+    enum CorrectionSaveResult: Equatable {
+        case saved
+        case alreadyExists
+        case invalid(TranscriptionGlossary.CorrectionValidationError)
+        case storageFailure(recoveryRequired: Bool)
+
+        var message: String {
+            switch self {
+            case .saved: "Regra salva"
+            case .alreadyExists: "Regra já existente"
+            case .invalid(let error): error.message
+            case .storageFailure(false): "Não foi possível salvar. O glossário anterior foi restaurado. Tente novamente."
+            case .storageFailure(true): "Não foi possível verificar o glossário. Feche e reabra a correção para recarregá-lo."
+            }
+        }
+    }
+
+    func saveTranscriptionCorrection(heard: String, canonical: String) -> CorrectionSaveResult {
+        guard canSaveTranscriptionCorrection else { return .storageFailure(recoveryRequired: true) }
+        let previousText = transcriptionGlossary
+        let previousValue = defaults.object(forKey: Key.transcriptionGlossary)
+        guard verifiedGlossaryText(value: previousValue)?.utf8.elementsEqual(previousText.utf8) == true else {
+            canSaveTranscriptionCorrection = false
+            return .storageFailure(recoveryRequired: true)
+        }
+        let candidate: String
+        switch TranscriptionGlossary.correctionCandidate(heard: heard, canonical: canonical, existingText: previousText) {
+        case .alreadyExists: return .alreadyExists
+        case .invalid(let error): return .invalid(error)
+        case .added(let text): candidate = text
+        }
+        transcriptionGlossary = candidate
+        if let stored = verifiedGlossaryText(value: defaults.object(forKey: Key.transcriptionGlossary)),
+           stored.utf8.elementsEqual(candidate.utf8),
+           TranscriptionGlossary(text: stored) == TranscriptionGlossary(text: candidate) {
+            return .saved
+        }
+
+        setGlossaryMemory(previousText)
+        if let previousValue { defaults.set(previousValue, forKey: Key.transcriptionGlossary) }
+        else { defaults.removeObject(forKey: Key.transcriptionGlossary) }
+        let restoredValue = defaults.object(forKey: Key.transcriptionGlossary)
+        let restored = verifiedGlossaryText(value: restoredValue)
+        let restoredAbsence = (previousValue == nil) == (restoredValue == nil)
+        canSaveTranscriptionCorrection = restoredAbsence
+            && restored?.utf8.elementsEqual(previousText.utf8) == true
+            && restored.map { TranscriptionGlossary(text: $0) } == TranscriptionGlossary(text: previousText)
+        return .storageFailure(recoveryRequired: !canSaveTranscriptionCorrection)
+    }
+
+    @discardableResult
+    func reloadTranscriptionGlossaryForCorrection() -> Bool {
+        guard let text = verifiedGlossaryText(value: defaults.object(forKey: Key.transcriptionGlossary)) else {
+            canSaveTranscriptionCorrection = false
+            return false
+        }
+        setGlossaryMemory(text)
+        canSaveTranscriptionCorrection = true
+        return true
+    }
+
+    private func verifiedGlossaryText(value: Any?) -> String? {
+        guard value == nil || value is String else { return nil }
+        let text = value as? String ?? TranscriptionGlossary.defaultText
+        let reread = defaults.object(forKey: Key.transcriptionGlossary)
+        guard (value == nil) == (reread == nil), reread == nil || reread is String,
+              text.count <= Self.maximumGlossaryCharacters,
+              text.utf8.elementsEqual((reread as? String ?? TranscriptionGlossary.defaultText).utf8),
+              (defaults.string(forKey: Key.transcriptionGlossary) ?? TranscriptionGlossary.defaultText).utf8.elementsEqual(text.utf8),
+              TranscriptionGlossary(text: text) == TranscriptionGlossary(text: reread as? String ?? TranscriptionGlossary.defaultText)
+        else { return nil }
+        return text
+    }
+
+    private func setGlossaryMemory(_ text: String) {
+        updatesGlossaryMemoryOnly = true
+        transcriptionGlossary = text
+        updatesGlossaryMemoryOnly = false
     }
 
     init(defaults: UserDefaults = .standard) {

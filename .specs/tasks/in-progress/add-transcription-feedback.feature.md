@@ -357,8 +357,8 @@ Phase 2 — feature integrada e prova do candidato
 
 | Step | Phase | Model | Agent | Depends on | Parallel with | Sub-Task File |
 | --- | --- | --- | --- | --- | --- | --- |
-| 01 — Save local seguro | 1 | opus | developer | None | 02 | [.specs/sub-tasks/add-transcription-feedback/01-safe-glossary-save.md](../../sub-tasks/add-transcription-feedback/01-safe-glossary-save.md) |
-| 02 — Views acessíveis | 1 | sonnet | developer | None | 01 | [.specs/sub-tasks/add-transcription-feedback/02-feedback-views.md](../../sub-tasks/add-transcription-feedback/02-feedback-views.md) |
+| 01 — Save local seguro [DONE] | 1 | opus | developer | None | 02 | [.specs/sub-tasks/add-transcription-feedback/01-safe-glossary-save.md](../../sub-tasks/add-transcription-feedback/01-safe-glossary-save.md) |
+| 02 — Views acessíveis [DONE] | 1 | sonnet | developer | None | 01 | [.specs/sub-tasks/add-transcription-feedback/02-feedback-views.md](../../sub-tasks/add-transcription-feedback/02-feedback-views.md) |
 | 03 — Sessão e integração nativa | 2 | opus | developer | 01, 02 | None | [.specs/sub-tasks/add-transcription-feedback/03-native-feedback-lifecycle.md](../../sub-tasks/add-transcription-feedback/03-native-feedback-lifecycle.md) |
 | 04 — Prova e documentação | 2 | sonnet | developer | 03 | None | [.specs/sub-tasks/add-transcription-feedback/04-physical-evidence-and-specs.md](../../sub-tasks/add-transcription-feedback/04-physical-evidence-and-specs.md) |
 
@@ -366,7 +366,7 @@ Largura máxima real: **2**; caminhos críticos: **01 → 03 → 04** e **02 →
 
 ### Phase Overview
 
-#### Phase 1 — Save verificável e superfícies renderizáveis
+#### Phase 1 — Save verificável e superfícies renderizáveis [REVIEWED]
 
 Steps: 01, 02.
 

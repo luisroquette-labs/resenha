@@ -94,6 +94,248 @@ final class WhisperKeyTests: XCTestCase {
         XCTAssertLessThanOrEqual(glossary.prompt.count, TranscriptionGlossary.maximumPromptCharacters)
     }
 
+    func testCorrectionCandidateValidatesFieldsAndPreservesExactExistingText() {
+        for pair in [("", "Nome"), (" \t ", "Nome"), ("Nome", " ")] {
+            XCTAssertEqual(TranscriptionGlossary.correctionCandidate(heard: pair.0, canonical: pair.1, existingText: ""),
+                           .invalid(.empty))
+        }
+        for invalid in ["nome\n", "\rnome", "no\u{2028}me", "no=me"] {
+            XCTAssertEqual(TranscriptionGlossary.correctionCandidate(heard: invalid, canonical: "Nome", existingText: ""),
+                           .invalid(.invalidCharacters))
+            XCTAssertEqual(TranscriptionGlossary.correctionCandidate(heard: "nome", canonical: invalid, existingText: ""),
+                           .invalid(.invalidCharacters))
+        }
+        XCTAssertEqual(TranscriptionGlossary.correctionCandidate(heard: " nome ", canonical: "nome", existingText: ""),
+                       .invalid(.identical))
+        XCTAssertEqual(TranscriptionGlossary.correctionCandidate(heard: " nome ", canonical: " Nome ", existingText: ""),
+                       .added(text: "nome = Nome"))
+        for existing in ["  anterior = Anterior  ", "anterior = Anterior\n", "anterior = Anterior\r\n"] {
+            let separator = existing.last?.isNewline == true ? "" : "\n"
+            XCTAssertEqual(TranscriptionGlossary.correctionCandidate(heard: " coisa ", canonical: " COESA ", existingText: existing),
+                           .added(text: existing + separator + "coisa = COESA"))
+        }
+    }
+
+    func testCorrectionCandidateFindsConflictsAndOnlyAcceptsEffectiveDuplicates() {
+        XCTAssertEqual(TranscriptionGlossary.correctionCandidate(heard: "COISA", canonical: "COESA", existingText: "coisa = COESA"),
+                       .alreadyExists)
+        XCTAssertEqual(TranscriptionGlossary.correctionCandidate(heard: "coesa", canonical: "COESA", existingText: "COESA"),
+                       .alreadyExists)
+        for existing in ["Coisa = Outra", "coisa = COESA\nCOISA = Outra", "Coisa", "outro = Coisa"] {
+            guard case .invalid(.conflict) = TranscriptionGlossary.correctionCandidate(
+                heard: "coisa", canonical: "COESA", existingText: existing
+            ) else { return XCTFail("Conflito não identificado: \(existing)") }
+        }
+        let full = Array(repeating: "termo", count: 200).joined(separator: "\n")
+        XCTAssertEqual(TranscriptionGlossary.correctionCandidate(
+            heard: "coisa", canonical: "COESA", existingText: full + "\ncoisa = COESA"
+        ), .invalid(.entryLimit))
+        XCTAssertEqual(TranscriptionGlossary.correctionCandidate(
+            heard: "coisa", canonical: "COESA", existingText: "coisa = COESA\n" + full + "\nCOISA = Outra"
+        ), .invalid(.conflict(existingCanonical: "Outra")))
+        XCTAssertEqual(TranscriptionGlossary.correctionCandidate(
+            heard: "coisa", canonical: "COESA", existingText: "coisa = COESA\n" + full
+        ), .alreadyExists)
+        // ICU case folding matches the replacement engine, including the Kelvin sign.
+        XCTAssertEqual(TranscriptionGlossary.correctionCandidate(
+            heard: "K", canonical: "Kelvin", existingText: "K = Outra"
+        ), .invalid(.conflict(existingCanonical: "Outra")))
+    }
+
+    func testCorrectionCandidateExactLineEntryTextAndPromptBoundaries() {
+        let canonical157 = String(repeating: "á", count: 156)
+        XCTAssertEqual(("x = " + canonical157).count, 160)
+        XCTAssertEqual(TranscriptionGlossary.correctionCandidate(heard: "x", canonical: canonical157, existingText: ""),
+                       .added(text: "x = " + canonical157))
+        XCTAssertEqual(TranscriptionGlossary.correctionCandidate(heard: "x", canonical: canonical157 + "á", existingText: ""),
+                       .invalid(.lineLimit))
+        let entries199 = Array(repeating: "termo", count: 199).joined(separator: "\n")
+        guard case .added(let at200) = TranscriptionGlossary.correctionCandidate(
+            heard: "x", canonical: "Y", existingText: entries199
+        ) else { return XCTFail("A entrada 200 deve ser aceita antes da deduplicação") }
+        XCTAssertEqual(TranscriptionGlossary(text: at200).terms.count, 2)
+        XCTAssertEqual(TranscriptionGlossary.correctionCandidate(heard: "x", canonical: "Y", existingText: entries199 + "\ntermo"),
+                       .invalid(.entryLimit))
+        let textPrefix = String(repeating: " ", count: 19_992) + "\n"
+        guard case .added(let at20000) = TranscriptionGlossary.correctionCandidate(
+            heard: "x", canonical: "YES", existingText: textPrefix
+        ) else { return XCTFail("20.000 caracteres devem ser aceitos") }
+        XCTAssertEqual(at20000.count, 20_000)
+        XCTAssertEqual(TranscriptionGlossary.correctionCandidate(
+            heard: "x", canonical: "YES", existingText: " " + textPrefix
+        ), .invalid(.textLimit))
+
+        let terms = (0..<50).map { String(format: "%02d", $0) + String(repeating: "a", count: 155) }
+        let existing = terms.joined(separator: "\n")
+        let finalTerm = String(repeating: "z", count: 50)
+        guard case .added(let at8000) = TranscriptionGlossary.correctionCandidate(
+            heard: "x", canonical: finalTerm, existingText: existing
+        ) else { return XCTFail("8.000 caracteres de prompt devem ser aceitos") }
+        XCTAssertEqual(TranscriptionGlossary(text: at8000).terms.joined(separator: ", ").count, 8_000)
+        XCTAssertEqual(TranscriptionGlossary.correctionCandidate(heard: "x", canonical: finalTerm + "z", existingText: existing),
+                       .invalid(.promptLimit))
+    }
+
+    func testCorrectionCandidateKeepsEscapingUnicodeWholeTermsAndExistingCascade() {
+        for pair in [("cifrão", "$COESA"), ("barra", #"C:\COESA"#), ("eriq", "Éric"), ("whisper.cp", "whisper.cpp")] {
+            guard case .added(let text) = TranscriptionGlossary.correctionCandidate(
+                heard: pair.0, canonical: pair.1, existingText: ""
+            ) else { return XCTFail("Par representável recusado") }
+            XCTAssertEqual(TranscriptPostprocessor.process("A \(pair.0) chegou.", glossary: .init(text: text)),
+                           "A \(pair.1) chegou.")
+        }
+        guard case .added(let text) = TranscriptionGlossary.correctionCandidate(
+            heard: "erro longo", canonical: "curto", existingText: "curto = Final"
+        ) else { return XCTFail("Cascata legada deve permanecer") }
+        XCTAssertEqual(TranscriptPostprocessor.process("erro longo", glossary: .init(text: text)), "Final")
+    }
+
+    private final class CorrectionDefaults: UserDefaults {
+        var glossaryWrites = 0
+        var glossaryRemovals = 0
+        var divergeAfterWrite = false
+        var divergentReads = 0
+        var rejectRestoration = false
+        var rejectNextWrite = false
+        var unreadable = false
+
+        override func set(_ value: Any?, forKey defaultName: String) {
+            // UserDefaults.removeObject calls set(nil); count that operation only as a removal.
+            guard defaultName == "resenha.transcriptionGlossary", value != nil else {
+                super.set(value, forKey: defaultName)
+                return
+            }
+            glossaryWrites += 1
+            if rejectNextWrite { rejectNextWrite = false; return }
+            if rejectRestoration && glossaryWrites > 1 { return }
+            super.set(value, forKey: defaultName)
+            if divergeAfterWrite { divergentReads = 1; divergeAfterWrite = false }
+        }
+
+        override func removeObject(forKey defaultName: String) {
+            if defaultName == "resenha.transcriptionGlossary" {
+                glossaryRemovals += 1
+                if rejectRestoration { return }
+            }
+            super.removeObject(forKey: defaultName)
+        }
+
+        override func object(forKey defaultName: String) -> Any? {
+            if defaultName == "resenha.transcriptionGlossary" {
+                if unreadable { return 42 }
+                if divergentReads > 0 { divergentReads -= 1; return "divergent read" }
+            }
+            return super.object(forKey: defaultName)
+        }
+    }
+
+    @MainActor
+    func testCorrectionSavePersistsCurrentSettingsAndOnlyGlossaryChanges() throws {
+        let suite = "ResenhaCorrection.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(CorrectionDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let preferences = ProductPreferences(defaults: defaults)
+        preferences.keepsHistory = false
+        // This settings edit happens after the caller opened its draft.
+        preferences.transcriptionGlossary = " anterior = Anterior "
+        let before = defaults.persistentDomain(forName: suite) ?? [:]
+        defaults.glossaryWrites = 0
+        XCTAssertEqual(preferences.saveTranscriptionCorrection(heard: " Coisa Energia ", canonical: " COESA Energia "), .saved)
+        XCTAssertEqual(defaults.glossaryWrites, 1)
+        XCTAssertEqual(preferences.transcriptionGlossary, " anterior = Anterior \nCoisa Energia = COESA Energia")
+        let restored = ProductPreferences(defaults: try XCTUnwrap(UserDefaults(suiteName: suite)))
+        XCTAssertEqual(restored.transcriptionGlossary, preferences.transcriptionGlossary)
+        XCTAssertEqual(TranscriptPostprocessor.process(
+            "A Coisa Energia chegou. Coisa Energias ficou.", glossary: .init(text: restored.transcriptionGlossary)
+        ), "A COESA Energia chegou. Coisa Energias ficou.")
+        var after = defaults.persistentDomain(forName: suite) ?? [:]
+        after.removeValue(forKey: "resenha.transcriptionGlossary")
+        var otherBefore = before
+        otherBefore.removeValue(forKey: "resenha.transcriptionGlossary")
+        XCTAssertEqual(after as NSDictionary, otherBefore as NSDictionary)
+        XCTAssertFalse(restored.keepsHistory)
+        XCTAssertEqual(preferences.saveTranscriptionCorrection(heard: "coisa energia", canonical: "COESA Energia"), .alreadyExists)
+        XCTAssertEqual(preferences.saveTranscriptionCorrection(heard: "", canonical: "COESA"), .invalid(.empty))
+        XCTAssertEqual(preferences.saveTranscriptionCorrection(heard: "coisa energia", canonical: "Outra"),
+                       .invalid(.conflict(existingCanonical: "COESA Energia")))
+        XCTAssertEqual(defaults.glossaryWrites, 1)
+    }
+
+    @MainActor
+    func testCorrectionSaveRollsBackDivergentReadIncludingAbsentKey() throws {
+        for original in [nil, " anterior = Anterior " as String?] {
+            let suite = "ResenhaCorrectionRollback.\(UUID().uuidString)"
+            let defaults = try XCTUnwrap(CorrectionDefaults(suiteName: suite))
+            defer { defaults.removePersistentDomain(forName: suite) }
+            if let original { defaults.set(original, forKey: "resenha.transcriptionGlossary") }
+            defaults.glossaryWrites = 0
+            let preferences = ProductPreferences(defaults: defaults)
+            let previous = preferences.transcriptionGlossary
+            defaults.divergeAfterWrite = true
+            XCTAssertEqual(preferences.saveTranscriptionCorrection(heard: "Coisa Energia", canonical: "COESA Energia"),
+                           .storageFailure(recoveryRequired: false))
+            XCTAssertEqual(preferences.transcriptionGlossary, previous)
+            XCTAssertEqual(defaults.string(forKey: "resenha.transcriptionGlossary"), original)
+            XCTAssertEqual(defaults.glossaryWrites, original == nil ? 1 : 2)
+            XCTAssertEqual(defaults.glossaryRemovals, original == nil ? 1 : 0)
+            XCTAssertTrue(preferences.canSaveTranscriptionCorrection)
+            XCTAssertEqual(ProductPreferences(defaults: try XCTUnwrap(UserDefaults(suiteName: suite))).transcriptionGlossary, previous)
+        }
+    }
+
+    @MainActor
+    func testCorrectionSaveRejectsWriteAndRecoversWithoutFalseSuccess() throws {
+        let suite = "ResenhaCorrectionRejectedWrite.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(CorrectionDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let preferences = ProductPreferences(defaults: defaults)
+        defaults.rejectNextWrite = true
+        XCTAssertEqual(preferences.saveTranscriptionCorrection(heard: "coisa", canonical: "COESA"),
+                       .storageFailure(recoveryRequired: false))
+        XCTAssertNil(defaults.object(forKey: "resenha.transcriptionGlossary"))
+        XCTAssertEqual(preferences.transcriptionGlossary, TranscriptionGlossary.defaultText)
+        XCTAssertTrue(preferences.canSaveTranscriptionCorrection)
+    }
+
+    @MainActor
+    func testCorrectionRollbackFailureBlocksDirectSaveUntilVerifiedReloadWithoutWrites() throws {
+        for original in [nil, "Anterior" as String?] {
+            let suite = "ResenhaCorrectionRecovery.\(UUID().uuidString)"
+            let defaults = try XCTUnwrap(CorrectionDefaults(suiteName: suite))
+            defer { defaults.removePersistentDomain(forName: suite) }
+            if let original { defaults.set(original, forKey: "resenha.transcriptionGlossary") }
+            defaults.glossaryWrites = 0
+            let preferences = ProductPreferences(defaults: defaults)
+            let previous = preferences.transcriptionGlossary
+            defaults.divergeAfterWrite = true
+            defaults.rejectRestoration = true
+            XCTAssertEqual(preferences.saveTranscriptionCorrection(heard: "coisa", canonical: "COESA"),
+                           .storageFailure(recoveryRequired: true))
+            XCTAssertEqual(preferences.transcriptionGlossary, previous)
+            XCTAssertFalse(preferences.canSaveTranscriptionCorrection)
+            let writes = defaults.glossaryWrites
+            let removals = defaults.glossaryRemovals
+            XCTAssertEqual(preferences.saveTranscriptionCorrection(heard: "outra", canonical: "Outra"),
+                           .storageFailure(recoveryRequired: true))
+            defaults.unreadable = true
+            XCTAssertFalse(preferences.reloadTranscriptionGlossaryForCorrection())
+            XCTAssertFalse(preferences.canSaveTranscriptionCorrection)
+            XCTAssertEqual(preferences.transcriptionGlossary, previous)
+            defaults.unreadable = false
+            defaults.divergentReads = 1
+            XCTAssertFalse(preferences.reloadTranscriptionGlossaryForCorrection())
+            defaults.rejectRestoration = false
+            XCTAssertTrue(preferences.reloadTranscriptionGlossaryForCorrection())
+            XCTAssertTrue(preferences.canSaveTranscriptionCorrection)
+            XCTAssertEqual(preferences.transcriptionGlossary, previous + "\ncoisa = COESA")
+            XCTAssertEqual(preferences.saveTranscriptionCorrection(heard: "coisa", canonical: "COESA"), .alreadyExists)
+            XCTAssertEqual(preferences.saveTranscriptionCorrection(heard: "coisa", canonical: "Outra"),
+                           .invalid(.conflict(existingCanonical: "COESA")))
+            XCTAssertEqual(defaults.glossaryWrites, writes)
+            XCTAssertEqual(defaults.glossaryRemovals, removals)
+        }
+    }
+
     func testPersonalGlossaryCanonicalizesObservedPhysicalTranscripts() {
         let glossary = TranscriptionGlossary(text: TranscriptionGlossary.defaultText + """
 
@@ -816,6 +1058,82 @@ final class WhisperKeyTests: XCTestCase {
         XCTAssertEqual(failure.secondary, "Abra o menu do Resenha para obter ajuda")
         XCTAssertTrue(failure.accessibilityLabel.contains("Microfone indisponível"))
         XCTAssertFalse(failure.isBusy)
+        XCTAssertEqual(FloatingStatus.feedback.title, "Como foi a transcrição?")
+        XCTAssertNil(FloatingStatus.feedback.secondary)
+        XCTAssertFalse(FloatingStatus.feedback.isBusy)
+        for message in ["Regra salva", "Regra já existente", "Solte e pressione novamente para ditar"] {
+            let notice = FloatingStatus.feedbackNotice(message)
+            XCTAssertEqual(notice.title, message)
+            XCTAssertEqual(notice.accessibilityLabel, message)
+            XCTAssertEqual(notice.symbol, "info.circle")
+            XCTAssertFalse(notice.isFailure)
+        }
+    }
+
+    @MainActor
+    func testFeedbackViewsUseOwnDimensionsAndClampSmallScreens() {
+        XCTAssertEqual(FloatingStatusView.panelSize(for: .feedback, available: CGSize(width: 1440, height: 900)),
+            CGSize(width: 340, height: 152))
+        XCTAssertEqual(TranscriptionCorrectionView.panelSize(available: CGSize(width: 1440, height: 900)),
+            CGSize(width: 440, height: 360))
+        let smallScreen = CGSize(width: 320, height: 320)
+        XCTAssertEqual(FloatingStatusView.panelSize(for: .feedback, available: smallScreen), CGSize(width: 296, height: 152))
+        XCTAssertEqual(TranscriptionCorrectionView.panelSize(available: smallScreen), CGSize(width: 296, height: 296))
+        XCTAssertEqual(FloatingStatusView.panelSize(for: .feedbackNotice("Regra salva"), available: smallScreen),
+            CGSize(width: 280, height: 64))
+    }
+
+    @MainActor
+    func testFeedbackViewActionLabelsAndEditorBindingsContract() {
+        var approved = 0
+        var corrected = 0
+        let model = FloatingPanelModel()
+        model.show(.feedback, now: 0)
+        let view = FloatingStatusView(model: model,
+            onApprove: { approved += 1 }, onCorrect: { corrected += 1 })
+        XCTAssertEqual(FloatingStatusView.approveLabel, "Transcrição correta")
+        XCTAssertEqual(FloatingStatusView.correctLabel, "Corrigir transcrição")
+        XCTAssertEqual(view.feedbackActions.map(\.label), ["Transcrição correta", "Corrigir transcrição"])
+        XCTAssertEqual(view.feedbackActions.map(\.symbol), ["hand.thumbsup", "hand.thumbsdown"])
+        view.feedbackActions[0].perform()
+        XCTAssertEqual(approved, 1)
+        XCTAssertEqual(corrected, 0)
+        view.feedbackActions[1].perform()
+        XCTAssertEqual(approved, 1)
+        XCTAssertEqual(corrected, 1)
+
+        var heard = ""
+        var canonical = ""
+        var saved = 0
+        var cancelled = 0
+        var editor = TranscriptionCorrectionView(heard: Binding(get: { heard }, set: { heard = $0 }),
+            canonical: Binding(get: { canonical }, set: { canonical = $0 }),
+            errorMessage: "Confira o termo informado.", invalidField: .heard, isSaveEnabled: true,
+            onSave: { saved += 1 }, onCancel: { cancelled += 1 })
+        XCTAssertEqual(editor.heard, "")
+        XCTAssertEqual(editor.canonical, "")
+        editor.heard = "Coisa Energia"
+        editor.canonical = "COESA Energia"
+        XCTAssertEqual(TranscriptionCorrectionView.Field.heard.label, "Saiu como")
+        XCTAssertEqual(TranscriptionCorrectionView.Field.canonical.label, "Correto é")
+        XCTAssertEqual(TranscriptionCorrectionView.saveLabel, "Salvar")
+        XCTAssertEqual(TranscriptionCorrectionView.cancelLabel, "Cancelar")
+        XCTAssertEqual(editor.errorMessage, "Confira o termo informado.")
+        XCTAssertEqual(editor.invalidField, .heard)
+        XCTAssertTrue(editor.isSaveEnabled)
+        XCTAssertEqual(editor.actions.map(\.label), ["Salvar", "Cancelar"])
+        editor.actions[0].perform()
+        XCTAssertEqual(saved, 1)
+        XCTAssertEqual(cancelled, 0)
+        editor.isSaveEnabled = false
+        XCTAssertFalse(editor.actions[0].isEnabled)
+        editor.actions[0].perform()
+        XCTAssertTrue(editor.actions[1].isEnabled)
+        editor.actions[1].perform()
+        XCTAssertEqual(saved, 1)
+        XCTAssertEqual(cancelled, 1)
+        XCTAssertEqual(heard, "Coisa Energia")
+        XCTAssertEqual(canonical, "COESA Energia")
     }
 
     func testScreenChoiceUsesIntersectionThenCenterAndDeterministicTie() {
@@ -949,11 +1267,34 @@ final class WhisperKeyTests: XCTestCase {
     }
 
     @MainActor
-    func testHUDNativeFixturesForEveryStateAndAppearance() throws {
+    func testHUDNativeFixturesForEveryStateAndAppearance() async throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("ResenhaTests/ui-fixtures", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        func capture<Content: View>(_ view: NSHostingView<Content>, size: CGSize, name: String) async throws {
+            let window = NSWindow(contentRect: CGRect(origin: .zero, size: size),
+                styleMask: [.borderless], backing: .buffered, defer: false)
+            defer { window.orderOut(nil) }
+            window.contentView = view
+            window.setContentSize(size)
+            window.orderFront(nil)
+            view.layoutSubtreeIfNeeded()
+            // Let SwiftUI commit its display layers, then restore the fixture's bounded frame.
+            try await Task.sleep(for: .milliseconds(20))
+            view.frame = CGRect(origin: .zero, size: size)
+            view.layoutSubtreeIfNeeded()
+            window.display()
+            view.displayIfNeeded()
+            XCTAssertEqual(view.bounds.size, size)
+            let bitmap = try XCTUnwrap(view.bitmapImageRepForCachingDisplay(in: view.bounds))
+            view.cacheDisplay(in: view.bounds, to: bitmap)
+            let data = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
+            try data.write(to: directory.appendingPathComponent(name))
+        }
         let states: [(String, FloatingStatus)] = [("ready", .ready), ("listening", .listening), ("listening-silence", .listening), ("listening-decay", .listening), ("transcribing", .transcribing), ("inserting", .inserting),
+            ("feedback", .feedback), ("feedback-saved", .feedbackNotice("Regra salva")),
+            ("feedback-existing", .feedbackNotice("Regra já existente")),
+            ("feedback-guidance", .feedbackNotice("Solte e pressione novamente para ditar")),
             ("failure", .failure("Permissão de Monitoramento de Entrada necessária")),
             ("long-failure", .failure("Permissão de Monitoramento de Entrada necessária para receber o atalho de ditado"))]
         let appearances: [(String, ColorScheme, ColorSchemeContrast, Bool, Bool)] = [
@@ -973,19 +1314,45 @@ final class WhisperKeyTests: XCTestCase {
                     }
                 }
                 let size = FloatingStatusView.panelSize(for: state, available: CGSize(width: 1440, height: 900))
-                if state == .listening { XCTAssertEqual(size, CGSize(width: 340, height: 72)) }
-                else if !state.isFailure { XCTAssertEqual(size, CGSize(width: 280, height: 64)) }
-                XCTAssertLessThanOrEqual(size.width, 360)
-                XCTAssertLessThanOrEqual(size.height, 104)
+                if state == .feedback { XCTAssertEqual(size, CGSize(width: 340, height: 152)) }
+                else {
+                    if state == .listening { XCTAssertEqual(size, CGSize(width: 340, height: 72)) }
+                    else if !state.isFailure { XCTAssertEqual(size, CGSize(width: 280, height: 64)) }
+                    XCTAssertLessThanOrEqual(size.width, 360)
+                    XCTAssertLessThanOrEqual(size.height, 104)
+                }
                 let view = NSHostingView(rootView: FloatingStatusView(model: model, fixtureContrast: contrast, fixtureReduceTransparency: opaque, fixtureReduceMotion: reduceMotion)
                     .environment(\.colorScheme, scheme))
-                view.frame = CGRect(origin: .zero, size: size)
                 view.appearance = NSAppearance(named: scheme == .dark ? .darkAqua : .aqua)
-                view.layoutSubtreeIfNeeded()
-                let bitmap = try XCTUnwrap(view.bitmapImageRepForCachingDisplay(in: view.bounds))
-                view.cacheDisplay(in: view.bounds, to: bitmap)
-                let data = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
-                try data.write(to: directory.appendingPathComponent("hud-\(name)-\(appearance).png"))
+                try await capture(view, size: size, name: "hud-\(name)-\(appearance).png")
+            }
+        }
+        for (appearance, scheme, contrast, opaque, reduceMotion) in appearances {
+            let smallSize = FloatingStatusView.panelSize(for: .feedback, available: CGSize(width: 320, height: 320))
+            let model = FloatingPanelModel()
+            model.show(.feedback, now: 0)
+            let offer = NSHostingView(rootView: FloatingStatusView(model: model, fixtureContrast: contrast,
+                fixtureReduceTransparency: opaque, fixtureReduceMotion: reduceMotion).environment(\.colorScheme, scheme))
+            offer.appearance = NSAppearance(named: scheme == .dark ? .darkAqua : .aqua)
+            try await capture(offer, size: smallSize, name: "hud-feedback-small-\(appearance).png")
+
+            for fixture in ["empty", "long-error", "small-error", "save-disabled"] {
+                let hasError = fixture.contains("error")
+                let editor = TranscriptionCorrectionView(
+                    heard: .constant(hasError ? "Coisa Energia e Participações de São José dos Campos" : ""),
+                    canonical: .constant(hasError ? "COESA Energia e Participações de São José dos Campos" : ""),
+                    errorMessage: hasError ? "Este termo já aponta para outro destino no glossário. Abra Ajustes → Transcrição → glossário para conferir a regra existente e corrigir o destino antes de salvar novamente." : nil,
+                    invalidField: hasError ? .heard : nil, isSaveEnabled: fixture != "save-disabled",
+                    onSave: {}, onCancel: {}, fixtureContrast: contrast,
+                    fixtureReduceTransparency: opaque, fixtureReduceMotion: reduceMotion)
+                XCTAssertEqual(editor.fixtureContrast, contrast)
+                XCTAssertEqual(editor.fixtureReduceTransparency, opaque)
+                XCTAssertEqual(editor.fixtureReduceMotion, reduceMotion)
+                let size = TranscriptionCorrectionView.panelSize(available: fixture == "small-error"
+                    ? CGSize(width: 320, height: 320) : CGSize(width: 1440, height: 900))
+                let view = NSHostingView(rootView: editor.environment(\.colorScheme, scheme))
+                view.appearance = NSAppearance(named: scheme == .dark ? .darkAqua : .aqua)
+                try await capture(view, size: size, name: "correction-\(fixture)-\(appearance).png")
             }
         }
     }

@@ -219,6 +219,83 @@ struct TranscriptionGlossary: Equatable, Sendable {
     }
 
     var prompt: String { String(terms.joined(separator: ", ").prefix(Self.maximumPromptCharacters)) }
+
+    enum CorrectionValidationError: Equatable {
+        case empty, identical, invalidCharacters, lineLimit, entryLimit, textLimit, promptLimit
+        case conflict(existingCanonical: String)
+        case ineffective
+
+        var message: String {
+            switch self {
+            case .empty: "Preencha os dois campos."
+            case .identical: "Informe uma correção diferente do texto ouvido."
+            case .invalidCharacters: "Use uma única linha, sem o caractere =, em cada campo."
+            case .lineLimit: "A regra deve ter no máximo 160 caracteres."
+            case .entryLimit: "O glossário atingiu 200 entradas. Revise-o em Ajustes → Transcrição."
+            case .textLimit: "O glossário atingiu 20.000 caracteres. Revise-o em Ajustes → Transcrição."
+            case .promptLimit: "O vocabulário excede 8.000 caracteres. Reduza o glossário em Ajustes → Transcrição."
+            case .conflict(let canonical): "Este termo já aponta para “\(canonical)”. Revise o glossário em Ajustes → Transcrição."
+            case .ineffective: "A regra não pode ser aplicada integralmente. Revise o glossário em Ajustes → Transcrição."
+            }
+        }
+    }
+
+    enum CorrectionCandidate: Equatable {
+        case added(text: String)
+        case alreadyExists
+        case invalid(CorrectionValidationError)
+    }
+
+    static func correctionCandidate(heard: String, canonical: String, existingText: String) -> CorrectionCandidate {
+        // Check before trimming so a pasted trailing newline cannot change the rule grammar.
+        guard ![heard, canonical].contains(where: {
+            $0.rangeOfCharacter(from: .newlines) != nil || $0.contains("=")
+        }) else { return .invalid(.invalidCharacters) }
+        let heard = heard.trimmingCharacters(in: .whitespacesAndNewlines)
+        let canonical = canonical.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !heard.isEmpty, !canonical.isEmpty else { return .invalid(.empty) }
+        guard heard != canonical else { return .invalid(.identical) }
+        let line = "\(heard) = \(canonical)"
+        guard line.count <= maximumLineCharacters else { return .invalid(.lineLimit) }
+
+        let source = try? NSRegularExpression(
+            pattern: "\\A\(NSRegularExpression.escapedPattern(for: heard))\\z", options: [.caseInsensitive]
+        )
+        func matches(_ text: String) -> Bool {
+            source?.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil
+        }
+        let previous = Self(text: existingText)
+        let rawLines = existingText.components(separatedBy: .newlines)
+        var acceptedCount = 0
+        for rawLine in rawLines {
+            let parsed = Self(text: rawLine)
+            if !parsed.terms.isEmpty { acceptedCount += 1 }
+            // Inspect unbounded lines too: an ignored or truncated conflict must remain visible.
+            let parts = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+                .split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
+                .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+            if let first = parts.first, let last = parts.last,
+               !first.isEmpty, !last.isEmpty {
+                if matches(first), last != canonical { return .invalid(.conflict(existingCanonical: last)) }
+                if matches(last), last != canonical { return .invalid(.conflict(existingCanonical: last)) }
+            }
+            for replacement in parsed.replacements where matches(replacement.heard) && replacement.canonical != canonical {
+                return .invalid(.conflict(existingCanonical: replacement.canonical))
+            }
+        }
+        if previous.replacements.contains(where: { matches($0.heard) && $0.canonical == canonical }) {
+            return .alreadyExists
+        }
+        guard acceptedCount < maximumTerms else { return .invalid(.entryLimit) }
+        let separator = existingText.isEmpty || existingText.last?.isNewline == true ? "" : "\n"
+        let candidate = existingText + separator + line
+        guard candidate.count <= ProductPreferences.maximumGlossaryCharacters else { return .invalid(.textLimit) }
+        let parsed = Self(text: candidate)
+        guard parsed.terms.joined(separator: ", ").count <= maximumPromptCharacters else { return .invalid(.promptLimit) }
+        guard parsed.replacements.contains(.init(heard: heard, canonical: canonical)),
+              previous.replacements.allSatisfy(parsed.replacements.contains) else { return .invalid(.ineffective) }
+        return .added(text: candidate)
+    }
 }
 
 enum TranscriptPostprocessor {
