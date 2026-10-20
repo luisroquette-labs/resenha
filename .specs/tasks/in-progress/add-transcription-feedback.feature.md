@@ -8,9 +8,12 @@ title: Add local transcription feedback and correction learning
 
 > Escolha confirmada: opção 1 — o dislike abre dois campos, “Saiu como” e “Correto é”, e salva a regra no glossário local.
 
+> Refinamento normativo após teste do piloto: like/dislike não podem ocupar um cartão grande nem permanecer indefinidamente. Devem emergir como detalhes sutis do mesmo HUD de voz ao terminar a transcrição e desaparecer sozinhos após um intervalo curto. A versão instalada deve ser atualizada para tornar o fluxo testável.
+
 ### Requirements
 
 - Após uma transcrição concluída, exibir ações rápidas de aprovação e reprovação no HUD.
+- Exibir essas ações como dois controles discretos dentro do mesmo HUD de processamento, sem cartão, título ou oferta visual separada, e dispensá-las automaticamente após 4 segundos.
 - Aprovação encerra o feedback sem persistir conteúdo adicional.
 - Reprovação abre uma correção curta com os campos “Saiu como” e “Correto é”.
 - Salvar uma correção confirmada adiciona uma regra local no formato já suportado pelo glossário.
@@ -24,7 +27,7 @@ Permitir que quem dita no Resenha avalie rapidamente o resultado no HUD e ensine
 
 ### Scope Included
 
-- Like e dislike após uma transcrição concluída e não vazia, associados ao resultado atual.
+- Like e dislike compactos após uma transcrição concluída e não vazia, associados ao resultado atual e incorporados à mesma superfície/posição do HUD de processamento.
 - Formulário curto com “Saiu como”, “Correto é”, salvar e cancelar; validação e confirmação local clara.
 - Regra explícita no glossário existente, preservando as demais entradas, seus limites e a compatibilidade com edição nas preferências.
 - Aplicação determinística da regra em transcrições seguintes, persistência entre aberturas e operação acessível por teclado e VoiceOver.
@@ -39,7 +42,7 @@ Permitir que quem dita no Resenha avalie rapidamente o resultado no HUD e ensine
 
 ### User Scenarios
 
-1. Após ditar, a pessoa vê os dois balões no HUD, aprova e encerra o feedback sem salvar nota ou conteúdo adicional. Ignorar o feedback permite continuar ditando normalmente.
+1. Após ditar, a pessoa vê por 4 segundos dois controles discretos no mesmo HUD que acabou de processar a fala, aprova e encerra o feedback sem salvar nota ou conteúdo adicional. Ignorar faz somente a oferta desaparecer e permite continuar ditando normalmente.
 2. A pessoa reprova, informa “Coisa Energia” e “COESA Energia”, confirma e recebe indicação de salvamento. Uma próxima transcrição contendo o termo ouvido usa “COESA Energia”; a regra também permanece disponível após reabrir o app.
 3. A pessoa abre a correção e cancela, fecha ou inicia outro ditado: nenhum rascunho vira regra e nenhuma confirmação obsoleta modifica o novo resultado.
 4. Um campo vazio, entrada incompatível com o formato ou limite excedido mantém o formulário com orientação acessível; nada é truncado, descartado ou anunciado como salvo. Uma regra idêntica já existente é tratada sem duplicação; uma forma ouvida já mapeada para outro destino exige resolução explícita, nunca substituição silenciosa.
@@ -51,22 +54,23 @@ Permitir que quem dita no Resenha avalie rapidamente o resultado no HUD e ensine
 
 | ID | Question | Category | Importance |
 | --- | --- | --- | --- |
-| CK-1 | Um resultado concluído e não vazio apresenta like/dislike acessíveis, enquanto gravação, processamento, falha e resultado vazio não apresentam avaliação acionável? | principle | essential |
+| CK-1 | Um resultado concluído e não vazio substitui o processamento, no mesmo HUD e sem salto de geometria, por like/dislike compactos e acessíveis; gravação, processamento, falha e resultado vazio não apresentam avaliação acionável? | principle | essential |
 | CK-2 | Like encerra o feedback sem persistir nota, áudio, transcrição ou conteúdo adicional e sem alterar o glossário? | hard_rule | essential |
 | CK-3 | Dislike abre exatamente os campos “Saiu como” e “Correto é”, e somente Salvar com confirmação válida aprende uma regra? | hard_rule | essential |
 | CK-4 | Campos vazios após trim, quebras de linha, delimitadores incompatíveis, termos iguais e entradas que excedem os limites efetivos do glossário são rejeitados com orientação, sem gravação parcial ou falso sucesso? | hard_rule | essential |
 | CK-5 | Salvar preserva entradas existentes, não duplica regra idêntica, não sobrescreve conflito silenciosamente e mantém a regra utilizável após reabrir o app? | hard_rule | essential |
 | CK-6 | A próxima transcrição aplica “Coisa Energia = COESA Energia” pelas regras existentes de termos completos, sem alterar palavras maiores não correspondentes nem texto já inserido? | hard_rule | essential |
-| CK-7 | Cancelar, dispensar e trocar de ditado descartam o rascunho sem aprendizado, e confirmações repetidas ou obsoletas não atingem outro resultado? | hard_rule | essential |
+| CK-7 | Cancelar, expirar, dispensar e trocar de ditado descartam a oferta/rascunho sem aprendizado, e timers, confirmações ou tokens repetidos/obsoletos não atingem nem ocultam outro resultado? | hard_rule | essential |
 | CK-8 | O fluxo completo funciona sem enviar áudio, transcrição ou feedback para rede, sem analytics, login, dependência nova ou API paga, persistindo apenas a regra confirmada além do comportamento já existente? | hard_rule | essential |
-| CK-9 | Teclado e VoiceOver operam ações e campos com nomes, foco e erros perceptíveis, sem depender só de cor ou ícone e sem prejudicar Reduce Motion ou legibilidade do HUD? | principle | important |
+| CK-9 | Teclado e VoiceOver operam os controles compactos e os campos por nomes acessíveis, foco e erros perceptíveis; os ícones não dependem só de forma/cor e Reduce Motion remove a transição sem alterar o timeout ou a disponibilidade? | principle | important |
 | CK-10 | Ditado posterior, inserção no aplicativo original, clipboard e histórico opcional conservam seu comportamento, com testes pelo mac-gate e evidência física distinguida de fixtures? | hard_rule | essential |
+| CK-11 | A oferta passiva expira exatamente após 4 segundos, enquanto dislike/editor cancela esse timeout; um timer antigo nunca fecha editor, notice, gravação ou oferta de uma sessão mais nova? | hard_rule | essential |
 
 **Regular Checks:**
 
-- [X] CK-1–CK-10: executar `~/.local/bin/mac-gate xcodebuild -project WhisperKey.xcodeproj -scheme WhisperKey -destination 'platform=macOS' -derivedDataPath build test`, conforme README e SPEC-008; preparar framework embarcado e projeto Xcode pelas instruções existentes se ausentes. Não executar `next build` nem inventar script npm para o app nativo.
+- [ ] CK-1–CK-11: executar `~/.local/bin/mac-gate xcodebuild -project WhisperKey.xcodeproj -scheme WhisperKey -destination 'platform=macOS' -derivedDataPath build test`, conforme README e SPEC-008; preparar framework embarcado e projeto Xcode pelas instruções existentes se ausentes. Não executar `next build` nem inventar script npm para o app nativo.
 - [X] CK-4–CK-8: revisar diff e testes de preferências/glossário para limites, preservação de dados, ausência de persistência de rascunho e ausência de chamadas de rede/telemetria introduzidas.
-- [ ] CK-1–CK-3, CK-7, CK-9–CK-10: validar app real em TextEdit, incluindo teclado, VoiceOver, gravação seguinte, clipboard e foco; registrar ambiente, commit, resultado e limitações em evidência de teste, sem conteúdo pessoal.
+- [ ] CK-1–CK-3, CK-7, CK-9–CK-11: validar app real em TextEdit, incluindo continuidade visual, timeout, teclado, VoiceOver, Reduce Motion, gravação seguinte, clipboard e foco; registrar ambiente, commit, resultado e limitações em evidência de teste, sem conteúdo pessoal.
 - [X] CK-10: executar `~/.local/bin/mac-gate node --test Scripts/site.test.mjs` somente se o diff atingir site/scripts cobertos pelo workflow existente. O workflow de site e eventual preview do site não provam comportamento do app nativo.
 
 **Rubric:**
@@ -83,7 +87,7 @@ Permitir que quem dita no Resenha avalie rapidamente o resultado no HUD e ensine
 
 ### Feedback explícito e continuidade do ditado
 
-Avaliar CK-1–CK-3 e CK-7: ações pertencem ao resultado atual; só a confirmação válida aprende; ignorar ou cancelar permite continuar.
+Avaliar CK-1–CK-3, CK-7 e CK-11: ações discretas pertencem ao resultado atual; só a confirmação válida aprende; ignorar expira em 4 segundos e cancelar permite continuar.
 
 Anchors:
 - score_2:
@@ -172,7 +176,7 @@ Test Cases to Cover:
 
 #### CK-1: Ações no resultado correto
 - [unit] Concluir transcrição não vazia disponibiliza as duas ações; demais estados não as disponibilizam.
-- [visual] Comparar HUD em claro/escuro, contraste aumentado, texto longo e Reduce Motion, sem controles cortados.
+- [visual] Comparar HUD em claro/escuro, contraste aumentado e Reduce Motion; feedback usa exatamente `280×64`, mesma geometria/posição do processamento imediatamente anterior, sem título, cartão vertical ou controles cortados.
 
 #### CK-2: Aprovação sem conteúdo adicional
 - [unit] Like encerra a interação; snapshot de preferências/glossário permanece idêntico e não é criado registro de feedback.
@@ -195,27 +199,33 @@ Test Cases to Cover:
 
 #### CK-7: Cancelamento e isolamento entre ditados
 - [unit] Cancelar, dispensar e iniciar outro ditado descartam rascunho sem mudar preferências; confirmação do resultado anterior não altera o atual.
-- [unit] Confirmar repetidamente produz no máximo uma regra efetiva; ações tardias após encerramento são inócuas.
+- [unit] Confirmar repetidamente produz no máximo uma regra efetiva; ações e timers tardios após encerramento são inócuos.
 
 #### CK-8: Privacidade local
 - [review] Inspecionar fluxo e observar rede durante like, dislike, cancelar e salvar, com modelo já local: nenhum envio de áudio/transcrição/feedback, analytics, login ou nova dependência.
 - [integration] Comparar armazenamento antes/depois: somente a regra confirmada muda no glossário; rascunhos, notas e áudio não ganham persistência nova, inclusive com histórico desativado.
 
 #### CK-9: Teclado e VoiceOver
-- [manual] Executar fluxo completo por teclado e VoiceOver, incluindo erro, correção, salvar e Escape/cancelar; verificar rótulos e foco previsível.
-- [visual] Verificar que indicação de erro/sucesso não depende só de cor ou animação e que nomes extensos permanecem legíveis.
+- [manual] Executar fluxo completo por teclado e VoiceOver, incluindo anúncio dos dois ícones compactos, erro, correção, salvar e Escape/cancelar; verificar rótulos e foco previsível antes da expiração.
+- [visual] Verificar que os ícones têm labels/hints acessíveis, contraste suficiente e hit targets nativos; com Reduce Motion a troca processamento → controles é imediata, sem remover os 4 segundos de disponibilidade.
 
 #### CK-10: Continuidade real e gates
 - [manual] Ditar no TextEdit, abrir/cancelar correção, ditar novamente e confirmar inserção no destino original, clipboard e opção de histórico; repetir com regra salva e app reaberto.
 - [review] Conferir comando e resultado do gate nativo via mac-gate, commit do binário testado e distinção entre fixtures, testes determinísticos e validação física.
 
+#### CK-11: Timeout e geração da oferta
+- [unit] Ao oferecer feedback, armar deadline em `now + 4`; antes de 4 segundos a oferta/token/menu permanecem, no limite expiram juntos e nenhuma preferência muda.
+- [unit] Dislike invalida o timer antes de abrir o editor; avanço arbitrário do relógio não fecha janela, não limpa draft e não executa callback de oferta.
+- [unit] Timer da oferta A não fecha oferta B, gravação, notice nem qualquer estado posterior; novo ditado e HUD off continuam encerrando a sessão atual pelos contratos existentes.
+- [manual] Ignorar os ícones faz somente a oferta desaparecer em aproximadamente 4 segundos; acionar dislike dentro da janela mantém o editor aberto até ação explícita.
+
 **Definition of Done:**
 
-- [ ] CK-1–CK-10 demonstrados por casos acima; nenhuma regra é aprendida antes da confirmação e nenhum dado pessoal adicional é persistido ou enviado.
+- [ ] CK-1–CK-11 demonstrados por casos acima; nenhuma regra é aprendida antes da confirmação e nenhum dado pessoal adicional é persistido ou enviado.
 - [X] Cenário “Coisa Energia” → “COESA Energia” provado com regra persistida e próxima saída corrigida, preservando entradas anteriores e texto já inserido.
-- [X] Gates locais aplicáveis verdes via mac-gate; erros conhecidos corrigidos sem afrouxar checks, dependências ou privacidade.
+- [ ] Gates locais aplicáveis verdes via mac-gate após o refinamento compacto/temporizado; erros conhecidos corrigidos sem afrouxar checks, dependências ou privacidade.
 - [ ] Evidência física datada por commit cobre ditado, foco, teclado e VoiceOver; itens não executados são declarados como pendência, nunca como sucesso.
-- [X] Spec, testes e documentação de uso/privacidade refletem o fluxo final; revisão do diff confirma escopo limitado e ausência de API paga, analytics ou novo serviço.
+- [ ] Spec, testes e documentação de uso/privacidade refletem o fluxo compacto e temporizado final; revisão do diff confirma escopo limitado e ausência de API paga, analytics ou novo serviço.
 
 ## Architecture Overview
 
@@ -232,7 +242,7 @@ Base inspecionada: `origin/main` em `9e674c3ddeee8f7e05b8289f2e5c20ceba55fbc5`. 
 | Decisão | Consequência e limite |
 | --- | --- |
 | Oferecer feedback somente após `insertStaged` retornar sem erro, com tentativa ainda atual | `onTranscript` continua exclusivo do histórico e não é gatilho de sucesso. Retorno do injetor prova o contrato de envio existente, não que o aplicativo remoto exibiu o texto; essa última prova é física. |
-| Manter a oferta até aprovar, corrigir, dispensar, ocultar HUD ou iniciar outro ditado; sem timeout próprio | Evita perder acesso por teclado/VoiceOver. Retém apenas identidade e destino em memória; timers de status anteriores são invalidados. |
+| Mostrar a oferta passiva por **4 segundos** no próprio HUD e então descartá-la | Corrige a permanência indefinida e reduz intrusão. Dislike invalida o timer antes de abrir o editor; o editor não expira. O deadline usa geração + token da sessão, portanto timer antigo não fecha estado novo. VoiceOver recebe nomes/anúncio durante a janela; o menu reflete somente a oferta ainda válida. |
 | Manter HUD não ativante; usar janela normal para os dois campos | A apresentação automática preserva foco. A janela tem semântica nativa de teclado/fechamento sem converter toda gravação em painel focalizável. |
 | Rejeitar fonte já mapeada para outro destino | Menor fluxo completo: mostrar o destino existente e orientar edição explícita em Ajustes → Transcrição → glossário. Não introduzir diálogo de sobrescrita, migração ou novo editor. |
 | Salvar somente uma regra validada no texto existente | Mantém compatibilidade e histórico independente. Substituição continua determinística e sequencial; não promete retreinamento, reconhecimento perfeito ou transformação semântica. |
@@ -242,8 +252,8 @@ Base inspecionada: `origin/main` em `9e674c3ddeee8f7e05b8289f2e5c20ceba55fbc5`. 
 ```text
 Whisper local → stage → histórico opcional → insertStaged
   → checar tentativa atual → capturar {id, aplicativo de destino}
-  → reset da gravação → callback de conclusão → oferta HUD + ações no menu
-      ├─ aprovar/dispensar → limpar sessão; nenhuma escrita
+  → reset da gravação → callback de conclusão → controles compactos no mesmo HUD + ações no menu
+      ├─ aprovar/expirar/dispensar → limpar sessão; nenhuma escrita
       └─ corrigir → janela com dois campos vazios
           → Salvar → validar glossário atual → uma atribuição de preferência
           → reler/parsear valor armazenado → confirmação → fechar/restaurar destino
@@ -253,8 +263,8 @@ Próximo hotkeyReleased → closure glossaryText atual → parser → pós-proce
 | Componente | Contrato proposto |
 | --- | --- |
 | `DictationCoordinator` | Callback `onCompleted` com token único e `NSRunningApplication` de destino, sem texto. Capturar contexto antes do reset; emitir depois da limpeza e somente se `showsHUD()` continuar true. Rechecar `attemptID` e cancelamento após o `await insertStaged`; callback antigo não completa tentativa nova. Falha/vazio/cancelamento nunca emitem conclusão. |
-| `FloatingPanelController` | Único dono da sessão `none / offered(context) / editing(context, draft, error)`, do controller da janela e da geração de callbacks. Expõe aprovação, abertura do editor, cancelamento e consulta do estado; notifica a AppDelegate para atualizar menu. Toda ação recebe/valida token; ação repetida ou aposentada é inócua. |
-| `FloatingStatusView` e view de correção no mesmo arquivo | Recebem estado e ações; não escrevem preferências. Oferta mostra `Button`s “Transcrição correta” e “Corrigir transcrição”. Formulário contém exatamente “Saiu como”, “Correto é”, Salvar, Cancelar e mensagem de validação. Campos começam vazios; não copiar transcrição inteira. |
+| `FloatingPanelController` | Único dono da sessão `none / offered(context) / editing(context, draft, error)`, do controller da janela e da geração de callbacks/timer. `offerFeedback` arma 4 segundos; expiração valida geração, token e estado passivo antes de apagar sessão/menu e esconder somente aquela oferta. Dislike invalida o timer antes de abrir o editor. Toda ação recebe/valida token; ação/timer repetido ou aposentado é inócuo. |
+| `FloatingStatusView` e view de correção no mesmo arquivo | Recebem estado e ações; não escrevem preferências. Oferta reutiliza a superfície `280×64` de processamento, sem título/cartão vertical, e mostra somente dois botões discretos de ícone com labels/hints “Transcrição correta” e “Corrigir transcrição”. Formulário continua contendo exatamente “Saiu como”, “Correto é”, Salvar, Cancelar e mensagem de validação. Campos começam vazios; não copiar transcrição inteira. |
 | `AppDelegate` + `NativeMenuController` | Conectam conclusão, callbacks de gravação, preferência HUD, menu acessível, fechamento e hotkey. Menu reflete disponibilidade do token atual e usa os mesmos handlers do HUD; não cria sessão/histórico paralelo. |
 | `TranscriptionGlossary` + `ProductPreferences` | Helper puro constrói candidato ou retorna erro específico; método de save em `@MainActor` lê preferência atual, valida, atribui uma vez e confere round-trip. Resultado distingue regra adicionada, regra já existente e erro. Reusar constantes e parser; sem mudanças no motor de reconhecimento ou algoritmo de substituição. |
 
@@ -264,11 +274,12 @@ Atividade do coordinator permanece `idle / recording / transcribing / inserting 
 
 | Evento | Comportamento verificável |
 | --- | --- |
-| Oferta automática | `orderFrontRegardless`, sem `activate`, `makeKey` ou first responder. Apenas a oferta recebe mouse (`ignoresMouseEvents = false`); gravação/processamento/inserção continuam pass-through. Like remove oferta sem mudar foco nem persistir nota. |
+| Oferta automática | No mesmo frame/posição `280×64` de transcrição/inserção, trocar o progresso por dois ícones discretos; sem título, painel adicional, `activate`, `makeKey` ou first responder. `orderFrontRegardless` mantém a superfície; apenas a oferta recebe mouse (`ignoresMouseEvents = false`). Like remove oferta sem mudar foco nem persistir nota. Um timer de 4 segundos remove oferta/token/menu se ainda forem os atuais. |
 | Entrada sem mouse | Adicionar ao menu do status item as ações “Transcrição correta” e “Corrigir transcrição”, habilitadas somente para a oferta atual. Acesso pelo comando de teclado do macOS para itens de status (`Control-F8`/`Fn-Control-F8`, conforme configuração), setas e Return; VoiceOver usa os itens de status. Sem atalho global novo. Validar o percurso real completo, não somente Tab depois de uma abertura por mouse. |
-| Dislike por HUD ou menu | Invalidar timer anterior, ocultar oferta e abrir uma `NSWindow` titulada/fechável, key-capable. Só essa ação explícita ativa Resenha e usa `makeKeyAndOrderFront`. `@FocusState` posiciona “Saiu como”; respeitar navegação por teclado do sistema e sequência campos → Salvar → Cancelar, com Return para salvar e Escape para cancelar. |
+| Dislike por HUD ou menu | Invalidar o timer da oferta **antes** de ocultar o HUD e abrir uma `NSWindow` titulada/fechável, key-capable. O editor não tem auto-dismiss. Só essa ação explícita ativa Resenha e usa `makeKeyAndOrderFront`. `@FocusState` posiciona “Saiu como”; respeitar navegação por teclado do sistema e sequência campos → Salvar → Cancelar, com Return para salvar e Escape para cancelar. |
+| Expiração passiva | Aos 4 segundos, se geração + token + estado `offered` ainda coincidirem, limpar sessão e ações de menu, restaurar pass-through e ocultar o HUD sem ativar app, escrever preferência ou mostrar notice. Expiração não atua em `editing`, em sessão mais nova nem em qualquer status posterior. |
 | Save válido, Cancelar, Escape ou botão de fechar | Consumir token e limpar draft antes de fechar; restaurar pass-through. Se Resenha ainda está em primeiro plano e o destino original continua vivo, pedir sua ativação uma vez. Se outro app já ganhou foco, preservá-lo. Nunca reabrir app terminado, inserir texto ao fechar ou insistir num destino indisponível. Falha de restauração informa “Volte ao campo de texto para ditar” sem reivindicar foco restaurado. |
-| Novo ditado com oferta ignorada | Pressão aceita no app externo aposenta oferta/token, cancela timers, restaura modo passivo e inicia normalmente na mesma pressão. Um timer antigo não esconde o novo HUD. Isso cobre explicitamente o cenário de ignorar ambos os balões. |
+| Novo ditado com oferta ignorada | Pressão aceita no app externo aposenta oferta/token, cancela o timer de 4 segundos, restaura modo passivo e inicia normalmente na mesma pressão. Um timer antigo não esconde o novo HUD. Isso cobre explicitamente o cenário de ignorar ambos os controles antes da expiração. |
 | Hotkey com editor focado | A primeira pressão fecha/cancela o draft e solicita retorno ao destino, sem iniciar gravação. Consumir a pressão até release; orientar “Solte e pressione novamente para ditar”. A próxima pressão só inicia se o app em primeiro plano já for externo e os guards normais permitirem. Não gravar enquanto se espera ativação e não redirecionar inserção ao editor. |
 | Hotkey após usuário alternar do editor para outro app | A pressão aceita descarta o editor sem forçar retorno ao antigo destino e grava no app externo atual. A limpeza não deve alterar o destino capturado por essa nova gravação. |
 | Ocultar HUD, cancelamento global, encerramento ou nova apresentação incompatível | Invalidar token e callbacks; fechar janela, apagar draft, cancelar timers e remover ações do menu. Preferência desligada não deixa um feedback invisível acionável. No encerramento não ativar outros apps. |
@@ -277,7 +288,7 @@ O caminho real de `configureHotkeyRouting()` hoje chama `handleHotkeyPress(targe
 
 Callbacks de status/permissões que normalmente são permitidos em `idle` não podem sobrescrever uma sessão de correção: a apresentação rotineira de “pronto” deve respeitar a sessão ativa; perda de permissão/invalidação explícita encerra feedback e mostra o erro adequado. Validar também `applicationDidBecomeActive`, que pode iniciar atualização de permissões ao abrir a janela.
 
-Usar `.accessibilityElement(children: .contain)` ou hierarquia equivalente somente nas superfícies interativas; preservar o resumo acessível dos estados passivos. Botões têm nome, campos têm rótulo, erro tem texto visível associado ao campo e anúncio acessível na tentativa inválida. Restaurar foco ao campo inválido, sem fechar nem apagar draft. Sucesso é texto “Regra salva” ou “Regra já existente”, também anunciado antes do fechamento, seguido de status passivo temporário; invalidar seu timer ao próximo estado. Preservar contraste, Reduce Motion, transparência reduzida, fonte/estilo da casa e clamping da tela. Validação física deve confirmar que o anúncio chega ao VoiceOver; renderizar uma fixture não demonstra isso.
+Usar `.accessibilityElement(children: .contain)` ou hierarquia equivalente somente nas superfícies interativas; preservar o resumo acessível dos estados passivos. Os botões compactos podem ser apenas ícones visualmente, mas têm labels/hints completos e anúncio único de disponibilidade; campos têm rótulo, erro tem texto visível associado ao campo e anúncio acessível na tentativa inválida. Restaurar foco ao campo inválido, sem fechar nem apagar draft. Sucesso é texto “Regra salva” ou “Regra já existente”, também anunciado antes do fechamento, seguido de status passivo temporário; invalidar seu timer ao próximo estado. Preservar contraste, transparência reduzida, fonte/estilo da casa e clamping da tela. Com Reduce Motion, a troca processamento → oferta é instantânea e o timer continua em 4 segundos; sem Reduce Motion, admitir apenas transição curta de opacidade/escala dentro do mesmo frame, sem prolongar o deadline. Validação física deve confirmar que o anúncio chega ao VoiceOver; renderizar uma fixture não demonstra isso.
 
 ### Persistence, limits and conflicts
 
@@ -306,10 +317,10 @@ Não emitir rede, telemetria ou logs contendo draft, frases, ratings ou transcri
 
 | Cobertura | Evidência mínima e CK |
 | --- | --- |
-| Estado e integração do app | XCTest para conclusão apenas depois de inserção sem erro, tentativa obsoleta após await, like/cancel sem escrita, oferta ignorada → próxima gravação, draft → hotkey consumido → release → próxima pressão externa, guarda self preservada, timers/status/permissões antigos, desativação HUD e ações antigas do menu. Exercitar handlers/seam de estado existente ou pequeno helper no mesmo arquivo, sem mockar todo o pipeline de áudio. CK-1–CK-3, CK-7, CK-10. |
+| Estado e integração do app | XCTest para conclusão apenas depois de inserção sem erro, tentativa obsoleta após await, like/cancel/expiração sem escrita, deadline 4s, dislike cancelando timer, geração+token impedindo timer antigo de fechar sessão nova/editor/notice/gravação, oferta ignorada → próxima gravação, draft → hotkey consumido → release → próxima pressão externa, guarda self preservada, desativação HUD e ações antigas do menu. Exercitar handlers/seam de estado existente ou pequeno helper no mesmo arquivo, sem mockar todo o pipeline de áudio. CK-1–CK-3, CK-7, CK-10–CK-11. |
 | Glossário e preferências | Suites UserDefaults únicas; fronteiras 160/161, 200/201 entradas aceitas, 20.000/20.001 e prompt 8.000/8.001; duplicatas antes/depois da capacidade, conflitos case-insensitive, formato inválido, conteúdo antigo preservado, leitura atualizada no Save, reconstrução e “Coisa Energia” → “COESA Energia” via pós-processador real. Invalid/no-op não escrevem. CK-4–CK-6, CK-8. |
-| Fixtures | Acrescentar oferta, editor e erro nas aparências existentes. Manter limites atuais de tamanho para estados passivos; dar dimensões próprias ao editor/feedback e verificar longos rótulos/erros sem cortar controles. Inspecionar imagens temporárias em `ResenhaTests/ui-fixtures`. CK-1, CK-9. |
-| Mac físico | Binário/commit identificados; TextEdit e navegador com texto descartável; fluxo sem mouse desde menu de status, Tab/Return/Escape, VoiceOver/erro/sucesso, foco na inserção, fechamento/retorno e destino terminado. Repetir oferta ignorada, editor aberto + hotkey, troca para outro app, histórico desligado, HUD desligado e regra depois de reabrir app. Microfone/inserção e rede observada são evidência distinta de XCTest/fixtures. CK-1–CK-10. |
+| Fixtures | Substituir a oferta alta pelo estado compacto `280×64` nas aparências existentes. Provar continuidade geométrica com transcribing/inserting, dois ícones com hit targets/rótulos acessíveis, contraste/transparência e Reduce Motion sem salto ou corte. Editor mantém dimensão própria. Inspecionar imagens temporárias em `ResenhaTests/ui-fixtures`. CK-1, CK-9, CK-11. |
+| Mac físico | Binário/commit identificados; TextEdit e navegador com texto descartável; continuidade processamento → dois ícones no mesmo HUD, expiração aproximada de 4s, dislike antes do deadline mantendo editor, fluxo sem mouse desde menu de status, VoiceOver/erro/sucesso, foco e destino terminado. Repetir com Reduce Motion, oferta ignorada, editor aberto + hotkey, troca para outro app, histórico/HUD desligados e regra depois de reabrir app. Microfone/inserção e rede observada são evidência distinta de XCTest/fixtures. CK-1–CK-11. |
 | Gates e registro | Rodar gate nativo canônico dos Regular Checks via `mac-gate`, registrar SHA, comando, resultado e pendências em `docs/testing/UI-REFINEMENT-EVIDENCE.md`. Workflow do site só se afetado; sem npm artificial, `next build`, API paga ou alegação de Vercel como deploy do app nativo. |
 
 ### Expected Changes
@@ -320,16 +331,16 @@ Não emitir rede, telemetria ou logs contendo draft, frases, ratings ou transcri
 | --- | --- |
 | `Sources/WhisperKey/DictationCoordinator.swift` | Guard pós-inserção, captura de contexto e callback terminal após reset; aposentar feedback ao iniciar/cancelar e proteger rotina de estado. |
 | `Sources/WhisperKey/WhisperKeyApp.swift` | Conectar conclusão/save/menu, disponibilidade do HUD e permissões; rota de hotkey com alvo real, editor aberto e release; encerramento seguro. |
-| `Sources/WhisperKey/FloatingPanel.swift` | Sessão/token/draft, modos mouse passivo/interativo, janela nativa da correção, fechamento/restauração do destino, invalidação de timers e callbacks. |
-| `Sources/WhisperKey/FloatingStatusView.swift` | Estado de oferta, dois botões, view de correção/validação e acessibilidade; layout próprio sem regressão dos estados passivos. |
+| `Sources/WhisperKey/FloatingPanel.swift` | Sessão/token/draft, timeout de 4 segundos protegido por geração+token, modos mouse passivo/interativo, janela nativa da correção, fechamento/restauração do destino e invalidação de timers/callbacks. |
+| `Sources/WhisperKey/FloatingStatusView.swift` | Estado de oferta com dois ícones discretos dentro do frame `280×64` do processamento, view de correção/validação e acessibilidade; sem cartão/título grande nem regressão dos estados passivos. |
 | `Sources/WhisperKey/NativeMenuController.swift` | Dois itens acessíveis de feedback, disponibilidade por sessão e ações compartilhadas com HUD. |
 | `Sources/WhisperKey/ProductPreferences.swift` | Save validado contra valor atual, uma atribuição e verificação de leitura, sem nova chave nem mudança do editor existente. |
 | `Sources/WhisperKey/WhisperTranscriber.swift` | Helper de candidato/validação junto ao glossário reutilizando semântica e limites; nenhuma mudança de inference ou pós-processamento. |
 | `Tests/WhisperKeyTests/WhisperKeyTests.swift` | Regressões de estado, roteamento, persistência/limites/conflitos e extensão delimitada das fixtures. |
-| `docs/specs/06-floating-ui.md` | Distinguir HUD passivo durante ditado e feedback interativo posterior; documentar janela/menu/foco. |
+| `docs/specs/06-floating-ui.md` | Documentar continuidade no mesmo HUD, oferta compacta de 4 segundos, janela/menu/foco e Reduce Motion. |
 | `docs/specs/11-output-quality.md` | Aprendizado explícito local, limites/conflitos e ausência de retreinamento. |
-| `docs/specs/08-testing.md` | Casos novos determinísticos e roteiro físico completo, incluindo ignorar oferta e keyboard entry. |
-| `docs/testing/UI-REFINEMENT-EVIDENCE.md` | Resultados reais com commit/build, aparelho, foco/VoiceOver, persistência e pendências explícitas. |
+| `docs/specs/08-testing.md` | Casos determinísticos e roteiro físico completo, incluindo geometria, timeout/stale timer, Reduce Motion, VoiceOver, ignorar oferta e keyboard entry. |
+| `docs/testing/UI-REFINEMENT-EVIDENCE.md` | Resultados reais com commit/build, aparelho, compactação/timeout, foco/VoiceOver, persistência e pendências explícitas. |
 
 Dependências somente de leitura: `DictationInteraction.swift`, `TextInjector.swift`, `TranscriptHistory.swift`, `PanelPlacement.swift`, `ResenhaDesign.swift`, `RecordingWaveformView.swift`, `HotkeyMonitor.swift`, `project.yml`, projeto/scheme Xcode, README e workflow de site. Sem arquivo Swift novo, não há registro novo no projeto Xcode, export, entitlement, configuração de provider, migração, asset de site ou dependência a alterar.
 
@@ -353,6 +364,11 @@ Phase 2 — feature integrada e prova do candidato
                 [04 specs + testes físicos + evidência]
                                       |
                               review opus
+                                      |
+Phase 3 — refinamento do feedback observado pelo usuário
+                [05 HUD compacto + timeout + regressões]
+                                      |
+                              review opus
 ```
 
 | Step | Phase | Model | Agent | Depends on | Parallel with | Sub-Task File |
@@ -361,8 +377,9 @@ Phase 2 — feature integrada e prova do candidato
 | 02 — Views acessíveis [DONE] | 1 | sonnet | developer | None | 01 | [.specs/sub-tasks/add-transcription-feedback/02-feedback-views.md](../../sub-tasks/add-transcription-feedback/02-feedback-views.md) |
 | 03 — Sessão e integração nativa [DONE] | 2 | opus | developer | 01, 02 | None | [.specs/sub-tasks/add-transcription-feedback/03-native-feedback-lifecycle.md](../../sub-tasks/add-transcription-feedback/03-native-feedback-lifecycle.md) |
 | 04 — Prova e documentação [DONE] | 2 | sonnet | developer | 03 | None | [.specs/sub-tasks/add-transcription-feedback/04-physical-evidence-and-specs.md](../../sub-tasks/add-transcription-feedback/04-physical-evidence-and-specs.md) |
+| 05 — Feedback compacto e temporizado | 3 | opus | developer | 04 | None | [.specs/sub-tasks/add-transcription-feedback/05-compact-timed-feedback.md](../../sub-tasks/add-transcription-feedback/05-compact-timed-feedback.md) |
 
-Largura máxima real: **2**; caminhos críticos: **01 → 03 → 04** e **02 → 03 → 04**. 01/02 dividem somente o arquivo XCTest, em regiões diferentes, sem formatação global. 03 depende de ambos os contratos e 04 depende do binário final, portanto não há paralelismo adicional correto. Modelos: dois opus por integridade de dados/contrato compartilhado e dois sonnet por UI delimitada/evidência; nenhum passo é uma edição mecânica de um arquivo que justifique haiku.
+Largura máxima real: **2**; caminhos críticos: **01 → 03 → 04 → 05** e **02 → 03 → 04 → 05**. 01/02 dividem somente o arquivo XCTest, em regiões diferentes, sem formatação global. 03 depende de ambos os contratos, 04 prova o primeiro candidato e 05 corrige o refinamento visual/temporal observado no uso real; não há paralelismo adicional correto. O passo 05 e sua revisão usam opus porque timer, token, geometria, mouse e acessibilidade compartilham o lifecycle do painel; não é somente ajuste cosmético.
 
 ### Phase Overview
 
@@ -409,4 +426,27 @@ Rubrics:
 - Acessibilidade da correção.
 - Project Guidelines Alignment.
 
-O Checklist desta task contém CK-1–CK-10 e nenhum ID HR; não inventar HR. Esta seção distribui os critérios existentes, sem criar critérios de aceitação ou configuração de avaliação adicionais.
+#### Phase 3 — Oferta compacta, temporizada e instalada
+
+Steps: 05.
+
+Reviewer model: opus — o diff visual é pequeno, mas a expiração compartilha estado e geração com notices, gravação, editor, menu e tokens; teto da escala para impedir regressão assíncrona silenciosa.
+
+Acceptance Criteria that should be fulfiled: o candidato substitui o cartão grande e indefinido por dois ícones discretos dentro do mesmo frame `280×64` de processamento, expira somente a oferta passiva após 4 segundos e preserva editor, novo ditado e estados posteriores contra timer obsoleto. Gate nativo, fixtures e prova física usam o mesmo SHA; a versão instalada deve ser atualizada somente depois da validação e identificada por commit/build.
+
+Este contrato da Phase 3 substitui explicitamente a decisão anterior “sem timeout próprio” e o Expected Output histórico do Step 03 que a reproduz; o editor continua sem timeout, mas a oferta passiva não.
+
+Checklist items:
+- CK-1: continuidade geométrica e visual processamento → feedback, sem painel/título grande.
+- CK-7, CK-11: timeout determinístico, cancelamento ao abrir editor, geração+token e lifecycle de novo ditado/HUD off.
+- CK-9: labels/hints dos ícones, hit targets, contraste, VoiceOver e Reduce Motion sem alterar deadline.
+- CK-10: gate via mac-gate, candidato instalado atribuível ao SHA, TextEdit/clipboard/foco e app reaberto.
+- CK-2, CK-3, CK-8: like/expiração não escrevem; dislike mantém editor local existente; nenhuma rede, dependência, inference ou glossário novo.
+
+Rubrics:
+- Feedback explícito e continuidade do ditado.
+- Privacidade local do aprendizado.
+- Acessibilidade da correção.
+- Project Guidelines Alignment.
+
+O Checklist desta task contém CK-1–CK-11 e nenhum ID HR; não inventar HR. Esta seção distribui os critérios existentes, sem criar IDs adicionais na implementação.
