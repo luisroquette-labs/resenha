@@ -251,7 +251,7 @@ Test Cases to Cover:
 2. Gate nativo e regressões sem rede passam no candidato final, incluindo falso positivo rosto/Hostel, limites de armazenamento, timeout, cancelamento e payload.
 3. Beta permanece desligado e reversível; ditado pessoal/remoto real segue indisponível até autorização específica; regras legadas e dados anteriores são preservados.
 4. A chamada sintética controlada só é marcada concluída com resposta/erro e uso observados. Ela não comprova qualidade de Jev nem autoriza uso recorrente; eventual avaliação semântica real permanece pendente de autorização própria.
-5. Revisão de diff, privacidade e acessibilidade está registrada; integração segue um único PR e checks aplicáveis ao target. Prova física e autorização posterior, quando ausentes, são limites explícitos da entrega.
+5. O candidato final pré-merge tem gates e prova física registrados em evidência versionada suficiente; a revisão única da fase 2 avalia esse candidato/evidência e exige PASS >= 4 antes de mover a task para `done`, fazer commit/push, conferir checks do SHA mais recente e integrar o único PR. Prova física pré-merge ausente impede esse fechamento. Rebuild/instalação do tree integrado após o merge são verificação operacional separada, não condição da fase 2/DoD; divergência ou falha posterior é incidente registrado sem reescrever a conclusão histórica nem alegar conclusão operacional. Uso remoto pessoal e avaliação semântica real continuam dependentes de autorização própria.
 
 ## Architecture Overview
 
@@ -395,11 +395,15 @@ Implementação futura executa o gate nativo via `~/.local/bin/mac-gate xcodebui
 
 Esta seção planeja trabalho futuro; não autoriza iniciá-lo nesta etapa documental. Antes de 01, concluir e integrar na `main` a dependência `add-transcription-feedback` até seu feedback visual/Phase 4, registrar o SHA integrado e criar um worktree limpo com uma branch própria a partir dessa `main` atualizada. O antigo Step 07/Phase 5 de Jev é substituído por esta task e **não** é pré-requisito, evitando dependência circular. Não implementar sobre `feat/transcription-feedback`, transportar WIP visual sem integração, reaproveitar seu PR ou apagar alterações existentes. Esta feature usa um único PR próprio; os caminhos da task abaixo acompanham sua localização caso seja promovida pelo orquestrador.
 
-**Diretiva de execução:** lançar um agente por passo, fornecendo o caminho desta task e o arquivo do passo; usar seu `Model`/`Agent`, implementar exatamente aquele escopo e executar passos marcados paralelos em paralelo. Aqui a largura é 1: 01 e 02 compartilham contratos e o arquivo XCTest, 03 documenta o comportamento efetivamente entregue, e 04 depende da revisão local completa. Não criar agentes adicionais por arquivo. Executar o code reviewer **uma única vez por fase**, no modelo indicado, após seus passos; corrigir achados antes de avançar. O marco da fase 1 inclui revisão de código/privacidade, gates e candidato identificados antes de qualquer chamada real; a revisão da fase 2 avalia a evidência remota/física sem repetir a revisão de implementação sem um novo diff.
+**Diretiva de execução:** lançar um agente por passo, fornecendo o caminho desta task e o arquivo do passo; usar seu `Model`/`Agent`, implementar exatamente aquele escopo e executar passos marcados paralelos em paralelo. Aqui a largura é 1: 01 e 02 compartilham contratos e o arquivo XCTest, 03 documenta o comportamento efetivamente entregue, e 04 depende da revisão local completa. Não criar agentes adicionais por arquivo. Executar o code reviewer **uma única vez por fase**, no modelo indicado, após seus passos; corrigir achados antes de avançar. O marco da fase 1 inclui revisão de código/privacidade, gates e candidato identificados antes de qualquer chamada real. A revisão única da fase 2 avalia o candidato final instalado/testado **pré-merge** e sua evidência versionada; somente após PASS >= 4 o orquestrador move a task para `done`, faz commit/push na mesma branch, confere checks do SHA mais recente e integra o único PR. A verificação operacional pós-merge não cria quinto passo nem nova revisão de fase.
 
 Nenhum passo introduz SDK, dependência, provider genérico, gasto recorrente ou migração do glossário. Persistência, transporte, credencial e lifecycle usam `opus`; somente documentação/evidência isoladas usam `sonnet`. Os tiers são atribuições de execução futura, não autorização para acionar outra API paga. Testes usam transporte/credencial falsos e storage isolado. Gate nativo: `~/.local/bin/mac-gate xcodebuild -project WhisperKey.xcodeproj -scheme WhisperKey -destination 'platform=macOS' -derivedDataPath build test`. Reinspecionar os workflows reais na branch futura; não inventar npm/Vercel para este target nativo nem executar gates fora de `mac-gate`.
 
-A fixture de diagnóstico de `Tests/Fixtures/contextual-corrections.json` deve constar explicitamente como recurso do target app `WhisperKey` em `project.yml` e na fase Copy Bundle Resources do projeto Xcode gerado, além do uso nos testes. O diagnóstico carrega a cópia do bundle candidato; XCTest comprova essa carga sem depender do checkout ou do bundle de testes. A fixture continua inteiramente sintética, sem segredos/dados reais. Após o merge, a prova física vai para artefato local identificado e comentário no mesmo PR ou issue vinculada, com hashes/resultados; não exige segundo PR nem torna essa evidência parte da documentação já versionada.
+A fixture de diagnóstico de `Tests/Fixtures/contextual-corrections.json` deve constar explicitamente como recurso do target app `WhisperKey` em `project.yml` e na fase Copy Bundle Resources do projeto Xcode gerado, além do uso nos testes. O diagnóstico carrega a cópia do bundle candidato; XCTest comprova essa carga sem depender do checkout ou do bundle de testes. A fixture continua inteiramente sintética, sem segredos/dados reais.
+
+**Ordem de fechamento vigente:** após a chamada sintética e os gates, 04 instala/testa fisicamente o candidato final pré-merge e completa `docs/testing/context-aware-corrections.md` antes da revisão da fase 2. As pendências físicas registradas em 03 são preenchidas em 04; esta ordem substitui qualquer orientação anterior que adie a prova necessária ao DoD para depois do merge. A evidência identifica snapshot de source/config/recursos, candidato/binário, assinatura, hashes e resultados. Depois do PASS, alterações de fechamento são apenas documentais; o commit final deve conservar exatamente o source testado. Alteração de source invalida a prova correspondente e exige sua revalidação antes da integração.
+
+Após merge, comparar o tree do commit final da branch com o tree integrado e confirmar a equivalência de source/config/recursos com o candidato aprovado; registrar commit final, tree IDs, merge SHA e hashes. Rebuild/instalação do tree integrado e checagem operacional ficam em artefato local identificado e comentário no mesmo PR/issue, sem segundo commit/PR. Essa verificação é posterior à fase 2/DoD: divergência de tree/source ou falha de build/instalação/uso gera incidente e impede afirmar conclusão operacional, preservando o registro histórico do candidato pré-merge avaliado.
 
 ### Parallelization Overview
 
@@ -415,10 +419,14 @@ Fase 1 — app utilizável localmente, rede real bloqueada
                          |
                Uma revisão opus
                          |
-Fase 2 — diagnóstico autorizado e prova física final
-04 Uma chamada sintética -> integração -> instalação/prova (opus)
+Fase 2 — diagnóstico autorizado e prova física pré-merge
+04 Uma chamada sintética -> gates -> instalação/prova final (opus)
                          |
-               Uma revisão opus
+          Uma revisão opus: PASS >= 4
+                         |
+       done -> commit/push -> checks do SHA final -> merge
+                         |
+Rebuild/instalação operacional do tree integrado (fora da fase 2/DoD)
 ```
 
 | Step | Phase | Model | Agent | Depends on | Parallel with | Sub-Task File |
@@ -428,7 +436,7 @@ Fase 2 — diagnóstico autorizado e prova física final
 | 03 — Privacidade e evidência local | 1 | sonnet | developer | 02 | None | [03-privacy-and-local-evidence.md](../../sub-tasks/add-context-aware-corrections/03-privacy-and-local-evidence.md) |
 | 04 — Diagnóstico e instalação final | 2 | opus | developer | 03 e revisão da fase 1 | None | [04-controlled-diagnostic-and-physical-proof.md](../../sub-tasks/add-context-aware-corrections/04-controlled-diagnostic-and-physical-proof.md) |
 
-Caminho crítico: **dependência integrada → 01 → 02 → 03 → revisão da fase 1 → 04 → revisão da fase 2**. Largura máxima: **1**. Quatro passos; nenhuma instalação física ou chamada real em 01–03. O passo 04 é uma fase própria porque cruza a fronteira entre comprovação local, única transmissão autorizada e ambiente físico; agrupá-lo com código permitiria gastar a autorização antes da revisão local.
+Caminho crítico: **dependência integrada → 01 → 02 → 03 → revisão da fase 1 → 04 com prova física pré-merge → revisão da fase 2 PASS >= 4 → done/commit/push/checks/merge**. Largura máxima: **1**. Quatro passos; nenhuma instalação física ou chamada real em 01–03. O passo 04 é uma fase própria porque cruza a fronteira entre comprovação local, única transmissão autorizada e ambiente físico; agrupá-lo com código permitiria gastar a autorização antes da revisão local. A verificação operacional pós-merge é acompanhamento da integração, não requisito retroativo para fechar a fase 2/DoD.
 
 ### Phase Overview
 
@@ -460,18 +468,18 @@ Steps: 04.
 
 Reviewer model: opus — valida a fronteira de uma única chamada paga e a proveniência/segurança da instalação; teto da escala. Nenhum novo desenho de produto nesta fase.
 
-Acceptance Criteria that should be fulfiled: somente após a fase 1 concluída, uma chamada sintética delimitada usa a chave descartável pelo controle seguro; o resultado/erro e uso observado são registrados sem segredo. A autorização é consumida mesmo em timeout/resultado desconhecido. Integrar o único PR somente com gates/checks aplicáveis verdes; instalar o candidato identificado no último passo e observar o fluxo físico local em campos descartáveis. Ditado pessoal remoto e avaliação real do corpus continuam bloqueados. Falha de credencial, serviço, permissão ou hardware fica explícita e não vira sucesso ou licença para repetir a chamada.
+Acceptance Criteria that should be fulfiled: somente após a fase 1 concluída, uma chamada sintética delimitada usa a chave descartável pelo controle seguro; o resultado/erro e uso observado são registrados sem segredo. A autorização é consumida mesmo em timeout/resultado desconhecido. Após os gates, instalar/testar fisicamente o candidato final **pré-merge** em campos descartáveis e registrar evidência versionada suficiente para a revisão única desta fase. PASS >= 4 libera o fechamento documental/commit/push/checks do SHA mais recente e merge do único PR; merge e rebuild/instalação operacional posteriores não são pré-condições desta revisão. Ditado pessoal remoto e avaliação real do corpus continuam bloqueados. Falha de credencial, serviço, permissão ou hardware fica explícita e não vira sucesso ou licença para repetir a chamada; prova física obrigatória pendente impede PASS/DoD.
 
 Checklist items:
 - CK-7, CK-8, HR-1, HR-2: diagnóstico sintético real isolado, opt-out, exclusão da credencial e nenhuma ampliação de autoridade.
 - CK-1, CK-2, CK-9, CK-11: confirmação/exclusão local, transparência do conflito legado, teclado/VoiceOver e foco observados no candidato instalado.
 - CK-4, CK-5, CK-6: os dois sentidos são ditados localmente; nenhuma chamada de ditado ou mutação tardia. Substituição contextual física, se exercitada, usa fixture/fake sintético identificado, sem alegar inferência Jev sobre fala pessoal.
 - CK-10, CK-12: corpus fake, chamada única e prova física separados; gates semânticos reais continuam não medidos.
-- HR-3: SHA, gate, PR/checks, integração e bundle instalado rastreáveis; prova pós-merge em artefato local e comentário no mesmo PR/issue com hashes/resultados, sem novo PR ou alegação de documentação pós-merge versionada. Publicação de release/loja/site não faz parte deste passo.
+- HR-3: snapshot de source/config/recursos, candidato instalado pré-merge, gate e hashes/resultados físicos rastreáveis em evidência versionada. Após PASS, preservar esse source no commit final e verificar checks antes do merge; equivalência do tree integrado e resultado operacional posterior ficam em artefato local/comentário no mesmo PR/issue, fora da fase 2/DoD e sem segundo commit/PR. Publicação de release/loja/site não faz parte deste passo.
 
 Rubrics:
 - Preservação de significado e decisão limitada — limites da observação física e ausência de alteração indevida.
 - Privacidade e autorização do beta — transmissão única e ditado remoto indisponível.
 - Continuidade e reversibilidade — desligamento, exclusão e continuidade física local.
 - Evidência de aprendizado contextual — proveniência e limites de cada evidência.
-- Project Guidelines Alignment — integração e candidato efetivamente instalado.
+- Project Guidelines Alignment — candidato final pré-merge efetivamente instalado/testado e evidência suficiente antes do fechamento e integração.
