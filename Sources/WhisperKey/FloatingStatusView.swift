@@ -72,6 +72,38 @@ struct TranscriptionFeedbackAction: Identifiable {
     }
 }
 
+struct FeedbackBubbleVisualState: Equatable {
+    let opacity: Double
+    let offset: CGFloat
+    let bubbleScale: CGFloat
+}
+
+enum FeedbackBubbleMotion {
+    static let targetSize: CGFloat = 44
+    static let visualSize: CGFloat = 36
+    static let duration: TimeInterval = 4
+
+    static func state(elapsed: TimeInterval, index: Int, reduceMotion: Bool) -> FeedbackBubbleVisualState {
+        let time = max(0, min(duration, elapsed.isFinite ? elapsed : 0))
+        let exit = smooth((time - 3.25) / 0.65)
+        if reduceMotion {
+            let opacity = smooth(time / 0.14) * (1 - exit)
+            return FeedbackBubbleVisualState(opacity: opacity, offset: 0, bubbleScale: 1)
+        }
+        let entry = smooth((time - Double(index) * 0.07) / 0.28)
+        return FeedbackBubbleVisualState(
+            opacity: entry * (1 - exit),
+            offset: (1 - entry) * 10 - exit * 14,
+            bubbleScale: 0.84 + entry * 0.16 + exit * 0.04
+        )
+    }
+
+    private static func smooth(_ value: Double) -> Double {
+        let bounded = max(0, min(1, value))
+        return bounded * bounded * (3 - 2 * bounded)
+    }
+}
+
 struct FloatingStatusView: View {
     static let approveLabel = "Transcrição correta"
     static let correctLabel = "Corrigir transcrição"
@@ -80,6 +112,7 @@ struct FloatingStatusView: View {
     var fixtureContrast: ColorSchemeContrast? = nil
     var fixtureReduceTransparency: Bool? = nil
     var fixtureReduceMotion: Bool? = nil
+    var fixtureFeedbackElapsed: TimeInterval? = nil
     var onApprove: () -> Void = {}
     var onCorrect: () -> Void = {}
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
@@ -145,23 +178,12 @@ struct FloatingStatusView: View {
     }
 
     private var feedbackContent: some View {
-        HStack(spacing: 16) {
-            ForEach(feedbackActions) { action in
-                Button(action: action.perform) {
-                    Label(action.label, systemImage: action.symbol ?? "")
-                        .labelStyle(.iconOnly)
-                        .font(.system(size: 16, weight: .medium))
-                        .frame(width: 36, height: 32)
-                }
-                .accessibilityLabel(action.label)
-                .accessibilityHint(action.label == Self.approveLabel
-                    ? "Encerra a avaliação sem salvar dados."
-                    : "Abre os campos Saiu como e Correto é para uma correção local.")
-            }
-        }
-        .buttonStyle(.bordered)
-        .controlSize(.regular)
-        .foregroundStyle(.primary)
+        FeedbackBubblesView(
+            actions: feedbackActions,
+            reduceMotion: fixtureReduceMotion ?? reduceMotion,
+            increasedContrast: (fixtureContrast ?? contrast) == .increased,
+            fixtureElapsed: fixtureFeedbackElapsed
+        )
     }
 
     private var statusContent: some View {
@@ -191,6 +213,85 @@ struct FloatingStatusView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+    }
+}
+
+private struct FeedbackBubblesView: View {
+    let actions: [TranscriptionFeedbackAction]
+    let reduceMotion: Bool
+    let increasedContrast: Bool
+    let fixtureElapsed: TimeInterval?
+    @State private var startedAt = Date()
+
+    var body: some View {
+        if let fixtureElapsed {
+            bubbles(elapsed: fixtureElapsed)
+        } else {
+            TimelineView(.animation(minimumInterval: 1.0 / 60.0)) { context in
+                bubbles(elapsed: context.date.timeIntervalSince(startedAt))
+            }
+        }
+    }
+
+    private func bubbles(elapsed: TimeInterval) -> some View {
+        HStack(spacing: 16) {
+            ForEach(Array(actions.enumerated()), id: \.element.id) { index, action in
+                let state = FeedbackBubbleMotion.state(
+                    elapsed: elapsed, index: index, reduceMotion: reduceMotion
+                )
+                Button(action: action.perform) {
+                    FeedbackBubble(action: action, index: index, increasedContrast: increasedContrast)
+                        .scaleEffect(state.bubbleScale)
+                        .frame(width: FeedbackBubbleMotion.targetSize, height: FeedbackBubbleMotion.targetSize)
+                }
+                .buttonStyle(.plain)
+                .contentShape(Circle())
+                .opacity(state.opacity)
+                .offset(y: state.offset)
+                .accessibilityLabel(action.label)
+                .accessibilityHint(action.label == FloatingStatusView.approveLabel
+                    ? "Encerra a avaliação sem salvar dados."
+                    : "Abre os campos Saiu como e Correto é para uma correção local.")
+            }
+        }
+    }
+}
+
+private struct FeedbackBubble: View {
+    let action: TranscriptionFeedbackAction
+    let index: Int
+    let increasedContrast: Bool
+
+    private var colors: [Color] {
+        index == 0
+            ? [Color(red: 0.24, green: 0.86, blue: 0.65), Color(red: 0.05, green: 0.48, blue: 0.40)]
+            : [Color(red: 0.95, green: 0.42, blue: 0.69), Color(red: 0.49, green: 0.22, blue: 0.76)]
+    }
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing))
+                .overlay {
+                    Circle()
+                        .fill(RadialGradient(
+                            colors: [.white.opacity(0.68), .clear],
+                            center: .init(x: 0.32, y: 0.24), startRadius: 0, endRadius: 19
+                        ))
+                }
+                .overlay {
+                    Circle().stroke(.white.opacity(increasedContrast ? 0.9 : 0.42),
+                                    lineWidth: increasedContrast ? 1.5 : 1)
+                }
+                .shadow(color: colors.last?.opacity(0.42) ?? .clear, radius: 4, y: 3)
+            Image(systemName: action.symbol ?? "")
+                .symbolVariant(.fill)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(.white)
+                .shadow(color: .black.opacity(0.22), radius: 1, y: 1)
+        }
+        .frame(width: FeedbackBubbleMotion.visualSize, height: FeedbackBubbleMotion.visualSize)
+        .accessibilityHidden(true)
     }
 }
 

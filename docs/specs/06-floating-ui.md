@@ -27,7 +27,7 @@ The focused text field remains focused while every pipeline status is displayed.
 
 ## Post-transcription feedback
 
-After successful `insertStaged`, cleanup and a current-attempt check, an enabled HUD offers “Transcrição correta” and “Corrigir transcrição”. Failure, empty output, cancellation and insertion fallback do not offer success feedback. The offer reuses the processing panel's 280 × 64 frame, position and material: only two small thumb icons in native buttons, without a visible title or separate card. It remains nonactivating and accepts mouse events. Labels and hints name both actions; a single accessibility announcement requests their availability. The status menu exposes the same actions with the current session token.
+After successful `insertStaged`, cleanup and a current-attempt check, an enabled HUD offers “Transcrição correta” and “Corrigir transcrição”. Failure, empty output, cancellation and insertion fallback do not offer success feedback. The offer reuses the processing panel's 280 × 64 frame, position and material: two 36-point gradient thumb bubbles sit inside 44 × 44 native button targets, without a visible title or separate card. It remains nonactivating and accepts mouse events. Labels and hints name both actions; a single accessibility announcement requests their availability. The status menu exposes the same actions with the current session token.
 
 The passive offer expires at the monotonic deadline `now + 4 seconds`. The existing dismissal task checks generation, original token and still-passive feedback state before clearing the offer/menu and hiding the panel. Expiration and approval write no preferences or ratings and show no notice. Opening correction invalidates the timer before opening its window; drafts, errors and Save never expire. A new accepted dictation retires the old offer on that press. Old timers cannot close later offers, recording, editors or notices.
 
@@ -37,7 +37,7 @@ Normal cancel, Escape and close discard the draft. If Resenha is still frontmost
 
 Every action checks its session token, including queued menu items. Hiding the HUD, new dictation or termination clears feedback, closes the editor and restores pass-through. History being disabled does not disable feedback. A failed storage rollback is the one exceptional cancel path: Save/Return stay blocked; Cancelar closes without writing and retains the pair only in memory for the same result. Reopening the menu correction action explicitly reloads/verifies the actual stored baseline before issuing a new token and enabling Save. Failed reload retains draft/error; new dictation, HUD off and termination erase it. No background retry writes a rule.
 
-Interactive surfaces expose accessible children and Portuguese names; passive surfaces retain their combined status. Feedback matches processing dimensions; the editor retains its own bounded dimensions. The feedback opacity transition lasts 0.12 seconds; Reduce Motion disables it without changing the four-second deadline. Recording geometry, waveform and contrast/transparency remain unchanged. See [SPEC-008](08-testing.md) for the physical script and [dated evidence](../testing/UI-REFINEMENT-EVIDENCE.md) for observed results and remaining gates.
+Interactive surfaces expose accessible children and Portuguese names; passive surfaces retain their combined status. Feedback matches processing dimensions; the editor retains its own bounded dimensions. Each bubble rises from 10 points below with a 70 ms stagger, rests, then rises 14 points while fading before the controller's unchanged four-second deadline. This decorative timeline never dismisses or mutates the feedback session. Each fresh hosting view restarts it. Reduce Motion removes travel, scale and stagger and keeps only short fades without changing the deadline. Increase Contrast strengthens the outline; opaque/light/dark appearances retain the same native gradient symbols. See [SPEC-008](08-testing.md) for the physical script and [dated evidence](../testing/UI-REFINEMENT-EVIDENCE.md) for observed results and remaining gates.
 
 ## Delivered state contract
 
@@ -48,7 +48,7 @@ Interactive surfaces expose accessible children and Portuguese names; passive su
 | Recording | `Listening` and monospaced `mm:ss`; release instruction remains in menu/accessibility status | Steady mist-green dot and 48 microphone-driven rounded bars | Entire recording interval |
 | Transcribing | `Transcribing…` | Native indeterminate progress | Entire transcription interval |
 | Inserting | `Inserting…` | Same progress footprint | Until actual insertion completion |
-| Feedback | No visible text; named accessible buttons | Two thumb icons in the processing frame | 4 seconds; correction cancels expiration |
+| Feedback | No visible text; named accessible buttons | Two 3D thumb bubbles in the processing frame | 4 seconds; correction cancels expiration |
 | Failure | Concise cause / `Open the WhisperKey menu for help` | Warning symbol | Approximately 2 seconds; recovery stays in menu |
 
 Ready/processing states use 280 × 64 points, a 20-point indicator slot, 12-point gap, 18-point horizontal inset and 4-point outer margin. Titles use 14-point semibold system font; secondary copy uses 12-point regular system font with a 3-point gap. The background uses an 18-point radius, regularMaterial and semantic colors. One-line processing states are vertically centered. Listening alone uses a horizontally arranged 340 × 72 capsule, clamped by the same fresh visible-frame rules.
@@ -69,9 +69,9 @@ Acceptance: deterministic injected clock/level checks cover normalization, fixed
 
 ## Brand resonance
 
-While listening, `ResenhaMark` responds to the same smoothed microphone level used by the waveform. The foreground mark scales from 84% to 116% and a faint duplicate expands to 152% at 30% opacity, producing a visible resonance without random or autonomous animation. Silence returns to the resting mark; loud speech never exceeds the HUD bounds.
+While listening, a native 44-point angular-gradient orb responds to the same smoothed microphone level used by the waveform. Its bright core scales from 84% to 116%; the blurred purple halo expands to 152% and adds at most 30% level-driven opacity. A radial highlight and bounded cyan shadow provide depth. Silence returns to the resting orb; loud speech never exceeds the HUD bounds, and no random or autonomous animation is added.
 
-The menu-bar mark uses five size steps from 12 to 18 pt driven by the live level. It returns to the full, static brand mark outside recording. No layout-width change, color flash or VoiceOver announcement is allowed. Reduce Motion keeps the HUD mark fixed and removes its halo; the waveform remains the existing stationary real-level display.
+The menu-bar mark uses five size steps from 12 to 18 pt driven by the live level. It returns to the full, static brand mark outside recording. No layout-width change, color flash or VoiceOver announcement is allowed. Reduce Motion fixes the orb's scale/rotation and removes its level-driven halo expansion; the waveform remains the existing stationary real-level display.
 
 Acceptance: deterministic tests cover nonfinite input, clamping, monotonic scale/opacity, Reduce Motion and the finite menu-frame set. Native fixtures must show distinct silence/speech states without changing the HUD footprint.
 

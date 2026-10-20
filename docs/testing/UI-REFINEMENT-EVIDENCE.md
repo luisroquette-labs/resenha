@@ -1,5 +1,25 @@
 # Interface refinement — item 1 evidence
 
+## Animated halo and feedback bubbles candidate — 20/10/2026, 19:38–19:43 BRT
+
+Step `06-animated-halo-feedback-bubbles`, pre-review working candidate: HEAD `2af1cdec9b6627fafff9b389a2953b94eb9cec18` plus the source fingerprints below. This is an uncommitted candidate, not a claim that HEAD or the installed app already contains the visual refinement.
+
+| Artifact | SHA-256 |
+|---|---|
+| `Sources/WhisperKey/FloatingStatusView.swift` | `aae58790ddf3f2782c1a0695e46903a556863998a56d0470a3e74c090e994cbf` |
+| `Sources/WhisperKey/RecordingWaveformView.swift` | `911fee74c4fba2aa634407fc9bc758e645a5131f41f0bf63cf53de70fb7e2cb9` |
+| `Tests/WhisperKeyTests/WhisperKeyTests.swift` | `f9b68e82728aa6fd3e07d8cdfcd541102423ba0ed610c96ceeb0ecb482136f14` |
+| Candidate executable | `0fd46cecf0e5601b2f9b47fb66c7bd602fee88d0f8f5b2e40b3f5ccab2105fb5` |
+| Candidate implementation dylib | `2b523a5f81fa5f8f9efca58a2491d1dcfed86aec1d1549426ce5e19f9369cc17` |
+
+Canonical native gate after Phase 4 review fixes **PASS: 83 tests, 0 failures**, completed 19:43:06 BRT. Command: `~/.local/bin/mac-gate xcodebuild -project WhisperKey.xcodeproj -scheme WhisperKey -destination 'platform=macOS' -derivedDataPath build test`. Result: `build/Logs/Test/Test-WhisperKey-2026.10.20_19-42-47--0300.xcresult`. An earlier attempt compiled and signed but failed before executing tests because the installed singleton app was running (`IDELaunchErrorDomain` Code 20; result `Test-WhisperKey-2026.10.20_19-38-23--0300.xcresult`). Only that installed Resenha instance was quit gracefully; the passing rerun completed and `/Applications/Resenha.app` was reopened unchanged as PID **43159**.
+
+Deterministic **PASS**: the restored 44-point angular-gradient orb uses the existing finite/clamped meter helpers, including stationary Reduce Motion values. Feedback motion is separately calculable and bounded: 36-point visual circles remain inside 44 × 44 targets, use a 70 ms entry stagger, rest without panel movement, then rise/fade before the controller's unchanged four-second deadline. Reduce Motion keeps offset zero and scale one, retaining only opacity changes. Existing deadline/token/editor regressions remained green; no controller, timer, persistence, network, dependency or project configuration changed.
+
+Fixtures regenerated at 19:39 under `/var/folders/7k/8wtpdcvn5f95c8s36d91t8k40000gn/T/ResenhaTests/ui-fixtures`. `hud-feedback-{light,dark}.png` and `hud-listening-light.png` were inspected: both bubbles are centered, distinct, unclipped and retain highlights/outlines on the 280 × 64 material; the listening fixture shows the orb/halo within the unchanged 340 × 72 capsule beside readable status/timer/waveform. The feedback matrix also generated increased-contrast, reduced-transparency and reduced-motion fixtures at a deterministic one-second resting state. Still images do **not** prove the rise/stagger/fade sequence, live meter response, keyboard focus or VoiceOver.
+
+**Not installed and not physically validated.** The installed application remains the prior compact candidate. Live silence/speech halo response, bubble animation/timing, clicking during the fade, actual OS Reduce Motion/Increase Contrast, keyboard focus, VoiceOver speech, TextEdit continuity and clipboard behavior remain **NOT RUN** for this working candidate. No Chrome/Terminal process, personal data, permission or accessibility setting was changed.
+
 ## Final compact candidate installed — 20/10/2026, 14:45–14:49 BRT
 
 **Installed revision: `68ddb7c1c89c71d8f4eded078d94c5967749cb21`.** Phase 3 review passed with score 4.53 before replacement. The clean committed candidate passed the canonical gate through `mac-gate`: **82 tests, 0 failures**, finished 14:45:33 BRT. Log `/tmp/resenha-step05-final-sha-gate.log`; result `build/Logs/Test/Test-WhisperKey-2026.10.20_14-45-14--0300.xcresult`. The lock enclosed graceful Resenha quit/reopen for the singleton restriction; no other application was terminated.

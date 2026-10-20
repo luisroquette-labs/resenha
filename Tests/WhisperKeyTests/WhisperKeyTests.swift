@@ -1536,6 +1536,43 @@ final class WhisperKeyTests: XCTestCase {
         XCTAssertEqual(canonical, "COESA Energia")
     }
 
+    func testFeedbackBubbleMotionStaysBoundedAndReduceMotionRemovesTravel() {
+        XCTAssertEqual(FeedbackBubbleMotion.targetSize, 44)
+        XCTAssertEqual(FeedbackBubbleMotion.visualSize, 36)
+        XCTAssertEqual(FeedbackBubbleMotion.duration, 4)
+
+        let firstEntry = FeedbackBubbleMotion.state(elapsed: 0.1, index: 0, reduceMotion: false)
+        let secondEntry = FeedbackBubbleMotion.state(elapsed: 0.1, index: 1, reduceMotion: false)
+        XCTAssertGreaterThan(firstEntry.opacity, secondEntry.opacity)
+        XCTAssertLessThan(firstEntry.offset, secondEntry.offset)
+
+        let settled = FeedbackBubbleMotion.state(elapsed: 1, index: 1, reduceMotion: false)
+        XCTAssertEqual(settled, FeedbackBubbleVisualState(opacity: 1, offset: 0, bubbleScale: 1))
+        let exiting = FeedbackBubbleMotion.state(elapsed: 4, index: 0, reduceMotion: false)
+        XCTAssertEqual(exiting.opacity, 0)
+        XCTAssertEqual(exiting.offset, -14)
+        XCTAssertEqual(exiting.bubbleScale, 1.04)
+        XCTAssertLessThanOrEqual(
+            FeedbackBubbleMotion.visualSize * exiting.bubbleScale,
+            FeedbackBubbleMotion.targetSize
+        )
+
+        for time in [TimeInterval.nan, -1, 0, 0.5, 3.5, 4, 8] {
+            let animated = FeedbackBubbleMotion.state(elapsed: time, index: 0, reduceMotion: false)
+            XCTAssertTrue(animated.opacity.isFinite)
+            XCTAssertTrue(animated.offset.isFinite)
+            XCTAssertTrue(animated.bubbleScale.isFinite)
+            XCTAssertTrue((0...1).contains(animated.opacity))
+            XCTAssertTrue((-14...10).contains(animated.offset))
+            XCTAssertTrue((0.84...1.04).contains(animated.bubbleScale))
+
+            let reduced = FeedbackBubbleMotion.state(elapsed: time, index: 1, reduceMotion: true)
+            XCTAssertEqual(reduced.offset, 0)
+            XCTAssertEqual(reduced.bubbleScale, 1)
+            XCTAssertTrue((0...1).contains(reduced.opacity))
+        }
+    }
+
     func testScreenChoiceUsesIntersectionThenCenterAndDeterministicTie() {
         let left = PanelScreen(id: 1, frame: CGRect(x: -1000, y: 0, width: 1000, height: 800), visibleFrame: CGRect(x: -1000, y: 24, width: 1000, height: 776))
         let right = PanelScreen(id: 2, frame: CGRect(x: 0, y: 0, width: 1000, height: 800), visibleFrame: CGRect(x: 0, y: 24, width: 1000, height: 776))
@@ -1721,7 +1758,7 @@ final class WhisperKeyTests: XCTestCase {
                     XCTAssertLessThanOrEqual(size.width, 360)
                     XCTAssertLessThanOrEqual(size.height, 104)
                 }
-                let view = NSHostingView(rootView: FloatingStatusView(model: model, fixtureContrast: contrast, fixtureReduceTransparency: opaque, fixtureReduceMotion: reduceMotion)
+                let view = NSHostingView(rootView: FloatingStatusView(model: model, fixtureContrast: contrast, fixtureReduceTransparency: opaque, fixtureReduceMotion: reduceMotion, fixtureFeedbackElapsed: 1)
                     .environment(\.colorScheme, scheme))
                 view.appearance = NSAppearance(named: scheme == .dark ? .darkAqua : .aqua)
                 try await capture(view, size: size, name: "hud-\(name)-\(appearance).png")
@@ -1732,7 +1769,8 @@ final class WhisperKeyTests: XCTestCase {
             let model = FloatingPanelModel()
             model.show(.feedback, now: 0)
             let offer = NSHostingView(rootView: FloatingStatusView(model: model, fixtureContrast: contrast,
-                fixtureReduceTransparency: opaque, fixtureReduceMotion: reduceMotion).environment(\.colorScheme, scheme))
+                fixtureReduceTransparency: opaque, fixtureReduceMotion: reduceMotion,
+                fixtureFeedbackElapsed: 1).environment(\.colorScheme, scheme))
             offer.appearance = NSAppearance(named: scheme == .dark ? .darkAqua : .aqua)
             try await capture(offer, size: smallSize, name: "hud-feedback-small-\(appearance).png")
 

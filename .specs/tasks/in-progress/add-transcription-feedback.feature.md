@@ -385,7 +385,7 @@ Phase 4 — auréola restaurada e feedback com profundidade
 | 03 — Sessão e integração nativa [DONE] | 2 | opus | developer | 01, 02 | None | [.specs/sub-tasks/add-transcription-feedback/03-native-feedback-lifecycle.md](../../sub-tasks/add-transcription-feedback/03-native-feedback-lifecycle.md) |
 | 04 — Prova e documentação [DONE] | 2 | sonnet | developer | 03 | None | [.specs/sub-tasks/add-transcription-feedback/04-physical-evidence-and-specs.md](../../sub-tasks/add-transcription-feedback/04-physical-evidence-and-specs.md) |
 | 05 — Feedback compacto e temporizado [DONE] | 3 | opus | developer | 04 | None | [.specs/sub-tasks/add-transcription-feedback/05-compact-timed-feedback.md](../../sub-tasks/add-transcription-feedback/05-compact-timed-feedback.md) |
-| 06 — Auréola animada e bolhas de feedback 3D | 4 | opus | developer | 05 | None | [.specs/sub-tasks/add-transcription-feedback/06-animated-halo-feedback-bubbles.md](../../sub-tasks/add-transcription-feedback/06-animated-halo-feedback-bubbles.md) |
+| 06 — Auréola animada e bolhas de feedback 3D [DONE] | 4 | opus | developer | 05 | None | [.specs/sub-tasks/add-transcription-feedback/06-animated-halo-feedback-bubbles.md](../../sub-tasks/add-transcription-feedback/06-animated-halo-feedback-bubbles.md) |
 
 Largura máxima real: **2**; caminhos críticos: **01 → 03 → 04 → 05 → 06** e **02 → 03 → 04 → 05 → 06**. 01/02 dividem somente o arquivo XCTest, em regiões diferentes, sem formatação global. 03 depende de ambos os contratos, 04 prova o primeiro candidato, 05 corrige o refinamento visual/temporal observado no uso real e 06 restaura o orbe e aprofunda apenas a apresentação dos controles; não há paralelismo adicional correto. Os passos 05/06 e suas revisões usam opus porque animação, timer, token, geometria, mouse e acessibilidade compartilham o lifecycle do painel; não são somente ajustes cosméticos.
 
@@ -457,11 +457,13 @@ Rubrics:
 - Acessibilidade da correção.
 - Project Guidelines Alignment.
 
-#### Phase 4 — Auréola restaurada e bolhas ascendentes
+#### Phase 4 — Auréola restaurada e bolhas ascendentes [REVIEWED]
 
 Steps: 06.
 
 Reviewer model: opus — o diff visual deve permanecer pequeno, mas precisa reconciliar o PR #13 divergente, animações SwiftUI, identidade de apresentação, timeout e targets acessíveis sem criar um segundo lifecycle.
+
+Review final: **4.66/5**. Implementação e gates automatizados aprovados; validação física permanece explicitamente pendente e não integra este score.
 
 Acceptance Criteria that should be fulfiled: o listening recupera o orbe/auréola reativo do piloto dentro do frame `340×72`; a oferta continua no mesmo HUD `280×64`, mas seus dois controles parecem pequenas bolhas 3D que emergem, sobem e desaparecem gradualmente durante a janela de 4 segundos. Reduce Motion remove deslocamento/stagger e conserva fade simples. O editor e todos os guards de geração+token permanecem iguais. Gate, fixtures, revisão e instalação usam o mesmo candidato; observação física não executada continua declarada como pendência.
 
