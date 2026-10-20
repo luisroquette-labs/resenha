@@ -63,4 +63,3 @@ Antes de editar, rastrear todos os usos de `RecordingWaveformView`, `RecordingRe
 | Risk | Visual pequeno reduz área clicável | High | Medium | Círculo visual menor dentro de frame/contentShape mínimo `44×44`, com foco e labels preservados |
 | Risk | Glow/gradiente perde contraste ou vira ruído | Medium | Medium | Cores adaptativas, contorno reforçado em Increase Contrast, fixtures light/dark/transparência e sombra contida |
 | Risk | Portar PR #13 traz asset/site ou regressão do waveform | Medium | Low | Port manual somente do trecho SwiftUI; comparar diff e manter captura/meter/layout atuais |
-
