@@ -1012,6 +1012,311 @@ final class WhisperKeyTests: XCTestCase {
         coordinator.cancel()
     }
 
+    @MainActor
+    func testFeedbackCompletionRequiresCurrentSuccessfulInsertionAfterCleanup() {
+        let panel = FloatingPanelController()
+        var showsHUD = true
+        let coordinator = DictationCoordinator(permissions: PermissionService(), panel: panel,
+            showsHUD: { showsHUD }, soundsEnabled: { false })
+        var completed: [UUID] = []
+        coordinator.onCompleted = { context in
+            XCTAssertEqual(coordinator.phase, .idle)
+            XCTAssertFalse(panel.isVisible)
+            XCTAssertNotEqual(coordinator.attemptID, context.id)
+            completed.append(context.id)
+        }
+        let original = coordinator.attemptID
+        coordinator.completeInsertion(attemptID: original, isCancelled: false)
+        XCTAssertTrue(completed.isEmpty)
+        coordinator.transition(to: .recording)
+        coordinator.transition(to: .transcribing)
+        coordinator.transition(to: .inserting)
+        coordinator.completeInsertion(attemptID: original, isCancelled: true)
+        coordinator.completeInsertion(attemptID: UUID(), isCancelled: false)
+        XCTAssertTrue(completed.isEmpty)
+        coordinator.cancel()
+        coordinator.transition(to: .recording)
+        coordinator.transition(to: .transcribing)
+        coordinator.transition(to: .inserting)
+        coordinator.completeInsertion(attemptID: original, isCancelled: false)
+        XCTAssertEqual(coordinator.phase, .inserting, "A post-await stale completion cannot reset the next attempt")
+        let current = coordinator.attemptID
+        coordinator.completeInsertion(attemptID: current, isCancelled: false)
+        XCTAssertEqual(completed, [current])
+        coordinator.completeInsertion(attemptID: current, isCancelled: false)
+        XCTAssertEqual(completed, [current])
+        showsHUD = false
+        coordinator.transition(to: .recording)
+        coordinator.transition(to: .transcribing)
+        coordinator.transition(to: .inserting)
+        coordinator.completeInsertion(attemptID: coordinator.attemptID, isCancelled: false)
+        XCTAssertEqual(completed, [current])
+        for error in [WhisperError.emptyTranscript as Error, TextInjectionError.eventCreationFailed,
+                      TextInjectionError.clipboardChanged, WhisperError.invalidAudio] {
+            coordinator.fail(DictationErrorPresentation(error: error))
+            XCTAssertEqual(completed, [current])
+            coordinator.cancel()
+        }
+    }
+
+    @MainActor
+    func testFeedbackLikeCancelAndOldTimersNeverWriteOrReachNewSession() throws {
+        let suite = "ResenhaFeedbackLifecycle.\(UUID())"
+        let defaults = try XCTUnwrap(CorrectionDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let preferences = ProductPreferences(defaults: defaults)
+        preferences.keepsHistory = false
+        let before = defaults.persistentDomain(forName: suite) ?? [:]
+        let panel = FloatingPanelController()
+        panel.configureFeedback(preferences: preferences)
+        panel.showTemporarily(.ready)
+        let timer = panel.dismissal.generation
+        let first = DictationCompletion(id: UUID(), targetApplication: nil)
+        panel.offerFeedback(first)
+        XCTAssertTrue(panel.hasFeedback)
+        XCTAssertFalse(panel.ignoresMouseEvents)
+        XCTAssertNil(panel.dismissal.deadline)
+        panel.dismissIfCurrent(generation: timer, now: .greatestFiniteMagnitude)
+        XCTAssertEqual(panel.feedbackToken, first.id)
+        panel.approveFeedback(token: first.id)
+        XCTAssertFalse(panel.hasFeedback)
+        XCTAssertTrue(panel.ignoresMouseEvents)
+        let next = DictationCompletion(id: UUID(), targetApplication: nil)
+        panel.offerFeedback(next)
+        panel.approveFeedback(token: first.id)
+        panel.openCorrection(token: first.id)
+        XCTAssertFalse(panel.isEditingCorrection)
+        panel.openCorrection(token: next.id)
+        XCTAssertTrue(panel.isEditingCorrection)
+        XCTAssertTrue(panel.ignoresMouseEvents)
+        XCTAssertEqual(panel.correctionDraft?.heard, "")
+        XCTAssertEqual(panel.correctionDraft?.canonical, "")
+        panel.updateCorrectionDraft(token: next.id, heard: "Coisa", canonical: "COESA")
+        let window = try XCTUnwrap(panel.correctionWindow)
+        XCTAssertTrue(window.canBecomeKey)
+        XCTAssertTrue(window.isVisible)
+        window.performClose(nil)
+        panel.saveCorrection(token: next.id)
+        XCTAssertFalse(panel.hasFeedback)
+        XCTAssertNil(panel.correctionDraft)
+        XCTAssertEqual(defaults.glossaryWrites, 0)
+        XCTAssertEqual(defaults.persistentDomain(forName: suite)! as NSDictionary, before as NSDictionary)
+        panel.hide()
+    }
+
+    @MainActor
+    func testCorrectionExplicitSavePreservesDraftOnValidationAndRollbackThenConsumesOnce() throws {
+        let suite = "ResenhaFeedbackSave.\(UUID())"
+        let defaults = try XCTUnwrap(CorrectionDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let preferences = ProductPreferences(defaults: defaults)
+        let panel = FloatingPanelController()
+        panel.configureFeedback(preferences: preferences)
+        let context = DictationCompletion(id: UUID(), targetApplication: nil)
+        panel.offerFeedback(context)
+        panel.openCorrection(token: context.id)
+        panel.saveCorrection(token: context.id)
+        XCTAssertTrue(panel.isEditingCorrection)
+        XCTAssertNotNil(panel.correctionError)
+        XCTAssertEqual(defaults.glossaryWrites, 0)
+        panel.updateCorrectionDraft(token: context.id, heard: "Coisa Energia", canonical: "COESA Energia")
+        defaults.divergeAfterWrite = true
+        panel.saveCorrection(token: context.id)
+        XCTAssertEqual(panel.feedbackToken, context.id)
+        XCTAssertTrue(panel.isEditingCorrection)
+        XCTAssertTrue(panel.canSaveCorrection)
+        XCTAssertEqual(panel.correctionDraft?.heard, "Coisa Energia")
+        XCTAssertEqual(panel.correctionDraft?.canonical, "COESA Energia")
+        XCTAssertTrue(panel.correctionError?.contains("restaurado") == true)
+        defaults.divergeAfterWrite = false
+        panel.saveCorrection(token: context.id)
+        XCTAssertFalse(panel.hasFeedback)
+        XCTAssertNil(panel.correctionDraft)
+        XCTAssertTrue(panel.status.title.contains("Regra salva"))
+        let writes = defaults.glossaryWrites
+        panel.saveCorrection(token: context.id)
+        XCTAssertEqual(defaults.glossaryWrites, writes)
+        let repeated = DictationCompletion(id: UUID(), targetApplication: nil)
+        panel.offerFeedback(repeated)
+        panel.openCorrection(token: repeated.id)
+        panel.updateCorrectionDraft(token: repeated.id, heard: "Coisa Energia", canonical: "COESA Energia")
+        panel.saveCorrection(token: repeated.id)
+        XCTAssertTrue(panel.status.title.contains("Regra já existente"))
+        XCTAssertEqual(defaults.glossaryWrites, writes)
+        panel.hide()
+    }
+
+    @MainActor
+    func testRollbackRecoveryCancelReloadAndRetiredTokens() throws {
+        let suite = "ResenhaFeedbackRecovery.\(UUID())"
+        let defaults = try XCTUnwrap(CorrectionDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let preferences = ProductPreferences(defaults: defaults)
+        let panel = FloatingPanelController()
+        panel.configureFeedback(preferences: preferences)
+        let original = UUID()
+        panel.offerFeedback(.init(id: original, targetApplication: nil))
+        panel.openCorrection(token: original)
+        panel.updateCorrectionDraft(token: original, heard: "Coisa", canonical: "COESA")
+        defaults.divergeAfterWrite = true
+        defaults.rejectRestoration = true
+        panel.saveCorrection(token: original)
+        XCTAssertFalse(panel.canSaveCorrection)
+        XCTAssertEqual(panel.feedbackToken, original)
+        let writes = defaults.glossaryWrites
+        let removals = defaults.glossaryRemovals
+        panel.saveCorrection(token: original)
+        panel.cancelFeedback(token: original, restoreFocus: false)
+        XCTAssertFalse(panel.isEditingCorrection)
+        XCTAssertNil(panel.feedbackToken)
+        XCTAssertTrue(panel.hasFeedback)
+        XCTAssertEqual(panel.correctionDraft?.heard, "Coisa")
+        XCTAssertNil(panel.approvalActionToken)
+        let recovery = try XCTUnwrap(panel.correctionActionToken)
+        defaults.unreadable = true
+        panel.openCorrection(token: recovery)
+        XCTAssertTrue(panel.isEditingCorrection)
+        XCTAssertFalse(panel.canSaveCorrection)
+        XCTAssertNil(panel.feedbackToken)
+        panel.saveCorrection(token: original)
+        panel.saveCorrection(token: recovery)
+        panel.cancelFeedback(token: recovery, restoreFocus: false)
+        let retry = try XCTUnwrap(panel.correctionActionToken)
+        XCTAssertNotEqual(retry, recovery)
+        defaults.unreadable = false
+        defaults.rejectRestoration = false
+        panel.openCorrection(token: retry)
+        let renewed = try XCTUnwrap(panel.feedbackToken)
+        XCTAssertNotEqual(renewed, original)
+        XCTAssertTrue(panel.canSaveCorrection)
+        XCTAssertEqual(panel.correctionDraft?.canonical, "COESA")
+        panel.cancelFeedback(token: recovery)
+        panel.saveCorrection(token: original)
+        XCTAssertTrue(panel.isEditingCorrection)
+        XCTAssertEqual(defaults.glossaryWrites, writes)
+        XCTAssertEqual(defaults.glossaryRemovals, removals)
+        panel.saveCorrection(token: renewed)
+        XCTAssertFalse(panel.hasFeedback)
+        XCTAssertTrue(panel.status.title.contains("Regra já existente"))
+        XCTAssertEqual(defaults.glossaryWrites, writes)
+        panel.hide()
+    }
+
+    @MainActor
+    func testFeedbackHotkeySelfReleaseExternalAndAltTabUseRealRoutingSeam() throws {
+        let app = AppDelegate()
+        let coordinator = DictationCoordinator(permissions: PermissionService(), panel: app.panel)
+        app.observeCoordinator(coordinator)
+        let original = UUID()
+        app.panel.offerFeedback(.init(id: original, targetApplication: nil))
+        XCTAssertTrue(app.acceptHotkeyPress(targetIsSelf: false), "An ignored offer retires on the same accepted press")
+        XCTAssertFalse(app.panel.hasFeedback)
+        app.handleHotkeyRelease()
+        let editing = UUID()
+        app.panel.offerFeedback(.init(id: editing, targetApplication: nil))
+        app.panel.openCorrection(token: editing)
+        app.panel.updateCorrectionDraft(token: editing, heard: "Coisa", canonical: "COESA")
+        XCTAssertFalse(app.acceptHotkeyPress(targetIsSelf: true))
+        XCTAssertEqual(coordinator.phase, .idle)
+        XCTAssertFalse(app.panel.hasFeedback)
+        XCTAssertTrue(app.interaction.isPressed)
+        XCTAssertFalse(app.acceptHotkeyPress(targetIsSelf: false))
+        app.handleHotkeyRelease()
+        XCTAssertFalse(app.acceptHotkeyPress(targetIsSelf: true), "Waiting for activation cannot dictate into Resenha")
+        app.handleHotkeyRelease()
+        XCTAssertTrue(app.acceptHotkeyPress(targetIsSelf: false))
+        app.handleHotkeyRelease()
+        let altTab = UUID()
+        app.panel.offerFeedback(.init(id: altTab, targetApplication: nil))
+        app.panel.openCorrection(token: altTab)
+        XCTAssertTrue(app.acceptHotkeyPress(targetIsSelf: false), "Alt-Tab permits immediate external dictation")
+        XCTAssertFalse(app.panel.hasFeedback)
+        XCTAssertFalse(app.panel.isEditingCorrection)
+        app.handleHotkeyRelease()
+        app.applicationWillTerminate(Notification(name: NSApplication.willTerminateNotification))
+    }
+
+    @MainActor
+    func testFeedbackMenuOldActionsAndRoutineStatusCannotChangeCurrentEditor() throws {
+        let app = AppDelegate()
+        app.observeCoordinator(DictationCoordinator(permissions: PermissionService(), panel: app.panel))
+        let menu = NativeMenuController(delegate: app)
+        menu.configure()
+        let original = UUID()
+        app.panel.offerFeedback(.init(id: original, targetApplication: nil))
+        menu.updateFeedback(approvalToken: app.panel.approvalActionToken, correctionToken: app.panel.correctionActionToken)
+        let oldApprove = try XCTUnwrap(menu.approvalMenuItem)
+        let oldCorrect = try XCTUnwrap(menu.correctionMenuItem)
+        XCTAssertTrue(oldApprove.isEnabled)
+        let current = UUID()
+        app.panel.offerFeedback(.init(id: current, targetApplication: nil))
+        menu.updateFeedback(approvalToken: app.panel.approvalActionToken, correctionToken: app.panel.correctionActionToken)
+        XCTAssertFalse(oldApprove === menu.approvalMenuItem)
+        app.approveTranscription(oldApprove)
+        app.correctTranscription(oldCorrect)
+        XCTAssertEqual(app.panel.feedbackToken, current)
+        XCTAssertFalse(app.panel.isEditingCorrection)
+        app.correctTranscription(try XCTUnwrap(menu.correctionMenuItem))
+        XCTAssertTrue(app.panel.isEditingCorrection)
+        app.showRoutineStatus(.ready)
+        app.showRoutineStatus(.failure("Atalho global indisponível"))
+        XCTAssertTrue(app.applyPermissionSnapshot(.init(microphone: true, inputMonitoring: true)))
+        XCTAssertTrue(app.panel.isEditingCorrection)
+        XCTAssertEqual(app.panel.feedbackToken, current)
+        XCTAssertFalse(app.applyPermissionSnapshot(.init(microphone: false, inputMonitoring: true)))
+        XCTAssertFalse(app.panel.hasFeedback)
+        XCTAssertNil(app.panel.correctionDraft)
+        app.panel.offerFeedback(.init(id: UUID(), targetApplication: nil))
+        app.applicationWillTerminate(Notification(name: NSApplication.willTerminateNotification))
+        XCTAssertFalse(app.panel.hasFeedback)
+        XCTAssertNil(app.panel.correctionDraft)
+        app.correctTranscription(oldCorrect)
+        XCTAssertFalse(app.panel.isEditingCorrection)
+    }
+
+    @MainActor
+    func testRecoveryDraftIsErasedOnNewDictationHUDOffAndTermination() throws {
+        for event in 0..<3 {
+            let suite = "ResenhaRecoveryDiscard.\(UUID())"
+            let defaults = try XCTUnwrap(CorrectionDefaults(suiteName: suite))
+            defer { defaults.removePersistentDomain(forName: suite) }
+            let preferences = ProductPreferences(defaults: defaults)
+            let app = AppDelegate()
+            app.observeCoordinator(DictationCoordinator(permissions: PermissionService(), panel: app.panel))
+            app.panel.configureFeedback(preferences: preferences)
+            let token = UUID()
+            app.panel.offerFeedback(.init(id: token, targetApplication: nil))
+            app.panel.openCorrection(token: token)
+            app.panel.updateCorrectionDraft(token: token, heard: "Coisa", canonical: "COESA")
+            defaults.divergeAfterWrite = true
+            defaults.rejectRestoration = true
+            app.panel.saveCorrection(token: token)
+            if event == 0 {
+                XCTAssertFalse(app.acceptHotkeyPress(targetIsSelf: true))
+                XCTAssertFalse(app.panel.isEditingCorrection)
+                XCTAssertNotNil(app.panel.correctionDraft)
+                XCTAssertFalse(app.acceptHotkeyPress(targetIsSelf: false))
+                app.handleHotkeyRelease()
+            } else {
+                app.panel.cancelFeedback(token: token, restoreFocus: false)
+            }
+            let recovery = try XCTUnwrap(app.panel.correctionActionToken)
+            let writes = defaults.glossaryWrites
+            switch event {
+            case 0: XCTAssertTrue(app.acceptHotkeyPress(targetIsSelf: false))
+            case 1: app.preferences.onHUDChange?(false)
+            default: app.applicationWillTerminate(Notification(name: NSApplication.willTerminateNotification))
+            }
+            XCTAssertFalse(app.panel.hasFeedback)
+            XCTAssertNil(app.panel.correctionDraft)
+            app.panel.openCorrection(token: recovery)
+            app.panel.saveCorrection(token: token)
+            XCTAssertFalse(app.panel.isEditingCorrection)
+            XCTAssertEqual(defaults.glossaryWrites, writes)
+            app.panel.hide()
+        }
+    }
+
     func testSafeErrorPresentationDoesNotExposeSubprocessOrUnknownErrorText() {
         let failure = DictationErrorPresentation(error: WhisperError.failed(7, "PRIVATE TRANSCRIPT"))
         XCTAssertEqual(failure.diagnostic, "Código de saída: 7")

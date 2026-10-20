@@ -1,5 +1,52 @@
 # Interface refinement — item 1 evidence
 
+## Local transcription feedback candidate — 20/10/2026, 11:41–11:49 BRT
+
+Status: **automated gate passed; physical evidence partial**. The historical sections below describe earlier revisions. This section does not mark the complete feedback acceptance/VoiceOver gate passed.
+
+### Provenance and environment
+
+Apple M5, arm64, 16 GB; macOS 26.1 (25B78). Branch `feat/transcription-feedback`; HEAD `7ce408579b260b30a932b47b4f3cbaa7c9e88904` plus the Step 03 uncommitted diff in `DictationCoordinator.swift`, `FloatingPanel.swift`, `NativeMenuController.swift`, `WhisperKeyApp.swift` and `WhisperKeyTests.swift`. SHA-256 of `git diff --binary --` restricted to those five files: `f694858b9f050298e56fcfa429289fc72c0e9b8def36949f53a66535b09f342e`. Step 04 changed only the three specs and this evidence document; product/test diff remained unchanged.
+
+| Artifact | SHA-256 / identity |
+|---|---|
+| Candidate `build/Build/Products/Debug/Resenha.app/Contents/MacOS/Resenha` | `b092604d77495b79ed59ed6573ee30dfc58bec401233ad423e07980722702146` |
+| Candidate `Resenha.debug.dylib` (implementation) | `04a09691f18a9eefee04195702a56e56e49485cdede7c005a57190dda13b9523` |
+| Candidate `__preview.dylib` | `a9e7615b19344b185e33893551c579ebdaa3e3a85fef75d4e94c92faabdafd64` |
+| Installed `/Applications/Resenha.app/Contents/MacOS/Resenha`, before and after | `2aae6550bbe8a309c8dc0ff5feb4c20212a2aaf9890563f65958b2ded70a695e` |
+
+The installed app was not overwritten, copied or re-signed. Its original PID 33938 was quit gracefully; the candidate ran from its explicit worktree build path as PID 38900. Both bundles have identifier `br.com.luisroquette.Resenha`, Team `S3YCFYY8SC`, the same Apple Development identity and identical designated requirement. Candidate `codesign --verify --deep --strict` succeeded. No TCC database/reset or grant was performed. The candidate displayed ready status and the existing `Option direita` shortcut; the restored installed app explicitly displayed all three permissions as enabled and local model ready.
+
+Initial system/UI inventory found AirPods selected as default input, rather than the requested built-in microphone. The reversible Sound → Input selection was restored to `Microfone (MacBook Pro)` before the test. UI selection and final `system_profiler SPAudioDataType` both confirmed the built-in input; no input-volume setting was edited. TTS used `say -a 79` to select built-in speakers for that one signal, without changing the default output. Local `ggml-large-v3-turbo-q5_0.bin` and `ggml-small-q5_1.bin` were already present in the unsandboxed model directory; successful recognition proves a local model loaded, but the exact loaded file was not independently captured for this run.
+
+Native gate supplied by Step 03 and independently read from its xcresult: **80 passed, 0 failed, 0 skipped**, `Test-WhisperKey-2026.10.20_11-40-18--0300.xcresult`, finished 11:40:41 BRT. Canonical invocation: `~/.local/bin/mac-gate xcodebuild -project WhisperKey.xcodeproj -scheme WhisperKey -destination 'platform=macOS' -derivedDataPath build test`. Log: `/tmp/resenha-feedback-step03-final-20261020.log`. No new code was changed during Step 04, so this unchanged passing gate was reused. `git diff --check` passed. Site/scripts were unaffected; no site/npm/Vercel build was run.
+
+### Observations, expected behavior and limits
+
+| Case / CK | Action → expected | Observed / result |
+|---|---|---|
+| Candidate identity / CK-10 | Launch exact candidate → one process at build path | **PASS, process/UI**: PID 38900 matched the worktree bundle; ready HUD and settings were accessible. Installed binary hash stayed unchanged. |
+| F1 / CK-1/10 | New disposable TextEdit document; hold/release configured shortcut around “A Coisa Energia chegou para o teste local.” → local capture, insertion, then feedback | **PASS for this synthesized-speech path**: explicitly authorized local JXA/CoreGraphics right-Option down/up, `say -a 79 -r 145` through built-in speakers and built-in microphone. TextEdit AX value became `A COISA Energia chegou para o teste local.`. System Events then exposed `Como foi a transcrição?` and two buttons in the actual candidate window. This is not human-speech or exact `COESA` correction proof. |
+| F1 negative states / CK-1 | Silence/error/processing → no actionable rating | **NOT RUN physically**. `testFeedbackCompletionRequiresCurrentSuccessfulInsertionAfterCleanup` covers eligible completion and stale/cancelled attempt guards deterministically. No failure was manufactured. |
+| F2–F4 / CK-2–6/9 | Like; editor invalid/Return/Escape; Save and relaunch → local-only correct state | **NOT RUN by the agent** after concurrent interaction. User separately reported manually trying the thumbs and correct/incorrect flow successfully; this is supplementary user evidence, without an observed phrase, validated Save, glossary comparison, focus sequence or relaunch proof. It does not establish those unobserved details. |
+| F5–F7 / CK-7/10 | Ignore offer/new dictation, editor hotkey, app switch, destination ended, refresh, history/HUD off → preserved target and retired actions | **NOT RUN physically**. A later independent dictation superseded the offer while another app was frontmost, so agent interactions stopped to avoid racing the user's session. Lifecycle/hotkey/menu/permission/recovery XCTest cover the listed contracts; simultaneous user activity is not a controlled continuity pass. |
+| Clipboard/focus / CK-10 | Compare staged clipboard and original target before/after each action | **PARTIAL**: TextEdit actually received the synthesized transcript. No clean clipboard baseline or continuous frontmost/caret observation was obtained; offer-only focus preservation, Return/Escape restoration and second-output correction remain **NOT RUN**. |
+| F2/F8 / CK-9 | Control-F8 entry and actual VoiceOver speech → named actions/errors/success | **NOT RUN**: Control-F8 through CUA left TextEdit's reported focus unchanged; SystemUIServer binding timed out. CUA retained an obsolete listening-window snapshot after insertion; fresh System Events contents exposed the feedback instead. VoiceOver was not enabled; no VoiceOver process was present in final inventory. AX text/fixtures are not spoken-announcement proof. |
+| F8 / CK-8 | Observe network throughout like/dislike/cancel/Save and offline repeat → no feedback transmission | **NOT RUN**: one process socket listing had no connection result, but no bounded observation over all four actions or offline repeat was completed. Source review found no network/analytics/dependency addition in feedback paths; that cannot substitute for the missing traffic observation. |
+| Cleanup / CK-10 | Quit candidate and reopen exact installed app → original usable installation/input | **PASS, process/UI**: candidate exited gracefully; installed app reopened as PID 51337 at `/Applications/Resenha.app/Contents/MacOS/Resenha`, showing `Pronto para usar`, three enabled permissions and local model ready. Final input was built-in `Microfone (MacBook Pro)`. Chrome, Terminal and pre-existing documents were not closed. |
+
+The disposable TextEdit document was created separately from the existing document and received only the test phrase. TextEdit auto-named it `Sem Título 2.rtf`; it was left available rather than deleting a document during concurrent use. History was enabled at observation time, so the ordinary existing history mechanism could retain the synthetic test transcript. No personal history/glossary was cleared, no draft was saved by the agent, and no claim is made that user-driven changes during the session were absent.
+
+### Deterministic and fixture evidence
+
+The 80-test result covers `testCorrectionCandidate*` boundaries/escaping/conflicts, `testCorrectionSave*` persistence/rollback, `testCorrectionRollbackFailureBlocksDirectSaveUntilVerifiedReloadWithoutWrites`, `testRollbackRecoveryCancelReloadAndRetiredTokens`, `testFeedback*` completion/lifecycle/menu/routing and `testRecoveryDraftIsErasedOnNewDictationHUDOffAndTermination`. The isolated Save → reconstructed preferences → real postprocessor scenario proves “Coisa Energia” → “COESA Energia” deterministically, with prior rules retained and whole-term boundaries. It does not prove a rule physically persisted/reapplied in this session. Rollback failures were test-only; no real storage corruption was induced.
+
+Current generated fixtures are under `/var/folders/7k/8wtpdcvn5f95c8s36d91t8k40000gn/T/ResenhaTests/ui-fixtures`, with feedback/editor files dated 20/10/2026 11:40. Step 04 inspected `hud-feedback-dark.png`, `correction-empty-light.png`, `correction-long-error-{light,dark,increased-contrast}.png` and `correction-small-error-dark.png`: controls/fields remain visible and normal-size error wraps. In the small fixture, long field values and the lower part of the long guidance exceed the initial viewport; source provides a ScrollView above the fixed action row, but physical scrolling/reading of that remainder was not tested. These are NSHostingView fixtures, not live screenshots or VoiceOver proof. An older similarly named container fixture folder dated 02/10 was not treated as candidate evidence.
+
+Remote PR head inventory was read only: #9 `0a6c7bcbee5a3da86b2378e71cc3466d3377947d`; #13 `758f9b13f272ed64d80981794c80dd15afe1440d`. Neither was integrated. Installed binary origin cannot be assigned to either PR from a build number/signing identity alone; its distinct hash is the observed identity.
+
+Remaining physical gates: controlled like/cancel/Save/defaults comparison; exact saved `Coisa Energia = COESA Energia` after relaunch and next dictation; keyboard entry/Return/Escape and VoiceOver speech; editor/hotkey/app-switch/ended-destination, HUD/history-off cases; clipboard/focus and bounded network/offline observation. The script is in [SPEC-008](../specs/08-testing.md). No pending case above is counted as a pass.
+
 ## Marca Resenha no produto — 02/10/2026
 
 - Símbolo original: balão de conversa com waveform em espaço negativo, gerado com fundo transparente.

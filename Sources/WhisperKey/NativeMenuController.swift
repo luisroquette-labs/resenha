@@ -36,6 +36,8 @@ final class NativeMenuController {
     private var instructionMenuItem: NSMenuItem!
     private var recentMenuItem: NSMenuItem!
     private var languageMenuItem: NSMenuItem!
+    private(set) var approvalMenuItem: NSMenuItem?
+    private(set) var correctionMenuItem: NSMenuItem?
     private var renderedSnapshot: PermissionSnapshot?
     private var renderedError: DictationErrorPresentation?
     private var isRecording = false
@@ -94,6 +96,15 @@ final class NativeMenuController {
         recentMenuItem = menu.addItem(withTitle: "Textos recentes", action: nil, keyEquivalent: "")
         recentMenuItem.image = menuSymbol("clock.arrow.circlepath")
         recentMenuItem.submenu = makeRecentMenu([])
+        approvalMenuItem = menu.addItem(withTitle: FloatingStatusView.approveLabel,
+            action: #selector(AppDelegate.approveTranscription), keyEquivalent: "")
+        correctionMenuItem = menu.addItem(withTitle: FloatingStatusView.correctLabel,
+            action: #selector(AppDelegate.correctTranscription), keyEquivalent: "")
+        for item in [approvalMenuItem, correctionMenuItem].compactMap({ $0 }) {
+            item.target = delegate
+            item.isEnabled = false
+            item.isHidden = true
+        }
         detailsMenuItem = menu.addItem(withTitle: "Detalhes do status", action: nil, keyEquivalent: "")
         detailsMenuItem.image = menuSymbol("exclamationmark.triangle")
         detailsMenuItem.isHidden = true
@@ -122,6 +133,26 @@ final class NativeMenuController {
         quitItem.target = delegate
         quitItem.image = menuSymbol("power")
         statusItem.menu = menu
+    }
+
+    func updateFeedback(approvalToken: UUID?, correctionToken: UUID?) {
+        approvalMenuItem = feedbackItem(approvalMenuItem, token: approvalToken)
+        correctionMenuItem = feedbackItem(correctionMenuItem, token: correctionToken)
+    }
+
+    private func feedbackItem(_ old: NSMenuItem?, token: UUID?) -> NSMenuItem? {
+        guard let old, let menu = old.menu else { return old }
+        guard old.representedObject as? UUID != token else { return old }
+        // Replace the item so an already queued action keeps its original session token.
+        let item = NSMenuItem(title: old.title, action: old.action, keyEquivalent: "")
+        item.target = delegate
+        item.representedObject = token
+        item.isEnabled = token != nil
+        item.isHidden = token == nil
+        let index = menu.index(of: old)
+        menu.removeItem(old)
+        menu.insertItem(item, at: index)
+        return item
     }
 
     func updateRecentTranscripts(_ items: [TranscriptHistoryItem], storageAvailable: Bool = true) {

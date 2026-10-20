@@ -121,6 +121,18 @@ O candidato com prompt reduziu o WER em 94% relativo. A contagem anterior de 96%
 - Cancelar ou encerrar um ditado invalida a tentativa e limpa seu áudio; não existe subprocesso externo.
 - API paga, telemetria e upload continuam proibidos sem decisão explícita posterior.
 
+## Correção explícita após o ditado
+
+Com o HUD ligado, uma inserção concluída e ainda atual oferece “Transcrição correta” e “Corrigir transcrição”, também no menu de status. Aprovar encerra a oferta sem guardar uma nota. Corrigir abre os campos vazios “Saiu como” e “Correto é”; somente Salvar válido adiciona `forma ouvida = forma final` ao glossário existente. Não é retreinamento do modelo. Salvar não reescreve texto já inserido, clipboard ou histórico; o próximo ditado lê o glossário atualizado.
+
+O Save usa o conteúdo atual de Ajustes, preserva suas linhas e confere o valor relido e o parser antes de confirmar. Rejeita campos vazios após trim, termos exatamente iguais, quebras de linha e `=` em qualquer campo. Correção apenas de caixa é permitida. Limites efetivos: linha serializada de 160 caracteres, 200 entradas aceitas antes da deduplicação, texto de 20.000 caracteres e prompt completo de 8.000. Excesso é recusado integralmente; não abre espaço truncando ou apagando entradas.
+
+Uma regra já efetiva e idêntica é um no-op (“Regra já existente”). Fonte equivalente sem distinguir caixa com destino diferente, inclusive conflito em linhas fora das primeiras 200, é rejeitada com orientação para edição explícita em Ajustes → Transcrição. Substituições mantêm limites de termos completos, escaping, prioridade por fonte mais longa e comportamento sequencial legado; não prometem correção semântica geral.
+
+Falha de escrita/read-back tenta restaurar e verificar a baseline anterior, conserva o draft e não confirma sucesso. Se o rollback também falhar, Save fica bloqueado, inclusive por Return. Cancelar fecha sem nova escrita e conserva somente esse par excepcional em memória para o mesmo resultado; reabrir a ação de correção verifica o armazenamento real antes de permitir nova confirmação. A baseline pode já conter a escrita anterior. Novo ditado, HUD desligado e encerramento descartam a recuperação. Não há `synchronize()`, promessa de flush síncrono ou criptografia: o glossário usa o UserDefaults local existente.
+
+Like, dislike, edição e cancelamento não criam persistência de feedback. Só o par confirmado muda o glossário; a preferência de histórico continua independente. Não se introduzem rede, analytics, login ou dependência. Os testes isolados de Save → reconstrução de preferências → pós-processador provam “A Coisa Energia chegou.” → “A COESA Energia chegou.”; voz real, foco, teclado/VoiceOver e observação de rede são evidências distintas, registradas em [UI-REFINEMENT-EVIDENCE](../testing/UI-REFINEMENT-EVIDENCE.md).
+
 ## Falhas e recuperação
 
 - Modelo ausente ou incompatível: explicar o caminho e não inserir texto parcial.

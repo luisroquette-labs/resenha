@@ -10,8 +10,8 @@ Communicate state without stealing focus from the target application.
 
 - One borderless, non-activating, floating panel, centered near the bottom of the target application's display.
 - SwiftUI content hosted in AppKit.
-- Compact status only; ordinary idle remains hidden. No persistent primary window or focusable HUD controls.
-- The panel ignores mouse events and is visible across Spaces as appropriate for a transient utility.
+- Ordinary idle remains hidden. Recording, processing, insertion and notices are passive status; completed transcription feedback is interactive.
+- The panel ignores mouse events except while offering feedback, and is visible across Spaces as appropriate for a transient utility.
 
 ## Requirements
 
@@ -24,6 +24,18 @@ Communicate state without stealing focus from the target application.
 ## Acceptance
 
 The focused text field remains focused while every pipeline status is displayed.
+
+## Post-transcription feedback
+
+After successful `insertStaged`, cleanup and a current-attempt check, an enabled HUD offers “Transcrição correta” and “Corrigir transcrição”. Failure, empty output, cancellation and insertion fallback do not offer success feedback. The offer is nonactivating, accepts mouse events and has no timeout; the status menu exposes the same actions with the current session token. Approval retires feedback without writing preferences or ratings. A new accepted dictation retires the old offer on that press.
+
+Only the explicit correction action activates Resenha and opens the normal, titled “Corrigir transcrição” window. It contains two initially empty labeled fields, “Saiu como” and “Correto é”, Salvar and Cancelar. The source field receives initial focus; Tab moves through controls, Return requests Save and Escape cancels. Invalid input retains both fields and displays/requests announcement of a textual error. A successful Save requests announcement of “Regra salva” or “Regra já existente” and presents a temporary passive notice. Actual VoiceOver delivery remains a separate physical gate.
+
+Normal cancel, Escape and close discard the draft. If Resenha is still frontmost and the original target is alive, closing requests its activation once; an app chosen meanwhile keeps focus. An unavailable target is never reopened and the notice asks the user to return to the text field. A hotkey press inside the editor cancels and consumes that press through release: “Solte e pressione novamente para ditar”. A fresh external press can then record. After switching to another external app, a fresh press discards the editor and uses that app. Permission refresh and routine ready status must not replace an active correction.
+
+Every action checks its session token, including queued menu items. Hiding the HUD, new dictation or termination clears feedback, closes the editor and restores pass-through. History being disabled does not disable feedback. A failed storage rollback is the one exceptional cancel path: Save/Return stay blocked; Cancelar closes without writing and retains the pair only in memory for the same result. Reopening the menu correction action explicitly reloads/verifies the actual stored baseline before issuing a new token and enabling Save. Failed reload retains draft/error; new dictation, HUD off and termination erase it. No background retry writes a rule.
+
+Interactive surfaces expose accessible children and Portuguese names; passive surfaces retain their combined status. Feedback/editor have their own bounded dimensions; recording geometry, waveform, contrast/transparency and Reduce Motion remain unchanged. See [SPEC-008](08-testing.md) for the physical script and [dated evidence](../testing/UI-REFINEMENT-EVIDENCE.md) for observed results and remaining gates.
 
 ## Delivered state contract
 
@@ -64,7 +76,7 @@ Acceptance: deterministic tests cover nonfinite input, clamping, monotonic scale
 
 Store 1.0 does not read another application's window through Accessibility. Retain the chosen display through the session; use the last valid external target mapping when available, then main/first. Exact target-window placement is deliberately not promised without a public sandbox-safe geometry source. Standalone feedback uses the current external app or latest known external target with the same fallback. Pointer position does not select the display.
 
-Refresh visibleFrame on presentation/display changes; recover from disconnected displays. Center horizontally, prefer visibleFrame.minY + 88 and clamp every edge with a 12-point margin, including negative coordinates. Preserve click-through, hidesOnDeactivate=false, canJoinAllSpaces/fullScreenAuxiliary and one physical panel.
+Refresh visibleFrame on presentation/display changes; recover from disconnected displays. Center horizontally, prefer visibleFrame.minY + 88 and clamp every edge with a 12-point margin, including negative coordinates. Preserve passive-state click-through, hidesOnDeactivate=false, canJoinAllSpaces/fullScreenAuxiliary and one physical status panel; the explicit correction uses its own normal window.
 
 The panel solely owns dismissal: replacement/hide cancels the prior task and invalidates its generation/deadline. Delayed hide applies only to the current generation. Failed → idle uses that completion. Check during activity updates the menu without replacing or queuing HUD feedback.
 

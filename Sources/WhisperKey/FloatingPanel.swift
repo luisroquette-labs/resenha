@@ -18,7 +18,41 @@ struct PanelDismissal {
 }
 
 @MainActor
-final class FloatingPanelController: NSObject {
+private final class CorrectionSession: ObservableObject {
+    let context: DictationCompletion
+    var token: UUID?
+    var recoveryID = UUID()
+    var isEditing = false
+    @Published var heard = ""
+    @Published var canonical = ""
+    @Published var errorMessage: String?
+    @Published var invalidField: TranscriptionCorrectionView.Field?
+    var actionID: UUID { token ?? recoveryID }
+
+    init(context: DictationCompletion) {
+        self.context = context
+        token = context.id
+    }
+}
+
+private struct CorrectionEditor: View {
+    @ObservedObject var session: CorrectionSession
+    @ObservedObject var preferences: ProductPreferences
+    let onSave: () -> Void
+    let onCancel: () -> Void
+
+    var body: some View {
+        TranscriptionCorrectionView(
+            heard: $session.heard, canonical: $session.canonical,
+            errorMessage: session.errorMessage, invalidField: session.invalidField,
+            isSaveEnabled: preferences.canSaveTranscriptionCorrection && session.token != nil,
+            onSave: onSave, onCancel: onCancel
+        )
+    }
+}
+
+@MainActor
+final class FloatingPanelController: NSObject, NSWindowDelegate {
     private let model = FloatingPanelModel()
     private lazy var panel: NSPanel = makePanel()
     private var dismissalTask: Task<Void, Never>?
@@ -28,6 +62,23 @@ final class FloatingPanelController: NSObject {
     private var screenSelection = PanelScreenSelection()
     private let clock: () -> TimeInterval
     private(set) var selectedScreenID: UInt32?
+    private var feedback: CorrectionSession?
+    private(set) var correctionWindow: NSWindow?
+    private var correctionPreferences: ProductPreferences?
+    var onFeedbackChange: (@MainActor () -> Void)?
+    var hasFeedback: Bool { feedback != nil }
+    var isEditingCorrection: Bool { feedback?.isEditing == true }
+    var feedbackToken: UUID? { feedback?.token }
+    var correctionActionToken: UUID? { feedback?.actionID }
+    var approvalActionToken: UUID? { isEditingCorrection ? nil : feedback?.token }
+    var correctionDraft: (heard: String, canonical: String)? {
+        feedback.map { ($0.heard, $0.canonical) }
+    }
+    var correctionError: String? { feedback?.errorMessage }
+    var canSaveCorrection: Bool {
+        isEditingCorrection && feedbackToken != nil && correctionPreferences?.canSaveTranscriptionCorrection == true
+    }
+    var ignoresMouseEvents: Bool { panel.ignoresMouseEvents }
     var isVisible: Bool { panel.isVisible }
     var status: FloatingStatus { model.status }
     var frame: CGRect { panel.frame }
@@ -52,9 +103,15 @@ final class FloatingPanelController: NSObject {
     }
 
     func show(_ status: FloatingStatus, target: PanelTarget = .standalone(nil)) {
+        discardFeedback()
+        present(status, target: target)
+    }
+
+    private func present(_ status: FloatingStatus, target: PanelTarget) {
         invalidateDismissal()
         self.target = target
         model.show(status, now: clock())
+        panel.ignoresMouseEvents = status != .feedback
         selectTargetScreen(target)
         positionPanel()
         panel.orderFrontRegardless()
@@ -77,10 +134,174 @@ final class FloatingPanelController: NSObject {
     }
 
     func hide() {
+        discardFeedback()
         invalidateDismissal()
         panel.orderOut(nil)
         screenSelection.endSession()
         model.recording = RecordingMeter()
+    }
+
+    func configureFeedback(preferences: ProductPreferences) {
+        correctionPreferences = preferences
+    }
+
+    func offerFeedback(_ context: DictationCompletion) {
+        hide()
+        feedback = CorrectionSession(context: context)
+        panel.contentView = NSHostingView(rootView: FloatingStatusView(model: model,
+            onApprove: { [weak self] in self?.approveFeedback(token: context.id) },
+            onCorrect: { [weak self] in self?.openCorrection(token: context.id) }))
+        present(.feedback, target: .session(context.targetApplication?.processIdentifier))
+        onFeedbackChange?()
+    }
+
+    func approveFeedback(token: UUID) {
+        guard approvalActionToken == token else { return }
+        hide()
+    }
+
+    func openCorrection(token: UUID) {
+        guard let session = feedback, session.actionID == token,
+              let preferences = correctionPreferences else { return }
+        if session.isEditing {
+            NSApplication.shared.activate(ignoringOtherApps: true)
+            correctionWindow?.makeKeyAndOrderFront(nil)
+            return
+        }
+        if session.token == nil || !preferences.canSaveTranscriptionCorrection {
+            if preferences.reloadTranscriptionGlossaryForCorrection() {
+                session.token = UUID()
+                session.errorMessage = nil
+            } else {
+                session.token = nil
+                session.errorMessage = ProductPreferences.CorrectionSaveResult.storageFailure(recoveryRequired: true).message
+            }
+        }
+        session.isEditing = true
+        invalidateDismissal()
+        panel.orderOut(nil)
+        panel.ignoresMouseEvents = true
+        let actionID = session.actionID
+        let window = NSWindow(contentRect: .zero, styleMask: [.titled, .closable],
+                              backing: .buffered, defer: false)
+        window.title = "Corrigir transcrição"
+        window.isReleasedWhenClosed = false
+        window.delegate = self
+        window.contentView = NSHostingView(rootView: CorrectionEditor(
+            session: session, preferences: preferences,
+            onSave: { [weak self] in self?.saveCorrection(token: actionID) },
+            onCancel: { [weak self] in self?.cancelFeedback(token: actionID) }
+        ))
+        let screen = NSScreen.screens.first { screenID($0) == selectedScreenID } ?? NSScreen.main
+        if let screen {
+            window.setContentSize(TranscriptionCorrectionView.panelSize(available: screen.visibleFrame.size))
+            window.setFrameOrigin(CGPoint(x: screen.visibleFrame.midX - window.frame.width / 2,
+                                          y: screen.visibleFrame.midY - window.frame.height / 2))
+        }
+        correctionWindow = window
+        onFeedbackChange?()
+        NSApplication.shared.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
+        if let error = session.errorMessage { announce(error) }
+    }
+
+    func updateCorrectionDraft(token: UUID, heard: String, canonical: String) {
+        guard let session = feedback, session.actionID == token, session.isEditing else { return }
+        session.heard = heard
+        session.canonical = canonical
+    }
+
+    func saveCorrection(token: UUID) {
+        guard let session = feedback, session.token == token, canSaveCorrection,
+              let preferences = correctionPreferences else { return }
+        let result = preferences.saveTranscriptionCorrection(heard: session.heard, canonical: session.canonical)
+        switch result {
+        case .saved, .alreadyExists:
+            announce(result.message)
+            let context = session.context
+            hide()
+            let restored = restoreTarget(context)
+            showTemporarily(.feedbackNotice(restored ? result.message : "\(result.message). Volte ao campo de texto para ditar"))
+        case .invalid, .storageFailure:
+            session.errorMessage = result.message
+            let invalidCharacters = CharacterSet.newlines.union(CharacterSet(charactersIn: "="))
+            let heardInvalid = session.heard.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                || session.heard.rangeOfCharacter(from: invalidCharacters) != nil
+            let canonicalInvalid = session.canonical.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                || session.canonical.rangeOfCharacter(from: invalidCharacters) != nil
+            session.invalidField = !heardInvalid && canonicalInvalid ? .canonical : .heard
+            announce(result.message)
+        }
+    }
+
+    func cancelCorrectionForHotkey(token: UUID) {
+        guard correctionActionToken == token, isEditingCorrection else { return }
+        let restored = cancelFeedback(token: token)
+        let guidance = FloatingStatus.feedbackNotice(restored
+            ? "Solte e pressione novamente para ditar"
+            : "Volte ao campo de texto. Solte e pressione novamente para ditar")
+        if hasFeedback {
+            // Recovery remains available until an external press actually starts the next dictation.
+            present(guidance, target: .standalone(nil))
+        } else {
+            showTemporarily(guidance)
+        }
+    }
+
+    @discardableResult
+    func cancelFeedback(token: UUID, restoreFocus: Bool = true) -> Bool {
+        guard let session = feedback, session.actionID == token else { return false }
+        let context = session.context
+        if session.isEditing && correctionPreferences?.canSaveTranscriptionCorrection == false {
+            session.token = nil
+            session.recoveryID = UUID()
+            session.isEditing = false
+            closeCorrectionWindow()
+            invalidateDismissal()
+            panel.orderOut(nil)
+            panel.ignoresMouseEvents = true
+            onFeedbackChange?()
+        } else {
+            hide()
+        }
+        if restoreFocus && !restoreTarget(context) {
+            present(.feedbackNotice("Volte ao campo de texto para ditar"), target: .standalone(nil))
+            return false
+        }
+        return true
+    }
+
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        guard sender === correctionWindow, let token = correctionActionToken else { return true }
+        cancelFeedback(token: token)
+        return false
+    }
+
+    private func closeCorrectionWindow() {
+        let window = correctionWindow
+        correctionWindow = nil
+        window?.delegate = nil
+        window?.close()
+    }
+
+    private func discardFeedback() {
+        guard feedback != nil else { return }
+        feedback = nil
+        closeCorrectionWindow()
+        panel.ignoresMouseEvents = true
+        onFeedbackChange?()
+    }
+
+    private func restoreTarget(_ context: DictationCompletion) -> Bool {
+        guard NSWorkspace.shared.frontmostApplication?.processIdentifier == ProcessInfo.processInfo.processIdentifier else { return true }
+        guard let application = context.targetApplication, !application.isTerminated,
+              application.processIdentifier != ProcessInfo.processInfo.processIdentifier else { return false }
+        return application.activate(options: [])
+    }
+
+    private func announce(_ message: String) {
+        NSAccessibility.post(element: correctionWindow ?? panel, notification: .announcementRequested,
+            userInfo: [.announcement: message, .priority: NSAccessibilityPriorityLevel.high.rawValue])
     }
 
     func updateRecordingLevel(_ level: Float) {

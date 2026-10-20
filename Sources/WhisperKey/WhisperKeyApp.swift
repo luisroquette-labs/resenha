@@ -15,7 +15,7 @@ struct WhisperKeyApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let logger = Logger(subsystem: "br.com.luisroquette.Resenha", category: "lifecycle")
     private let permissions = PermissionService()
-    private let panel = FloatingPanelController()
+    let panel = FloatingPanelController()
     private let hotkey = HotkeyMonitor()
     private let cuePlayer = DictationCuePlayer()
     private var coordinator: DictationCoordinator!
@@ -47,7 +47,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self.hotkey.configure(shortcut: shortcut)
             self.startHotkeyIfReady(showResult: true)
         }
-        preferences.onHUDChange = { [weak self] visible in if !visible { self?.panel.hide() } }
         observeCoordinator(DictationCoordinator(
             permissions: permissions,
             panel: panel,
@@ -78,10 +77,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func observeCoordinator(_ coordinator: DictationCoordinator) {
         self.coordinator = coordinator
         coordinator.onPhaseChange = { [weak self] _ in self?.updateStatusItem() }
+        coordinator.onCompleted = { [weak self] context in
+            guard let self, self.preferences.showsHUD else { return }
+            self.panel.offerFeedback(context)
+        }
+        panel.configureFeedback(preferences: preferences)
+        panel.onFeedbackChange = { [weak self] in self?.updateFeedbackMenu() }
+        preferences.onHUDChange = { [weak self] visible in if !visible { self?.panel.hide() } }
     }
 
     func configureHotkeyRouting() {
-        hotkey.onPress = { [weak self] in self?.handleHotkeyPress(targetIsSelf: false) }
+        hotkey.onPress = { [weak self] in self?.handleHotkeyPress() }
         hotkey.onRelease = { [weak self] in self?.handleHotkeyRelease() }
     }
 
@@ -90,10 +96,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func handleHotkeyPress(targetIsSelf: Bool? = nil) {
-        guard let coordinator, interaction.press(phase: coordinator.phase,
-            targetIsSelf: targetIsSelf ?? (NSWorkspace.shared.frontmostApplication?.processIdentifier
-                == ProcessInfo.processInfo.processIdentifier)) else { return }
+        guard acceptHotkeyPress(targetIsSelf: targetIsSelf) else { return }
         coordinator.hotkeyPressed()
+    }
+
+    func acceptHotkeyPress(targetIsSelf: Bool? = nil) -> Bool {
+        guard let coordinator else { return false }
+        let isSelf = targetIsSelf ?? (NSWorkspace.shared.frontmostApplication?.processIdentifier
+            == ProcessInfo.processInfo.processIdentifier)
+        let wasPressed = interaction.isPressed
+        let accepted = interaction.press(phase: coordinator.phase, targetIsSelf: isSelf)
+        if !wasPressed, isSelf, panel.isEditingCorrection, let token = panel.correctionActionToken {
+            panel.cancelCorrectionForHotkey(token: token)
+            return false
+        }
+        guard accepted else { return false }
+        panel.hide()
+        return true
     }
 
     func handleHotkeyRelease() {
@@ -108,7 +127,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         permissionTimer?.invalidate()
         hotkey.stop()
-        coordinator.cancel()
+        panel.hide()
+        coordinator?.cancel()
     }
 
     @objc func enablePermissions() {
@@ -145,6 +165,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc func showSettings() {
         settingsController.show()
+    }
+
+    @objc func approveTranscription(_ sender: NSMenuItem) {
+        guard let token = sender.representedObject as? UUID else { return }
+        panel.approveFeedback(token: token)
+    }
+
+    @objc func correctTranscription(_ sender: NSMenuItem) {
+        guard let token = sender.representedObject as? UUID else { return }
+        panel.openCorrection(token: token)
     }
 
     @objc func copyRecentTranscript(_ sender: NSMenuItem) {
@@ -190,18 +220,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func startHotkeyIfReady(showResult: Bool = false) {
         guard coordinator != nil else { return }
         let snapshot = permissions.snapshot
-        lastPermissionSnapshot = snapshot
-        updateStatusItem(snapshot)
-        guard snapshot.isReady else {
-            hotkeyFailureFeedback.lastAttemptFailed = false
-            hotkey.stop()
-            interaction.release()
-            coordinator.permissionLost(snapshot)
-            if showResult && coordinator.phase.acceptsStatusFeedback {
-                panel.showTemporarily(.failure(snapshot.missingPermissionMessage))
-            }
-            return
-        }
+        guard applyPermissionSnapshot(snapshot, showResult: showResult) else { return }
 
         coordinator.permissionsRestored()
         updateStatusItem(snapshot)
@@ -215,15 +234,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 didPlayLaunchReadyCue = true
                 cuePlayer.play(.ready, readySound: preferences.readySound)
             }
-            if (showResult || !wasRunning) && coordinator.phase.acceptsStatusFeedback {
-                panel.showTemporarily(.ready)
-            }
+            if showResult || !wasRunning { showRoutineStatus(.ready) }
         } catch {
             if hotkeyFailureFeedback.recordFailure(phase: coordinator.phase, explicitCheck: showResult) {
-                panel.showTemporarily(.failure("Atalho global indisponível"))
+                showRoutineStatus(.failure("Atalho global indisponível"))
             }
             updateStatusItem(snapshot)
         }
+    }
+
+    func applyPermissionSnapshot(_ snapshot: PermissionSnapshot, showResult: Bool = false) -> Bool {
+        guard let coordinator else { return false }
+        lastPermissionSnapshot = snapshot
+        updateStatusItem(snapshot)
+        guard !snapshot.isReady else { return true }
+        hotkeyFailureFeedback.lastAttemptFailed = false
+        hotkey.stop()
+        interaction.release()
+        if panel.hasFeedback { panel.hide() }
+        coordinator.permissionLost(snapshot)
+        if showResult { showRoutineStatus(.failure(snapshot.missingPermissionMessage)) }
+        return false
     }
 
     private func refreshPermissionState() {
@@ -233,6 +264,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
+    func showRoutineStatus(_ status: FloatingStatus) {
+        guard coordinator?.phase.acceptsStatusFeedback == true, !panel.hasFeedback, preferences.showsHUD else { return }
+        panel.showTemporarily(status)
+    }
+
     private func updateStatusItem(_ snapshot: PermissionSnapshot? = nil) {
         guard let coordinator else { return }
         let currentSnapshot = snapshot ?? permissions.snapshot
@@ -240,6 +276,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             error: coordinator.currentError, hotkeyUnavailable: hotkeyFailureFeedback.lastAttemptFailed,
             shortcut: preferences.shortcut)
         menuController.update(presentation, isRequestingPermission: interaction.isRequestingPermission)
+        updateFeedbackMenu()
         onboardingController.update(snapshot: currentSnapshot, isRequesting: interaction.isRequestingPermission)
     }
 
@@ -249,7 +286,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
     func menuDidClose(_ menu: NSMenu) { interaction.openMenuCount = max(0, interaction.openMenuCount - 1) }
 
-    private func configureMenuBar() { menuController.configure() }
+    private func configureMenuBar() {
+        menuController.configure()
+        updateFeedbackMenu()
+    }
+
+    private func updateFeedbackMenu() {
+        menuController.updateFeedback(approvalToken: panel.approvalActionToken, correctionToken: panel.correctionActionToken)
+    }
 
     private func recordTranscript(_ text: String) {
         guard preferences.keepsHistory else { return }

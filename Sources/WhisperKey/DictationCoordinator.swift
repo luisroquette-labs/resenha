@@ -1,5 +1,10 @@
 import AppKit
 
+struct DictationCompletion {
+    let id: UUID
+    let targetApplication: NSRunningApplication?
+}
+
 enum DictationPhase: Equatable {
     case idle
     case recording
@@ -85,10 +90,11 @@ final class DictationCoordinator {
         didSet { if oldValue != phase { onPhaseChange?(phase) } }
     }
     var onPhaseChange: (@MainActor (DictationPhase) -> Void)?
+    var onCompleted: (@MainActor (DictationCompletion) -> Void)?
     private(set) var currentError: DictationErrorPresentation?
     private var targetApplication: NSRunningApplication?
     private var task: Task<Void, Never>?
-    private var attemptID = UUID()
+    private(set) var attemptID = UUID()
     private let showsHUD: () -> Bool
     private let soundsEnabled: () -> Bool
     private let onTranscript: (String) -> Void
@@ -125,6 +131,7 @@ final class DictationCoordinator {
 
     func hotkeyPressed() {
         guard phase == .idle else { return }
+        panel.hide()
         attemptID = UUID()
         currentError = nil
         sessionLanguage = language()
@@ -179,8 +186,8 @@ final class DictationCoordinator {
                     self.transition(to: .inserting)
                     if self.showsHUD() { self.panel.show(.inserting, target: self.panelTarget) }
                     try await self.injector.insertStaged(into: self.targetApplication, changeCount: changeCount)
-                    self.transition(to: .idle)
-                    self.reset()
+                    try? FileManager.default.removeItem(at: audioURL)
+                    self.completeInsertion(attemptID: attemptID, isCancelled: Task.isCancelled)
                 } catch is CancellationError {
                     guard self.attemptID == attemptID else { return }
                     self.reset()
@@ -192,6 +199,14 @@ final class DictationCoordinator {
         } catch {
             fail(DictationErrorPresentation(error: error))
         }
+    }
+
+    // Called only after insertStaged returns successfully; identity is checked after its suspension.
+    func completeInsertion(attemptID: UUID, isCancelled: Bool) {
+        guard !isCancelled, self.attemptID == attemptID, phase == .inserting else { return }
+        let completion = DictationCompletion(id: attemptID, targetApplication: targetApplication)
+        reset()
+        if showsHUD() { onCompleted?(completion) }
     }
 
     func cancel() {
