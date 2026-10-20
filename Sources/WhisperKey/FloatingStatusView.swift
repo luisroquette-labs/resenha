@@ -16,7 +16,7 @@ enum FloatingStatus: Equatable {
         case .listening: "Ouvindo…"
         case .transcribing: "Transcrevendo…"
         case .inserting: "Inserindo…"
-        case .feedback: "Como foi a transcrição?"
+        case .feedback: "Avaliar transcrição"
         case .feedbackNotice(let message): message
         case .failure(let message): message
         }
@@ -83,6 +83,7 @@ struct FloatingStatusView: View {
     var onApprove: () -> Void = {}
     var onCorrect: () -> Void = {}
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorSchemeContrast) private var contrast
     @Environment(\.colorScheme) private var colorScheme
 
@@ -93,9 +94,6 @@ struct FloatingStatusView: View {
 
     @MainActor
     static func panelSize(for status: FloatingStatus, available: CGSize) -> CGSize {
-        if status == .feedback {
-            return CGSize(width: min(340, max(0, available.width - 24)), height: min(152, max(0, available.height - 24)))
-        }
         if status == .listening { return CGSize(width: 340, height: 72) }
         guard status.isFailure else { return CGSize(width: 280, height: 64) }
         let width = min(360, max(0, available.width - 24))
@@ -114,6 +112,7 @@ struct FloatingStatusView: View {
                 RecordingWaveformView(meter: model.recording, fixtureReduceMotion: fixtureReduceMotion)
             } else if model.status == .feedback {
                 feedbackContent
+                    .transition(.opacity)
             } else { statusContent }
         }
         .padding(.horizontal, 18)
@@ -136,26 +135,33 @@ struct FloatingStatusView: View {
                 )
         }
         .padding(4)
+        .animation((fixtureReduceMotion ?? reduceMotion) ? nil : .easeOut(duration: 0.12),
+                   value: model.status == .feedback)
+        .transaction {
+            if fixtureReduceMotion ?? reduceMotion { $0.animation = nil; $0.disablesAnimations = true }
+        }
         .accessibilityElement(children: model.status == .feedback ? .contain : .ignore)
         .accessibilityLabel(model.status.accessibilityLabel)
     }
 
     private var feedbackContent: some View {
-        VStack(spacing: 8) {
-            Text(model.status.title)
-                .font(.system(size: 14, weight: .semibold, design: .rounded))
+        HStack(spacing: 16) {
             ForEach(feedbackActions) { action in
                 Button(action: action.perform) {
-                    Group {
-                        if let symbol = action.symbol { Label(action.label, systemImage: symbol) }
-                        else { Text(action.label) }
-                    }.frame(maxWidth: .infinity)
+                    Label(action.label, systemImage: action.symbol ?? "")
+                        .labelStyle(.iconOnly)
+                        .font(.system(size: 16, weight: .medium))
+                        .frame(width: 36, height: 32)
                 }
+                .accessibilityLabel(action.label)
+                .accessibilityHint(action.label == Self.approveLabel
+                    ? "Encerra a avaliação sem salvar dados."
+                    : "Abre os campos Saiu como e Correto é para uma correção local.")
             }
         }
         .buttonStyle(.bordered)
-        .controlSize(.large)
-        .padding(.vertical, 12)
+        .controlSize(.regular)
+        .foregroundStyle(.primary)
     }
 
     private var statusContent: some View {

@@ -4,10 +4,12 @@ import SwiftUI
 struct PanelDismissal {
     private(set) var generation: UInt = 0
     private(set) var deadline: TimeInterval?
+    private(set) var feedbackToken: UUID?
 
-    mutating func invalidate(deadline: TimeInterval? = nil) {
+    mutating func invalidate(deadline: TimeInterval? = nil, feedbackToken: UUID? = nil) {
         generation &+= 1
         self.deadline = deadline
+        self.feedbackToken = feedbackToken
     }
 
     mutating func dismissIfCurrent(generation: UInt, now: TimeInterval) -> Bool {
@@ -123,13 +125,17 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
         onDismiss: (@MainActor () -> Void)? = nil
     ) {
         show(status, target: target)
-        dismissal.invalidate(deadline: ProcessInfo.processInfo.systemUptime + 2)
+        scheduleDismissal(after: 2)
         self.onDismiss = onDismiss
+    }
+
+    private func scheduleDismissal(after seconds: TimeInterval, feedbackToken: UUID? = nil) {
+        dismissal.invalidate(deadline: clock() + seconds, feedbackToken: feedbackToken)
         let generation = dismissal.generation
         dismissalTask = Task { [weak self] in
-            do { try await Task.sleep(for: .seconds(2)) } catch { return }
-            guard !Task.isCancelled else { return }
-            self?.dismissIfCurrent(generation: generation, now: ProcessInfo.processInfo.systemUptime)
+            do { try await Task.sleep(for: .seconds(seconds)) } catch { return }
+            guard !Task.isCancelled, let self else { return }
+            self.dismissIfCurrent(generation: generation, now: self.clock())
         }
     }
 
@@ -152,7 +158,9 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
             onApprove: { [weak self] in self?.approveFeedback(token: context.id) },
             onCorrect: { [weak self] in self?.openCorrection(token: context.id) }))
         present(.feedback, target: .session(context.targetApplication?.processIdentifier))
+        scheduleDismissal(after: 4, feedbackToken: context.id)
         onFeedbackChange?()
+        announce("Transcrição correta. Corrigir transcrição.")
     }
 
     func approveFeedback(token: UUID) {
@@ -163,6 +171,7 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
     func openCorrection(token: UUID) {
         guard let session = feedback, session.actionID == token,
               let preferences = correctionPreferences else { return }
+        invalidateDismissal()
         if session.isEditing {
             NSApplication.shared.activate(ignoringOtherApps: true)
             correctionWindow?.makeKeyAndOrderFront(nil)
@@ -178,7 +187,6 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
             }
         }
         session.isEditing = true
-        invalidateDismissal()
         panel.orderOut(nil)
         panel.ignoresMouseEvents = true
         let actionID = session.actionID
@@ -310,6 +318,9 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
     }
 
     func dismissIfCurrent(generation: UInt, now: TimeInterval) {
+        if let token = dismissal.feedbackToken {
+            guard feedback?.token == token, !isEditingCorrection, model.status == .feedback else { return }
+        }
         guard dismissal.dismissIfCurrent(generation: generation, now: now) else { return }
         let completion = onDismiss
         hide()

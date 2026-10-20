@@ -27,7 +27,9 @@ The focused text field remains focused while every pipeline status is displayed.
 
 ## Post-transcription feedback
 
-After successful `insertStaged`, cleanup and a current-attempt check, an enabled HUD offers “Transcrição correta” and “Corrigir transcrição”. Failure, empty output, cancellation and insertion fallback do not offer success feedback. The offer is nonactivating, accepts mouse events and has no timeout; the status menu exposes the same actions with the current session token. Approval retires feedback without writing preferences or ratings. A new accepted dictation retires the old offer on that press.
+After successful `insertStaged`, cleanup and a current-attempt check, an enabled HUD offers “Transcrição correta” and “Corrigir transcrição”. Failure, empty output, cancellation and insertion fallback do not offer success feedback. The offer reuses the processing panel's 280 × 64 frame, position and material: only two small thumb icons in native buttons, without a visible title or separate card. It remains nonactivating and accepts mouse events. Labels and hints name both actions; a single accessibility announcement requests their availability. The status menu exposes the same actions with the current session token.
+
+The passive offer expires at the monotonic deadline `now + 4 seconds`. The existing dismissal task checks generation, original token and still-passive feedback state before clearing the offer/menu and hiding the panel. Expiration and approval write no preferences or ratings and show no notice. Opening correction invalidates the timer before opening its window; drafts, errors and Save never expire. A new accepted dictation retires the old offer on that press. Old timers cannot close later offers, recording, editors or notices.
 
 Only the explicit correction action activates Resenha and opens the normal, titled “Corrigir transcrição” window. It contains two initially empty labeled fields, “Saiu como” and “Correto é”, Salvar and Cancelar. The source field receives initial focus; Tab moves through controls, Return requests Save and Escape cancels. Invalid input retains both fields and displays/requests announcement of a textual error. A successful Save requests announcement of “Regra salva” or “Regra já existente” and presents a temporary passive notice. Actual VoiceOver delivery remains a separate physical gate.
 
@@ -35,7 +37,7 @@ Normal cancel, Escape and close discard the draft. If Resenha is still frontmost
 
 Every action checks its session token, including queued menu items. Hiding the HUD, new dictation or termination clears feedback, closes the editor and restores pass-through. History being disabled does not disable feedback. A failed storage rollback is the one exceptional cancel path: Save/Return stay blocked; Cancelar closes without writing and retains the pair only in memory for the same result. Reopening the menu correction action explicitly reloads/verifies the actual stored baseline before issuing a new token and enabling Save. Failed reload retains draft/error; new dictation, HUD off and termination erase it. No background retry writes a rule.
 
-Interactive surfaces expose accessible children and Portuguese names; passive surfaces retain their combined status. Feedback/editor have their own bounded dimensions; recording geometry, waveform, contrast/transparency and Reduce Motion remain unchanged. See [SPEC-008](08-testing.md) for the physical script and [dated evidence](../testing/UI-REFINEMENT-EVIDENCE.md) for observed results and remaining gates.
+Interactive surfaces expose accessible children and Portuguese names; passive surfaces retain their combined status. Feedback matches processing dimensions; the editor retains its own bounded dimensions. The feedback opacity transition lasts 0.12 seconds; Reduce Motion disables it without changing the four-second deadline. Recording geometry, waveform and contrast/transparency remain unchanged. See [SPEC-008](08-testing.md) for the physical script and [dated evidence](../testing/UI-REFINEMENT-EVIDENCE.md) for observed results and remaining gates.
 
 ## Delivered state contract
 
@@ -46,6 +48,7 @@ Interactive surfaces expose accessible children and Portuguese names; passive su
 | Recording | `Listening` and monospaced `mm:ss`; release instruction remains in menu/accessibility status | Steady mist-green dot and 48 microphone-driven rounded bars | Entire recording interval |
 | Transcribing | `Transcribing…` | Native indeterminate progress | Entire transcription interval |
 | Inserting | `Inserting…` | Same progress footprint | Until actual insertion completion |
+| Feedback | No visible text; named accessible buttons | Two thumb icons in the processing frame | 4 seconds; correction cancels expiration |
 | Failure | Concise cause / `Open the WhisperKey menu for help` | Warning symbol | Approximately 2 seconds; recovery stays in menu |
 
 Ready/processing states use 280 × 64 points, a 20-point indicator slot, 12-point gap, 18-point horizontal inset and 4-point outer margin. Titles use 14-point semibold system font; secondary copy uses 12-point regular system font with a 3-point gap. The background uses an 18-point radius, regularMaterial and semantic colors. One-line processing states are vertically centered. Listening alone uses a horizontally arranged 340 × 72 capsule, clamped by the same fresh visible-frame rules.

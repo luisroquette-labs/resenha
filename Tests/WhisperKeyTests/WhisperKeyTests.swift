@@ -1075,7 +1075,7 @@ final class WhisperKeyTests: XCTestCase {
         panel.offerFeedback(first)
         XCTAssertTrue(panel.hasFeedback)
         XCTAssertFalse(panel.ignoresMouseEvents)
-        XCTAssertNil(panel.dismissal.deadline)
+        XCTAssertNotNil(panel.dismissal.deadline)
         panel.dismissIfCurrent(generation: timer, now: .greatestFiniteMagnitude)
         XCTAssertEqual(panel.feedbackToken, first.id)
         panel.approveFeedback(token: first.id)
@@ -1102,6 +1102,97 @@ final class WhisperKeyTests: XCTestCase {
         XCTAssertEqual(defaults.glossaryWrites, 0)
         XCTAssertEqual(defaults.persistentDomain(forName: suite)! as NSDictionary, before as NSDictionary)
         panel.hide()
+    }
+
+    @MainActor
+    func testFeedbackDeadlineExpiresOnlyCurrentPassiveOfferWithoutWrites() throws {
+        let suite = "ResenhaFeedbackTimeout.\(UUID())"
+        let defaults = try XCTUnwrap(CorrectionDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let preferences = ProductPreferences(defaults: defaults)
+        let before = defaults.persistentDomain(forName: suite) ?? [:]
+        var now: TimeInterval = 100
+        let panel = FloatingPanelController(clock: { now })
+        defer { panel.hide() }
+        panel.configureFeedback(preferences: preferences)
+        var menuToken: UUID?
+        panel.onFeedbackChange = { menuToken = panel.approvalActionToken }
+        let first = DictationCompletion(id: UUID(), targetApplication: nil)
+        panel.show(.inserting, target: .session(nil))
+        let processingFrame = panel.frame
+        panel.offerFeedback(first)
+        XCTAssertEqual(panel.frame, processingFrame)
+        XCTAssertEqual(panel.frame.size, CGSize(width: 280, height: 64))
+        XCTAssertEqual(panel.dismissal.deadline, 104)
+        XCTAssertEqual(panel.dismissal.feedbackToken, first.id)
+        let generation = panel.dismissal.generation
+        panel.dismissIfCurrent(generation: generation, now: 103.999)
+        XCTAssertTrue(panel.isVisible)
+        XCTAssertEqual(menuToken, first.id)
+        XCTAssertEqual(panel.feedbackToken, first.id)
+        now = 104
+        panel.dismissIfCurrent(generation: generation, now: now)
+        XCTAssertFalse(panel.isVisible)
+        XCTAssertFalse(panel.hasFeedback)
+        XCTAssertNil(panel.feedbackToken)
+        XCTAssertNil(panel.correctionActionToken)
+        XCTAssertNil(menuToken)
+        XCTAssertTrue(panel.ignoresMouseEvents)
+        XCTAssertEqual(defaults.glossaryWrites, 0)
+        XCTAssertEqual((defaults.persistentDomain(forName: suite) ?? [:]) as NSDictionary, before as NSDictionary)
+    }
+
+    @MainActor
+    func testFeedbackTimerCannotReachReplacementEditorRecordingNoticeOrHiddenHUD() throws {
+        let suite = "ResenhaFeedbackStaleTimeout.\(UUID())"
+        let defaults = try XCTUnwrap(CorrectionDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let preferences = ProductPreferences(defaults: defaults)
+        let before = defaults.persistentDomain(forName: suite) ?? [:]
+        var now: TimeInterval = 100
+        let panel = FloatingPanelController(clock: { now })
+        defer { panel.hide() }
+        panel.configureFeedback(preferences: preferences)
+        panel.offerFeedback(.init(id: UUID(), targetApplication: nil))
+        let oldGeneration = panel.dismissal.generation
+        now = 102
+        let next = UUID()
+        panel.offerFeedback(.init(id: next, targetApplication: nil))
+        let currentGeneration = panel.dismissal.generation
+        panel.dismissIfCurrent(generation: oldGeneration, now: 104)
+        XCTAssertEqual(panel.feedbackToken, next)
+        XCTAssertEqual(panel.dismissal.deadline, 106)
+        XCTAssertTrue(panel.isVisible)
+        panel.openCorrection(token: next)
+        XCTAssertNil(panel.dismissal.deadline)
+        XCTAssertNil(panel.dismissal.feedbackToken)
+        panel.updateCorrectionDraft(token: next, heard: "Coisa", canonical: "")
+        panel.saveCorrection(token: next)
+        let error = try XCTUnwrap(panel.correctionError)
+        panel.dismissIfCurrent(generation: currentGeneration, now: .greatestFiniteMagnitude)
+        XCTAssertTrue(panel.isEditingCorrection)
+        XCTAssertTrue(panel.correctionWindow?.isVisible == true)
+        XCTAssertEqual(panel.feedbackToken, next)
+        XCTAssertEqual(panel.correctionDraft?.heard, "Coisa")
+        XCTAssertEqual(panel.correctionError, error)
+        for state in [FloatingStatus.listening, .feedbackNotice("Regra salva")] {
+            panel.offerFeedback(.init(id: UUID(), targetApplication: nil))
+            let generation = panel.dismissal.generation
+            panel.show(state)
+            panel.dismissIfCurrent(generation: generation, now: .greatestFiniteMagnitude)
+            XCTAssertEqual(panel.status, state)
+            XCTAssertTrue(panel.isVisible)
+            XCTAssertFalse(panel.hasFeedback)
+        }
+        panel.offerFeedback(.init(id: UUID(), targetApplication: nil))
+        let hiddenGeneration = panel.dismissal.generation
+        panel.hide()
+        panel.dismissIfCurrent(generation: hiddenGeneration, now: .greatestFiniteMagnitude)
+        XCTAssertFalse(panel.hasFeedback)
+        XCTAssertFalse(panel.isVisible)
+        XCTAssertNil(panel.dismissal.deadline)
+        XCTAssertEqual(defaults.glossaryWrites, 0)
+        XCTAssertEqual((defaults.persistentDomain(forName: suite) ?? [:]) as NSDictionary, before as NSDictionary)
     }
 
     @MainActor
@@ -1363,7 +1454,7 @@ final class WhisperKeyTests: XCTestCase {
         XCTAssertEqual(failure.secondary, "Abra o menu do Resenha para obter ajuda")
         XCTAssertTrue(failure.accessibilityLabel.contains("Microfone indisponível"))
         XCTAssertFalse(failure.isBusy)
-        XCTAssertEqual(FloatingStatus.feedback.title, "Como foi a transcrição?")
+        XCTAssertEqual(FloatingStatus.feedback.title, "Avaliar transcrição")
         XCTAssertNil(FloatingStatus.feedback.secondary)
         XCTAssertFalse(FloatingStatus.feedback.isBusy)
         for message in ["Regra salva", "Regra já existente", "Solte e pressione novamente para ditar"] {
@@ -1376,13 +1467,17 @@ final class WhisperKeyTests: XCTestCase {
     }
 
     @MainActor
-    func testFeedbackViewsUseOwnDimensionsAndClampSmallScreens() {
+    func testFeedbackUsesProcessingDimensionsAndEditorClampsSmallScreens() {
         XCTAssertEqual(FloatingStatusView.panelSize(for: .feedback, available: CGSize(width: 1440, height: 900)),
-            CGSize(width: 340, height: 152))
+            CGSize(width: 280, height: 64))
+        for state in [FloatingStatus.transcribing, .inserting] {
+            XCTAssertEqual(FloatingStatusView.panelSize(for: state, available: CGSize(width: 1440, height: 900)),
+                FloatingStatusView.panelSize(for: .feedback, available: CGSize(width: 1440, height: 900)))
+        }
         XCTAssertEqual(TranscriptionCorrectionView.panelSize(available: CGSize(width: 1440, height: 900)),
             CGSize(width: 440, height: 360))
         let smallScreen = CGSize(width: 320, height: 320)
-        XCTAssertEqual(FloatingStatusView.panelSize(for: .feedback, available: smallScreen), CGSize(width: 296, height: 152))
+        XCTAssertEqual(FloatingStatusView.panelSize(for: .feedback, available: smallScreen), CGSize(width: 280, height: 64))
         XCTAssertEqual(TranscriptionCorrectionView.panelSize(available: smallScreen), CGSize(width: 296, height: 296))
         XCTAssertEqual(FloatingStatusView.panelSize(for: .feedbackNotice("Regra salva"), available: smallScreen),
             CGSize(width: 280, height: 64))
@@ -1619,7 +1714,7 @@ final class WhisperKeyTests: XCTestCase {
                     }
                 }
                 let size = FloatingStatusView.panelSize(for: state, available: CGSize(width: 1440, height: 900))
-                if state == .feedback { XCTAssertEqual(size, CGSize(width: 340, height: 152)) }
+                if state == .feedback { XCTAssertEqual(size, CGSize(width: 280, height: 64)) }
                 else {
                     if state == .listening { XCTAssertEqual(size, CGSize(width: 340, height: 72)) }
                     else if !state.isFailure { XCTAssertEqual(size, CGSize(width: 280, height: 64)) }

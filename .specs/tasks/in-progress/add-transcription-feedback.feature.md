@@ -377,7 +377,7 @@ Phase 3 — refinamento do feedback observado pelo usuário
 | 02 — Views acessíveis [DONE] | 1 | sonnet | developer | None | 01 | [.specs/sub-tasks/add-transcription-feedback/02-feedback-views.md](../../sub-tasks/add-transcription-feedback/02-feedback-views.md) |
 | 03 — Sessão e integração nativa [DONE] | 2 | opus | developer | 01, 02 | None | [.specs/sub-tasks/add-transcription-feedback/03-native-feedback-lifecycle.md](../../sub-tasks/add-transcription-feedback/03-native-feedback-lifecycle.md) |
 | 04 — Prova e documentação [DONE] | 2 | sonnet | developer | 03 | None | [.specs/sub-tasks/add-transcription-feedback/04-physical-evidence-and-specs.md](../../sub-tasks/add-transcription-feedback/04-physical-evidence-and-specs.md) |
-| 05 — Feedback compacto e temporizado | 3 | opus | developer | 04 | None | [.specs/sub-tasks/add-transcription-feedback/05-compact-timed-feedback.md](../../sub-tasks/add-transcription-feedback/05-compact-timed-feedback.md) |
+| 05 — Feedback compacto e temporizado [DONE] | 3 | opus | developer | 04 | None | [.specs/sub-tasks/add-transcription-feedback/05-compact-timed-feedback.md](../../sub-tasks/add-transcription-feedback/05-compact-timed-feedback.md) |
 
 Largura máxima real: **2**; caminhos críticos: **01 → 03 → 04 → 05** e **02 → 03 → 04 → 05**. 01/02 dividem somente o arquivo XCTest, em regiões diferentes, sem formatação global. 03 depende de ambos os contratos, 04 prova o primeiro candidato e 05 corrige o refinamento visual/temporal observado no uso real; não há paralelismo adicional correto. O passo 05 e sua revisão usam opus porque timer, token, geometria, mouse e acessibilidade compartilham o lifecycle do painel; não é somente ajuste cosmético.
 
@@ -426,7 +426,7 @@ Rubrics:
 - Acessibilidade da correção.
 - Project Guidelines Alignment.
 
-#### Phase 3 — Oferta compacta, temporizada e instalada
+#### Phase 3 — Oferta compacta, temporizada e instalada [REVIEWED]
 
 Steps: 05.
 
