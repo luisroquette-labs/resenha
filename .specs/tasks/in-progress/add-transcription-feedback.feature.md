@@ -68,7 +68,7 @@ Permitir que quem dita no Resenha avalie rapidamente o resultado no HUD e ensine
 
 **Regular Checks:**
 
-- [ ] CK-1–CK-11: executar `~/.local/bin/mac-gate xcodebuild -project WhisperKey.xcodeproj -scheme WhisperKey -destination 'platform=macOS' -derivedDataPath build test`, conforme README e SPEC-008; preparar framework embarcado e projeto Xcode pelas instruções existentes se ausentes. Não executar `next build` nem inventar script npm para o app nativo.
+- [X] CK-1–CK-11: executar `~/.local/bin/mac-gate xcodebuild -project WhisperKey.xcodeproj -scheme WhisperKey -destination 'platform=macOS' -derivedDataPath build test`, conforme README e SPEC-008; preparar framework embarcado e projeto Xcode pelas instruções existentes se ausentes. Não executar `next build` nem inventar script npm para o app nativo.
 - [X] CK-4–CK-8: revisar diff e testes de preferências/glossário para limites, preservação de dados, ausência de persistência de rascunho e ausência de chamadas de rede/telemetria introduzidas.
 - [ ] CK-1–CK-3, CK-7, CK-9–CK-11: validar app real em TextEdit, incluindo continuidade visual, timeout, teclado, VoiceOver, Reduce Motion, gravação seguinte, clipboard e foco; registrar ambiente, commit, resultado e limitações em evidência de teste, sem conteúdo pessoal.
 - [X] CK-10: executar `~/.local/bin/mac-gate node --test Scripts/site.test.mjs` somente se o diff atingir site/scripts cobertos pelo workflow existente. O workflow de site e eventual preview do site não provam comportamento do app nativo.
@@ -223,9 +223,9 @@ Test Cases to Cover:
 
 - [ ] CK-1–CK-11 demonstrados por casos acima; nenhuma regra é aprendida antes da confirmação e nenhum dado pessoal adicional é persistido ou enviado.
 - [X] Cenário “Coisa Energia” → “COESA Energia” provado com regra persistida e próxima saída corrigida, preservando entradas anteriores e texto já inserido.
-- [ ] Gates locais aplicáveis verdes via mac-gate após o refinamento compacto/temporizado; erros conhecidos corrigidos sem afrouxar checks, dependências ou privacidade.
+- [X] Gates locais aplicáveis verdes via mac-gate após o refinamento compacto/temporizado; erros conhecidos corrigidos sem afrouxar checks, dependências ou privacidade.
 - [ ] Evidência física datada por commit cobre ditado, foco, teclado e VoiceOver; itens não executados são declarados como pendência, nunca como sucesso.
-- [ ] Spec, testes e documentação de uso/privacidade refletem o fluxo compacto e temporizado final; revisão do diff confirma escopo limitado e ausência de API paga, analytics ou novo serviço.
+- [X] Spec, testes e documentação de uso/privacidade refletem o fluxo compacto e temporizado final; revisão do diff confirma escopo limitado e ausência de API paga, analytics ou novo serviço.
 
 ## Architecture Overview
 
@@ -236,6 +236,8 @@ Implementar uma sessão efêmera de feedback depois da conclusão da inserção,
 Referências normativas deste plano: [skill de feedback](../../../.claude/skills/resenha-transcription-feedback/SKILL.md), [análise de impacto](../../analysis/analysis-add-transcription-feedback.md), [judge 2a](../../reports/judge-2a-transcription-feedback.md), [judge 2b](../../reports/judge-2b-transcription-feedback.md) e [judge 2c](../../reports/judge-2c-transcription-feedback.md). Os caminhos são relativos à task tanto em `draft/` quanto em `todo/`. A decisão de **rejeitar conflitos**, abaixo, especializa e substitui a recomendação genérica de atualização por Save da skill; não existe substituição silenciosa.
 
 Base inspecionada: `origin/main` em `9e674c3ddeee8f7e05b8289f2e5c20ceba55fbc5`. PR #9 e PR #13 são divergências a reavaliar contra a main atualizada antes da implementação, inclusive origem do binário instalado; não são dependências, nem autorização para integrar suas branches. Preservar o waveform de gravação da base efetiva. Testar um binário desta task não valida automaticamente o app instalado de PR #9.
+
+Para a Phase 4, o PR #13 permanece somente referência de leitura. Portar manualmente apenas a composição SwiftUI do orbe/auréola de `RecordingWaveformView.swift` no commit `758f9b13f272ed64d80981794c80dd15afe1440d`; não integrar a branch nem o PNG do site. O refinamento das bolhas usa somente recursos nativos e preserva os contratos de sessão, timeout e acessibilidade já entregues.
 
 ### Decisions and tradeoffs
 
@@ -369,6 +371,11 @@ Phase 3 — refinamento do feedback observado pelo usuário
                 [05 HUD compacto + timeout + regressões]
                                       |
                               review opus
+                                      |
+Phase 4 — auréola restaurada e feedback com profundidade
+                [06 orbe + bolhas 3D + regressões]
+                                      |
+                              review opus
 ```
 
 | Step | Phase | Model | Agent | Depends on | Parallel with | Sub-Task File |
@@ -378,8 +385,9 @@ Phase 3 — refinamento do feedback observado pelo usuário
 | 03 — Sessão e integração nativa [DONE] | 2 | opus | developer | 01, 02 | None | [.specs/sub-tasks/add-transcription-feedback/03-native-feedback-lifecycle.md](../../sub-tasks/add-transcription-feedback/03-native-feedback-lifecycle.md) |
 | 04 — Prova e documentação [DONE] | 2 | sonnet | developer | 03 | None | [.specs/sub-tasks/add-transcription-feedback/04-physical-evidence-and-specs.md](../../sub-tasks/add-transcription-feedback/04-physical-evidence-and-specs.md) |
 | 05 — Feedback compacto e temporizado [DONE] | 3 | opus | developer | 04 | None | [.specs/sub-tasks/add-transcription-feedback/05-compact-timed-feedback.md](../../sub-tasks/add-transcription-feedback/05-compact-timed-feedback.md) |
+| 06 — Auréola animada e bolhas de feedback 3D | 4 | opus | developer | 05 | None | [.specs/sub-tasks/add-transcription-feedback/06-animated-halo-feedback-bubbles.md](../../sub-tasks/add-transcription-feedback/06-animated-halo-feedback-bubbles.md) |
 
-Largura máxima real: **2**; caminhos críticos: **01 → 03 → 04 → 05** e **02 → 03 → 04 → 05**. 01/02 dividem somente o arquivo XCTest, em regiões diferentes, sem formatação global. 03 depende de ambos os contratos, 04 prova o primeiro candidato e 05 corrige o refinamento visual/temporal observado no uso real; não há paralelismo adicional correto. O passo 05 e sua revisão usam opus porque timer, token, geometria, mouse e acessibilidade compartilham o lifecycle do painel; não é somente ajuste cosmético.
+Largura máxima real: **2**; caminhos críticos: **01 → 03 → 04 → 05 → 06** e **02 → 03 → 04 → 05 → 06**. 01/02 dividem somente o arquivo XCTest, em regiões diferentes, sem formatação global. 03 depende de ambos os contratos, 04 prova o primeiro candidato, 05 corrige o refinamento visual/temporal observado no uso real e 06 restaura o orbe e aprofunda apenas a apresentação dos controles; não há paralelismo adicional correto. Os passos 05/06 e suas revisões usam opus porque animação, timer, token, geometria, mouse e acessibilidade compartilham o lifecycle do painel; não são somente ajustes cosméticos.
 
 ### Phase Overview
 
@@ -442,6 +450,27 @@ Checklist items:
 - CK-9: labels/hints dos ícones, hit targets, contraste, VoiceOver e Reduce Motion sem alterar deadline.
 - CK-10: gate via mac-gate, candidato instalado atribuível ao SHA, TextEdit/clipboard/foco e app reaberto.
 - CK-2, CK-3, CK-8: like/expiração não escrevem; dislike mantém editor local existente; nenhuma rede, dependência, inference ou glossário novo.
+
+Rubrics:
+- Feedback explícito e continuidade do ditado.
+- Privacidade local do aprendizado.
+- Acessibilidade da correção.
+- Project Guidelines Alignment.
+
+#### Phase 4 — Auréola restaurada e bolhas ascendentes
+
+Steps: 06.
+
+Reviewer model: opus — o diff visual deve permanecer pequeno, mas precisa reconciliar o PR #13 divergente, animações SwiftUI, identidade de apresentação, timeout e targets acessíveis sem criar um segundo lifecycle.
+
+Acceptance Criteria that should be fulfiled: o listening recupera o orbe/auréola reativo do piloto dentro do frame `340×72`; a oferta continua no mesmo HUD `280×64`, mas seus dois controles parecem pequenas bolhas 3D que emergem, sobem e desaparecem gradualmente durante a janela de 4 segundos. Reduce Motion remove deslocamento/stagger e conserva fade simples. O editor e todos os guards de geração+token permanecem iguais. Gate, fixtures, revisão e instalação usam o mesmo candidato; observação física não executada continua declarada como pendência.
+
+Checklist items:
+- CK-1: orbe no listening e bolhas no feedback sem salto de janela, cartão, título visível ou novo painel.
+- CK-7, CK-11: animação sem timer/dismiss paralelo; deadline 4s, editor persistente e callbacks antigos inócuos.
+- CK-9: target `44×44`, labels/hints/teclado/VoiceOver, light/dark, contraste, transparência e Reduce Motion.
+- CK-10: gate via mac-gate, fixtures inspecionadas e binário instalado atribuível ao SHA final.
+- CK-2, CK-3, CK-8: like/dislike/editor e privacidade continuam inalterados; sem asset, dependência, API ou telemetria.
 
 Rubrics:
 - Feedback explícito e continuidade do ditado.
