@@ -1358,6 +1358,9 @@ final class WhisperKeyTests: XCTestCase {
         XCTAssertEqual(targets.count, 2)
         XCTAssertEqual(NSWorkspace.shared.frontmostApplication?.processIdentifier, activePID)
         let labels = [FloatingStatusView.approveLabel, FloatingStatusView.correctLabel]
+        let visual = try XCTUnwrap(NSApplication.shared.windows.first {
+            $0.frame == panel.frame && $0.ignoresMouseEvents
+        })
         for (index, target) in targets.enumerated() {
             XCTAssertEqual(target.frame.size, CGSize(width: 44, height: 44))
             XCTAssertEqual(target.frame.midY, panel.frame.midY)
@@ -1365,8 +1368,10 @@ final class WhisperKeyTests: XCTestCase {
             XCTAssertFalse(target.ignoresMouseEvents)
             XCTAssertFalse(target.canBecomeKey)
             XCTAssertFalse(target.canBecomeMain)
-            let visual = try XCTUnwrap(target.parent)
+            XCTAssertNil(target.parent)
             XCTAssertTrue(visual.ignoresMouseEvents)
+            XCTAssertFalse(visual.hasShadow)
+            XCTAssertEqual(visual.backgroundColor?.alphaComponent, 0)
             XCTAssertEqual(target.level, visual.level)
             XCTAssertEqual(target.collectionBehavior, visual.collectionBehavior)
             let button = try XCTUnwrap(target.contentView as? NSButton)
@@ -1400,6 +1405,59 @@ final class WhisperKeyTests: XCTestCase {
         XCTAssertTrue(panel.isEditingCorrection)
         XCTAssertEqual(panel.activePresentationTaskCount, 0)
         XCTAssertEqual(panel.feedbackPhase, .hidden)
+        XCTAssertTrue(panel.feedbackTargetWindows.isEmpty)
+    }
+
+    @MainActor
+    func testFeedbackWindowServerRoutesMouseClickToCorrectionAndPassesBackgroundThrough() async throws {
+        let suite = "ResenhaFeedbackMouseRouting.\(UUID())"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let panel = FloatingPanelController(clock: { 100 })
+        defer { panel.hide() }
+        panel.configureFeedback(preferences: ProductPreferences(defaults: defaults))
+        panel.show(.ready)
+        let underneath = NSWindow(contentRect: panel.frame, styleMask: .borderless, backing: .buffered, defer: false)
+        underneath.isReleasedWhenClosed = false
+        underneath.backgroundColor = .white
+        underneath.level = .floating
+        underneath.orderFrontRegardless()
+        defer { underneath.close() }
+        let token = UUID()
+        panel.offerFeedback(.init(id: token, targetApplication: nil))
+        let targets = panel.feedbackTargetWindows
+        targets.forEach { $0.displayIfNeeded() }
+        // Let the WindowServer commit the pixels before asking which window receives a real mouse-down.
+        try await Task.sleep(for: .milliseconds(100))
+        for target in targets {
+            let point = CGPoint(x: target.frame.midX, y: target.frame.midY)
+            XCTAssertEqual(NSWindow.windowNumber(at: point, belowWindowWithWindowNumber: 0), target.windowNumber)
+        }
+        for point in [CGPoint(x: panel.frame.minX + 8, y: panel.frame.midY),
+                      CGPoint(x: panel.frame.midX, y: panel.frame.midY)] {
+            XCTAssertEqual(NSWindow.windowNumber(at: point, belowWindowWithWindowNumber: 0), underneath.windowNumber)
+        }
+        let correction = try XCTUnwrap(targets.last)
+        let point = CGPoint(x: correction.frame.midX, y: correction.frame.midY)
+        let receiver = NSWindow.windowNumber(at: point, belowWindowWithWindowNumber: 0)
+        guard receiver == correction.windowNumber else {
+            XCTFail("WindowServer routing bypassed correction overlay")
+            return
+        }
+        XCTAssertEqual(panel.feedbackToken, token)
+        XCTAssertEqual(panel.dismissal.deadline, 104)
+        let location = correction.convertPoint(fromScreen: point)
+        let down = try XCTUnwrap(NSEvent.mouseEvent(with: .leftMouseDown, location: location, modifierFlags: [],
+            timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: receiver, context: nil,
+            eventNumber: 1, clickCount: 1, pressure: 1))
+        let up = try XCTUnwrap(NSEvent.mouseEvent(with: .leftMouseUp, location: location, modifierFlags: [],
+            timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: receiver, context: nil,
+            eventNumber: 2, clickCount: 1, pressure: 0))
+        NSApplication.shared.postEvent(up, atStart: true)
+        NSApplication.shared.sendEvent(down)
+        XCTAssertTrue(panel.isEditingCorrection)
+        XCTAssertTrue(panel.correctionWindow?.isVisible == true)
+        XCTAssertNil(panel.dismissal.deadline)
         XCTAssertTrue(panel.feedbackTargetWindows.isEmpty)
     }
 
@@ -1843,24 +1901,30 @@ final class WhisperKeyTests: XCTestCase {
 
     func testFeedbackBubbleMotionStaysBoundedAndReduceMotionRemovesTravel() {
         XCTAssertEqual(FeedbackBubbleMotion.targetSize, 44)
-        XCTAssertEqual(FeedbackBubbleMotion.visualSize, 36)
+        XCTAssertEqual(FeedbackBubbleMotion.visualSize, 32)
         XCTAssertEqual(FeedbackBubbleMotion.duration, 4)
 
         let firstEntry = FeedbackBubbleMotion.state(elapsed: 0.1, index: 0, reduceMotion: false)
         let secondEntry = FeedbackBubbleMotion.state(elapsed: 0.1, index: 1, reduceMotion: false)
-        XCTAssertGreaterThan(firstEntry.opacity, secondEntry.opacity)
-        XCTAssertLessThan(firstEntry.offset, secondEntry.offset)
+        XCTAssertEqual(firstEntry, secondEntry) // No stagger or independent animation clock.
 
         let settled = FeedbackBubbleMotion.state(elapsed: 1, index: 1, reduceMotion: false)
-        XCTAssertEqual(settled, FeedbackBubbleVisualState(opacity: 1, offset: 0, bubbleScale: 1))
+        XCTAssertEqual(settled.opacity, 1)
+        XCTAssertEqual(settled.offset, 8 - 12 / 3.25, accuracy: 0.001)
+        XCTAssertEqual(settled.bubbleScale, 1)
+        let fadeStart = FeedbackBubbleMotion.state(elapsed: 3.25, index: 0, reduceMotion: false)
+        XCTAssertEqual(fadeStart.opacity, 1)
+        XCTAssertEqual(fadeStart.offset, -4)
         let exiting = FeedbackBubbleMotion.state(elapsed: 4, index: 0, reduceMotion: false)
         XCTAssertEqual(exiting.opacity, 0)
-        XCTAssertEqual(exiting.offset, -14)
-        XCTAssertEqual(exiting.bubbleScale, 1.04)
-        XCTAssertLessThanOrEqual(
-            FeedbackBubbleMotion.visualSize * exiting.bubbleScale,
-            FeedbackBubbleMotion.targetSize
-        )
+        XCTAssertEqual(exiting.offset, -12)
+        XCTAssertEqual(exiting.bubbleScale, 1)
+        XCTAssertEqual(FeedbackBubbleMotion.state(elapsed: 0, index: 0, reduceMotion: false).offset - exiting.offset, 20)
+        XCTAssertEqual(FeedbackBubblePhase.hidden.elapsed, 4)
+        XCTAssertEqual(FeedbackBubblePhase.entering.elapsed, 0)
+        XCTAssertEqual(FeedbackBubblePhase.resting.elapsed, 3.25)
+        XCTAssertEqual(FeedbackBubblePhase.exiting.elapsed, 4)
+        XCTAssertLessThanOrEqual(FeedbackBubbleMotion.visualSize, FeedbackBubbleMotion.targetSize)
 
         for time in [TimeInterval.nan, -1, 0, 0.5, 3.5, 4, 8] {
             let animated = FeedbackBubbleMotion.state(elapsed: time, index: 0, reduceMotion: false)
@@ -1868,14 +1932,58 @@ final class WhisperKeyTests: XCTestCase {
             XCTAssertTrue(animated.offset.isFinite)
             XCTAssertTrue(animated.bubbleScale.isFinite)
             XCTAssertTrue((0...1).contains(animated.opacity))
-            XCTAssertTrue((-14...10).contains(animated.offset))
-            XCTAssertTrue((0.84...1.04).contains(animated.bubbleScale))
+            XCTAssertTrue((-12...8).contains(animated.offset))
+            XCTAssertEqual(animated.bubbleScale, 1)
 
             let reduced = FeedbackBubbleMotion.state(elapsed: time, index: 1, reduceMotion: true)
             XCTAssertEqual(reduced.offset, 0)
             XCTAssertEqual(reduced.bubbleScale, 1)
-            XCTAssertTrue((0...1).contains(reduced.opacity))
+            XCTAssertEqual(reduced.opacity, animated.opacity)
         }
+    }
+
+    @MainActor
+    func testFeedbackGlyphOnlyFixturesHaveNoCardBorderOrBubbleBackground() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("ResenhaTests/feedback-glyphs", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let appearances: [(String, ColorScheme, Bool, Bool)] = [
+            ("light", .light, false, false), ("dark", .dark, false, false),
+            ("contrast", .light, true, false), ("opaque", .dark, true, false),
+            ("reduced-motion", .light, false, true)
+        ]
+        for (name, scheme, contrast, reduceMotion) in appearances {
+            for elapsed in [0.0, 2.0, 4.0] {
+                let model = FloatingPanelModel()
+                model.show(.feedback, now: 100)
+                let view = FloatingStatusView(model: model, fixtureContrast: contrast ? .increased : .standard,
+                    fixtureReduceTransparency: name == "opaque", fixtureReduceMotion: reduceMotion,
+                    fixtureFeedbackElapsed: elapsed).environment(\.colorScheme, scheme).frame(width: 280, height: 64)
+                let renderer = ImageRenderer(content: view)
+                renderer.scale = 2
+                let bitmap = NSBitmapImageRep(cgImage: try XCTUnwrap(renderer.cgImage))
+                var paintedPixels = 0
+                var outsideGlyphPixels = 0
+                let offset = FeedbackBubbleMotion.state(elapsed: elapsed, index: 0, reduceMotion: reduceMotion).offset
+                // Glyph + minimal shadow only; the 44pt bounds exclude a title, card and border.
+                let glyphBounds = [110.0, 170.0].map {
+                    CGRect(x: $0 - 22, y: 32 + offset - 22, width: 44, height: 44)
+                }
+                for y in 0..<bitmap.pixelsHigh {
+                    for x in 0..<bitmap.pixelsWide {
+                        guard let color = bitmap.colorAt(x: x, y: y), color.alphaComponent > 0.01 else { continue }
+                        paintedPixels += 1
+                        let point = CGPoint(x: Double(x) / 2, y: Double(y) / 2)
+                        if !glyphBounds.contains(where: { $0.contains(point) }) { outsideGlyphPixels += 1 }
+                    }
+                }
+                XCTAssertEqual(outsideGlyphPixels, 0, "\(name) elapsed=\(elapsed): no paint outside glyphs")
+                if elapsed == 4 { XCTAssertEqual(paintedPixels, 0) }
+                else { XCTAssertGreaterThan(paintedPixels, 100) }
+                let data = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
+                try data.write(to: directory.appendingPathComponent("feedback-\(name)-\(Int(elapsed)).png"))
+            }
+        }
+        print("Feedback glyph fixtures: \(directory.path)")
     }
 
     func testScreenChoiceUsesIntersectionThenCenterAndDeterministicTie() {

@@ -84,36 +84,27 @@ enum FeedbackBubblePhase: Equatable {
 
     var elapsed: TimeInterval {
         switch self {
-        case .hidden, .entering: 0
-        case .resting: 1
-        case .exiting: 4
+        case .entering: 0
+        case .resting: 3.25
+        case .hidden, .exiting: 4
         }
     }
 }
 
 enum FeedbackBubbleMotion {
     static let targetSize: CGFloat = 44
-    static let visualSize: CGFloat = 36
+    static let visualSize: CGFloat = 32
     static let duration: TimeInterval = 4
 
     static func state(elapsed: TimeInterval, index: Int, reduceMotion: Bool) -> FeedbackBubbleVisualState {
         let time = max(0, min(duration, elapsed.isFinite ? elapsed : 0))
-        let exit = smooth((time - 3.25) / 0.65)
-        if reduceMotion {
-            let opacity = smooth(time / 0.14) * (1 - exit)
-            return FeedbackBubbleVisualState(opacity: opacity, offset: 0, bubbleScale: 1)
-        }
-        let entry = smooth((time - Double(index) * 0.07) / 0.28)
+        let restingProgress = min(1, time / 3.25)
+        let exitProgress = max(0, min(1, (time - 3.25) / 0.75))
         return FeedbackBubbleVisualState(
-            opacity: entry * (1 - exit),
-            offset: (1 - entry) * 10 - exit * 14,
-            bubbleScale: 0.84 + entry * 0.16 + exit * 0.04
+            opacity: 1 - exitProgress,
+            offset: reduceMotion ? 0 : 8 - 12 * restingProgress - 8 * exitProgress,
+            bubbleScale: 1
         )
-    }
-
-    private static func smooth(_ value: Double) -> Double {
-        let bounded = max(0, min(1, value))
-        return bounded * bounded * (3 - 2 * bounded)
     }
 }
 
@@ -165,21 +156,25 @@ struct FloatingStatusView: View {
         .padding(.horizontal, 18)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background {
-            let shape = RoundedRectangle(cornerRadius: model.status == .listening ? 32 : 18)
-            if fixtureReduceTransparency ?? reduceTransparency {
-                shape.fill(colorScheme == .dark ? ResenhaTheme.ink : ResenhaTheme.paper)
-            } else {
-                shape.fill(.regularMaterial)
-                    .overlay(shape.fill((colorScheme == .dark ? ResenhaTheme.ink : ResenhaTheme.paper).opacity(0.28)))
+            if model.status != .feedback {
+                let shape = RoundedRectangle(cornerRadius: model.status == .listening ? 32 : 18)
+                if fixtureReduceTransparency ?? reduceTransparency {
+                    shape.fill(colorScheme == .dark ? ResenhaTheme.ink : ResenhaTheme.paper)
+                } else {
+                    shape.fill(.regularMaterial)
+                        .overlay(shape.fill((colorScheme == .dark ? ResenhaTheme.ink : ResenhaTheme.paper).opacity(0.28)))
+                }
             }
         }
         .overlay {
-            RoundedRectangle(cornerRadius: model.status == .listening ? 32 : 18)
-                .stroke(
-                    (model.status == .listening || model.status.isFailure ? ResenhaTheme.signal : Color.primary)
-                        .opacity((fixtureContrast ?? contrast) == .increased ? 0.78 : 0.18),
-                    lineWidth: (fixtureContrast ?? contrast) == .increased ? 1.5 : 1
-                )
+            if model.status != .feedback {
+                RoundedRectangle(cornerRadius: model.status == .listening ? 32 : 18)
+                    .stroke(
+                        (model.status == .listening || model.status.isFailure ? ResenhaTheme.signal : Color.primary)
+                            .opacity((fixtureContrast ?? contrast) == .increased ? 0.78 : 0.18),
+                        lineWidth: (fixtureContrast ?? contrast) == .increased ? 1.5 : 1
+                    )
+            }
         }
         .padding(4)
         .animation((fixtureReduceMotion ?? reduceMotion) ? nil : .easeOut(duration: 0.12),
@@ -248,17 +243,17 @@ private struct FeedbackBubblesView: View {
                     elapsed: fixtureElapsed ?? phase.elapsed, index: index, reduceMotion: reduceMotion
                 )
                 Button(action: action.perform) {
-                    FeedbackBubble(action: action, index: index, increasedContrast: increasedContrast)
+                    FeedbackBubble(index: index, increasedContrast: increasedContrast)
                         .scaleEffect(state.bubbleScale)
                         .frame(width: FeedbackBubbleMotion.targetSize, height: FeedbackBubbleMotion.targetSize)
                 }
                 .buttonStyle(.plain)
-                .contentShape(Circle())
+                .contentShape(Rectangle())
                 .opacity(state.opacity)
                 .offset(y: state.offset)
                 .animation(fixtureElapsed != nil ? nil :
-                    .easeInOut(duration: phase == .exiting ? 0.65 : (reduceMotion ? 0.14 : 0.28))
-                        .delay(phase == .resting && !reduceMotion ? Double(index) * 0.07 : 0),
+                    (phase == .resting ? .easeOut(duration: 3.25) :
+                        (phase == .exiting ? .easeIn(duration: 0.75) : nil)),
                     value: phase)
                 .accessibilityLabel(action.label)
                 .accessibilityHint(action.label == FloatingStatusView.approveLabel
@@ -270,40 +265,16 @@ private struct FeedbackBubblesView: View {
 }
 
 private struct FeedbackBubble: View {
-    let action: TranscriptionFeedbackAction
     let index: Int
     let increasedContrast: Bool
 
-    private var colors: [Color] {
-        index == 0
-            ? [Color(red: 0.24, green: 0.86, blue: 0.65), Color(red: 0.05, green: 0.48, blue: 0.40)]
-            : [Color(red: 0.95, green: 0.42, blue: 0.69), Color(red: 0.49, green: 0.22, blue: 0.76)]
-    }
-
     var body: some View {
-        ZStack {
-            Circle()
-                .fill(LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing))
-                .overlay {
-                    Circle()
-                        .fill(RadialGradient(
-                            colors: [.white.opacity(0.68), .clear],
-                            center: .init(x: 0.32, y: 0.24), startRadius: 0, endRadius: 19
-                        ))
-                }
-                .overlay {
-                    Circle().stroke(.white.opacity(increasedContrast ? 0.9 : 0.42),
-                                    lineWidth: increasedContrast ? 1.5 : 1)
-                }
-                .shadow(color: colors.last?.opacity(0.42) ?? .clear, radius: 4, y: 3)
-            Image(systemName: action.symbol ?? "")
-                .symbolVariant(.fill)
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(.white)
-                .shadow(color: .black.opacity(0.22), radius: 1, y: 1)
-        }
-        .frame(width: FeedbackBubbleMotion.visualSize, height: FeedbackBubbleMotion.visualSize)
-        .accessibilityHidden(true)
+        Text(index == 0 ? "👍" : "👎")
+            .font(.system(size: 30))
+            .shadow(color: .white.opacity(increasedContrast ? 0.44 : 0.24), radius: 0.5, y: -0.5)
+            .shadow(color: .black.opacity(increasedContrast ? 0.42 : 0.28), radius: 2, y: 2)
+            .frame(width: FeedbackBubbleMotion.visualSize, height: FeedbackBubbleMotion.visualSize)
+            .accessibilityHidden(true)
     }
 }
 

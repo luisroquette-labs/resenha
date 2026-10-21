@@ -183,6 +183,7 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
         self.target = target
         model.show(status, now: clock())
         panel.ignoresMouseEvents = true
+        panel.hasShadow = status != .feedback
         if panel.contentView == nil {
             panel.contentView = NSHostingView(rootView: FloatingStatusView(model: model, feedbackIsVisualOnly: true))
         }
@@ -466,7 +467,8 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
         for index in 0..<2 {
             let overlay = FeedbackTargetPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel],
                                               backing: .buffered, defer: false)
-            overlay.backgroundColor = .clear
+            // A fully clear window is skipped by WindowServer mouse routing.
+            overlay.backgroundColor = NSColor.black.withAlphaComponent(0.01)
             overlay.isOpaque = false
             overlay.hasShadow = false
             overlay.level = panel.level
@@ -486,8 +488,8 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
             }
             overlay.contentView = button
             feedbackTargets.append(overlay)
-            panel.addChildWindow(overlay, ordered: .above)
-            // Attaching a child adds ignoresCycle; apply the shared policy afterward.
+            // Keep independent screen-space windows: attaching the transparent HUD's
+            // children before their first order can leave WindowServer bounds parent-relative.
             overlay.collectionBehavior = panel.collectionBehavior
         }
         positionFeedbackTargets()
@@ -498,7 +500,6 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
         model.feedbackPhase = .hidden
         for overlay in feedbackTargets {
             (overlay.contentView as? FeedbackTargetButton)?.handler = nil
-            panel.removeChildWindow(overlay)
             overlay.orderOut(nil)
             overlay.contentView = nil
             overlay.close()

@@ -23,9 +23,10 @@ validate_release_entitlements() {
   [[ "${entitlements:l}" != *testmanagerd* ]] || { release_fail "entitlement de testmanagerd proibido"; return 1; }
   [[ "${entitlements:l}" != *coresymbolicationd* ]] || { release_fail "entitlement de coresymbolicationd proibido"; return 1; }
   [[ "$entitlements" != *com.apple.security.app-sandbox* ]] || { release_fail "App Sandbox não pode estar ativo"; return 1; }
-  # The direct Release currently needs no entitlement. New privileges need an explicit contract change.
-  [[ "$(print -r -- "$entitlements" | plutil -convert json -o - - | jq 'length')" == 0 ]] || {
-    release_fail "entitlements fora do conjunto permitido (dict vazio)"; return 1
+  # Hardened Runtime requires Audio Input even when TCC already records consent.
+  # Exact equality rejects missing/false/non-Boolean values and every extra privilege.
+  [[ "$(print -r -- "$entitlements" | plutil -convert json -o - - | jq '. == {"com.apple.security.device.audio-input": true}')" == true ]] || {
+    release_fail "entitlements devem conter somente com.apple.security.device.audio-input=true"; return 1
   }
 }
 
