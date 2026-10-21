@@ -163,4 +163,7 @@ false positives, 7 unauthorized mutations and 10 harmful changes, while
 
 ## Phase 1 review
 
-- Status: NOT RUN until Task 6 Step 7.
+Phase 1: PASS (4.8/5); essential CK/HR failures: 0
+
+- Phase 1 artifact SHA-256: a440ead9ccd86152aee9c290ad3278784828c9f3ae0e683ec8b0e69df5eb85be
+- Findings disposition: keyed Decisions provenance corrected; exact 100-row audit table and family matrix embedded; no product change required.
