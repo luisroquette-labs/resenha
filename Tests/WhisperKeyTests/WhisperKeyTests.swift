@@ -845,6 +845,18 @@ final class WhisperKeyTests: XCTestCase {
         XCTAssertTrue(app.isHotkeyRoutingConfigured)
     }
 
+    @MainActor
+    func testReopeningMenuBarAppShowsSettings() throws {
+        let app = AppDelegate()
+
+        XCTAssertTrue(app.applicationShouldHandleReopen(NSApplication.shared, hasVisibleWindows: false))
+
+        let window = try XCTUnwrap(NSApplication.shared.windows.first {
+            $0.title == "Ajustes do Resenha" && $0.isVisible
+        })
+        window.orderOut(nil)
+    }
+
     func testStaleAudioCleanupKeepsFreshAndUnrelatedFiles() throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("ResenhaAudioCleanupTests-\(UUID().uuidString)", isDirectory: true)

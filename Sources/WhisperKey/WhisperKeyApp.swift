@@ -197,6 +197,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         startHotkeyIfReady()
     }
 
+    func applicationShouldHandleReopen(
+        _ sender: NSApplication,
+        hasVisibleWindows flag: Bool
+    ) -> Bool {
+        settingsController.show()
+        return true
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
         contextualPolicy.invalidate(.appTerminated)
         permissionTimer?.invalidate()
