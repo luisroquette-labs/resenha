@@ -3,7 +3,50 @@ import AppKit
 struct DictationCompletion {
     let id: UUID
     let targetApplication: NSRunningApplication?
+    let text: String
+    let language: TranscriptionLanguage
+    let retentionProbe: ContextRetentionProbe?
+
+    init(
+        id: UUID,
+        targetApplication: NSRunningApplication?,
+        text: String,
+        language: TranscriptionLanguage,
+        retentionProbe: ContextRetentionProbe? = nil
+    ) {
+        self.id = id
+        self.targetApplication = targetApplication
+        self.text = text
+        self.language = language
+        self.retentionProbe = retentionProbe
+    }
+
+    init(id: UUID, targetApplication: NSRunningApplication?) {
+        self.init(
+            id: id,
+            targetApplication: targetApplication,
+            text: "",
+            language: .portuguese
+        )
+    }
 }
+
+final class ContextRetentionProbe {
+    private let onDeinit: () -> Void
+    init(onDeinit: @escaping () -> Void) { self.onDeinit = onDeinit }
+    deinit { onDeinit() }
+}
+
+typealias ContextualPolicyTokenSource = @MainActor @Sendable (UUID) -> ContextualPolicyToken
+typealias ContextualStoreGenerationSource = @MainActor @Sendable () -> UInt64
+
+@MainActor
+protocol DictationOutputSink {
+    func stage(_ text: String) throws -> Int
+    func insertStaged(into target: NSRunningApplication?, changeCount: Int) async throws
+}
+
+extension TextInjector: DictationOutputSink {}
 
 enum DictationPhase: Equatable {
     case idle
@@ -80,11 +123,21 @@ struct DictationErrorPresentation: Equatable {
 
 @MainActor
 final class DictationCoordinator {
+    static func productionContextualTokenSource(
+        policy: ContextualCorrectionPolicy,
+        isEnabled: @escaping @MainActor @Sendable () -> Bool
+    ) -> ContextualPolicyTokenSource {
+        { _ in policy.issueToken(scope: isEnabled() ? .personalDictation : .disabled) }
+    }
+
     private let permissions: PermissionService
     private let panel: FloatingPanelController
     private let recorder = AudioRecorder()
     private let transcriber: WhisperTranscriber
-    private let injector = TextInjector()
+    private let outputSink: any DictationOutputSink
+    private let contextualResolver: any ContextualResolving
+    private let contextualTokenSource: ContextualPolicyTokenSource
+    private let contextualStoreGeneration: ContextualStoreGenerationSource
     private let cuePlayer = DictationCuePlayer()
     private(set) var phase = DictationPhase.idle {
         didSet { if oldValue != phase { onPhaseChange?(phase) } }
@@ -115,7 +168,11 @@ final class DictationCoordinator {
         onRecordingLevel: @escaping (Float) -> Void = { _ in },
         onTranscript: @escaping (String) -> Void = { _ in },
         onFailure: @escaping (DictationErrorPresentation) -> Void = { _ in },
-        transcriber: WhisperTranscriber = WhisperTranscriber()
+        transcriber: WhisperTranscriber = WhisperTranscriber(),
+        outputSink: any DictationOutputSink,
+        contextualResolver: any ContextualResolving,
+        contextualTokenSource: @escaping ContextualPolicyTokenSource,
+        contextualStoreGeneration: @escaping ContextualStoreGenerationSource
     ) {
         self.permissions = permissions
         self.panel = panel
@@ -126,6 +183,10 @@ final class DictationCoordinator {
         self.onTranscript = onTranscript
         self.onFailure = onFailure
         self.transcriber = transcriber
+        self.outputSink = outputSink
+        self.contextualResolver = contextualResolver
+        self.contextualTokenSource = contextualTokenSource
+        self.contextualStoreGeneration = contextualStoreGeneration
         recorder.onLevel = { [weak panel] level in
             panel?.updateRecordingLevel(level)
             onRecordingLevel(level)
@@ -193,14 +254,11 @@ final class DictationCoordinator {
                     control.cancel()
                     transcriptionTask.cancel()
                 }
-                try Task.checkCancellation()
-                guard self.attemptID == attemptID else { return }
-                let changeCount = try self.injector.stage(transcript)
-                self.onTranscript(transcript)
-                self.transition(to: .inserting)
-                if self.showsHUD() { self.panel.show(.inserting, target: self.panelTarget) }
-                try await self.injector.insertStaged(into: self.targetApplication, changeCount: changeCount)
-                self.completeInsertion(attemptID: attemptID, isCancelled: Task.isCancelled)
+                try await self.finishTranscription(
+                    transcript,
+                    attemptID: attemptID,
+                    language: sessionLanguage
+                )
             } catch is CancellationError {
                 guard self.attemptID == attemptID else { return }
                 self.reset()
@@ -211,12 +269,78 @@ final class DictationCoordinator {
         }
     }
 
-    // Called only after insertStaged returns successfully; identity is checked after its suspension.
-    func completeInsertion(attemptID: UUID, isCancelled: Bool) {
-        guard !isCancelled, self.attemptID == attemptID, phase == .inserting else { return }
-        let completion = DictationCompletion(id: attemptID, targetApplication: targetApplication)
+    func finishTranscription(
+        _ transcript: String,
+        attemptID: UUID,
+        language: TranscriptionLanguage
+    ) async throws {
+        let generation = contextualStoreGeneration()
+        let token = contextualTokenSource(attemptID)
+        let final = await contextualResolver.resolve(.init(
+            attemptID: attemptID,
+            text: transcript,
+            language: language.rawValue,
+            policyToken: token,
+            storeGenerationAtStart: generation
+        ))
+        try Task.checkCancellation()
+        guard self.attemptID == attemptID,
+              phase == .transcribing,
+              generation == contextualStoreGeneration(),
+              token.generation == contextualTokenSource(attemptID).generation else {
+            if self.attemptID == attemptID { reset() }
+            return
+        }
+
+        let target = targetApplication
+        let changeCount = try outputSink.stage(final)
+        onTranscript(final)
+        transition(to: .inserting)
+        if showsHUD() { panel.show(.inserting, target: panelTarget) }
+        try await outputSink.insertStaged(into: target, changeCount: changeCount)
+        guard !Task.isCancelled,
+              self.attemptID == attemptID,
+              phase == .inserting,
+              generation == contextualStoreGeneration(),
+              token.generation == contextualTokenSource(attemptID).generation else {
+            if self.attemptID == attemptID { reset() }
+            return
+        }
+        let completion = DictationCompletion(
+            id: attemptID,
+            targetApplication: target,
+            text: final,
+            language: language
+        )
         reset()
         if showsHUD() { onCompleted?(completion) }
+    }
+
+    // Called only after insertStaged returns successfully; identity is checked after its suspension.
+    func completeInsertion(
+        attemptID: UUID,
+        isCancelled: Bool,
+        text: String,
+        language: TranscriptionLanguage
+    ) {
+        guard !isCancelled, self.attemptID == attemptID, phase == .inserting else { return }
+        let completion = DictationCompletion(
+            id: attemptID,
+            targetApplication: targetApplication,
+            text: text,
+            language: language
+        )
+        reset()
+        if showsHUD() { onCompleted?(completion) }
+    }
+
+    func completeInsertion(attemptID: UUID, isCancelled: Bool) {
+        completeInsertion(
+            attemptID: attemptID,
+            isCancelled: isCancelled,
+            text: "",
+            language: sessionLanguage
+        )
     }
 
     func cancel() {

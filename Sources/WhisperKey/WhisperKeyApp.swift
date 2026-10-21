@@ -12,6 +12,15 @@ struct WhisperKeyApp: App {
 }
 
 @MainActor
+private final class AppContextualOptInStore: ContextualOptInStore {
+    private(set) var contextualCorrectionsEnabled = false
+
+    func persistContextualCorrectionsEnabled(_ enabled: Bool) throws {
+        contextualCorrectionsEnabled = enabled
+    }
+}
+
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let logger = Logger(subsystem: "br.com.luisroquette.Resenha", category: "lifecycle")
     private let permissions = PermissionService()
@@ -25,6 +34,55 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var hotkeyFailureFeedback = HotkeyFailureFeedback()
     private var didPlayLaunchReadyCue = false
     let preferences = ProductPreferences()
+    private let contextualTime = ContinuousContextualTime()
+    private let contextualPolicy = ContextualCorrectionPolicy()
+    private let contextualStore = ContextualCorrectionStore()
+    private let contextualOptIn = AppContextualOptInStore()
+    private let contextualCredentialStore = KeychainContextualCredentialStore()
+    private lazy var contextualTimeComposition: ContextualTimeComposition = {
+        do {
+            return try ContextualTimeComposition(
+                resolver: contextualTime,
+                diagnostic: contextualTime,
+                transport: contextualTime
+            )
+        } catch {
+            preconditionFailure("Contextual clocks must share one origin")
+        }
+    }()
+    private lazy var contextualTransport = URLSessionDecisionsStreamingTransport(
+        time: contextualTimeComposition.shared
+    )
+    private lazy var contextualClient = OpenRouterDecisionsClient(
+        transport: contextualTransport,
+        credential: { [contextualCredentialStore] in
+            guard let value = try contextualCredentialStore.load() else {
+                throw OpenRouterDecisionsError.missingCredential
+            }
+            return value
+        }
+    )
+    private lazy var contextualAuthorization = SyntheticDiagnosticAuthorizationOwner(
+        optInStore: contextualOptIn,
+        credentialStore: contextualCredentialStore,
+        guardStore: SyntheticDiagnosticGuard(),
+        policy: contextualPolicy
+    )
+    private lazy var contextualResolver = ContextualCorrectionResolver(
+        store: contextualStore,
+        policy: contextualPolicy,
+        provider: contextualClient,
+        storeGeneration: { [contextualStore] in contextualStore.generation },
+        time: contextualTimeComposition.shared
+    )
+    private lazy var contextualDiagnosticController = SyntheticDiagnosticController(
+        policy: contextualPolicy,
+        authorization: contextualAuthorization,
+        client: contextualClient,
+        validator: ContextualDecisionValidator(),
+        fixture: try! SyntheticDiagnosticFixture.load(),
+        time: contextualTimeComposition.shared
+    )
     private lazy var transcriptHistory = TranscriptHistory()
     private lazy var menuController = NativeMenuController(delegate: self)
     private lazy var onboardingController = PermissionOnboardingController(
@@ -35,6 +93,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         AudioRecorder.cleanupStaleRecordings()
+        contextualStore.onMutation = { [weak contextualPolicy] in
+            contextualPolicy?.invalidate(.storeMutated)
+        }
+        _ = contextualDiagnosticController
         transcriptHistory.onChange = { [weak self] items, storageAvailable in
             self?.menuController.updateRecentTranscripts(items, storageAvailable: storageAvailable)
         }
@@ -58,7 +120,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             onTranscript: { [weak self] text in
                 self?.recordTranscript(text)
             },
-            onFailure: { _ in }
+            onFailure: { _ in },
+            outputSink: TextInjector(),
+            contextualResolver: contextualResolver,
+            contextualTokenSource: DictationCoordinator.productionContextualTokenSource(
+                policy: contextualPolicy,
+                isEnabled: { [contextualOptIn] in contextualOptIn.contextualCorrectionsEnabled }
+            ),
+            contextualStoreGeneration: { [weak contextualStore] in contextualStore?.generation ?? 0 }
         ))
         configureHotkeyRouting()
         configureMenuBar()
@@ -125,6 +194,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        contextualPolicy.invalidate(.appTerminated)
         permissionTimer?.invalidate()
         hotkey.stop()
         panel.hide()

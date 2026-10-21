@@ -1726,13 +1726,13 @@ final class SyntheticDiagnosticAuthorizationOwner: SyntheticDiagnosticAuthorizat
     }
 
     func setLocalBetaEnabled(_ enabled: Bool) async throws {
-        if !enabled {
-            diagnosticArmed = false
-            policy.invalidate(.optedOut)
-        }
         try optInStore.persistContextualCorrectionsEnabled(enabled)
         guard optInStore.contextualCorrectionsEnabled == enabled else {
             throw SyntheticDiagnosticAuthorizationError.localBetaDisabled
+        }
+        if !enabled {
+            diagnosticArmed = false
+            policy.invalidate(.optedOut)
         }
     }
 

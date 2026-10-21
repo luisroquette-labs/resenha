@@ -3,6 +3,61 @@ import XCTest
 import SwiftUI
 @testable import WhisperKey
 
+private actor DisabledCoordinatorDecisionProvider: ContextualDecisionProvider {
+    func decide(
+        sentence: String,
+        language: String,
+        occurrences: [ContextualCorrectionOccurrence],
+        deadline: ContextualInstant
+    ) async throws -> ContextualDecisionReceipt {
+        preconditionFailure("Disabled coordinator tests must not reach a provider")
+    }
+}
+
+@MainActor
+private extension DictationCoordinator {
+    convenience init(
+        permissions: PermissionService,
+        panel: FloatingPanelController,
+        showsHUD: @escaping () -> Bool = { true },
+        soundsEnabled: @escaping () -> Bool = { true },
+        language: @escaping () -> TranscriptionLanguage = { .portuguese },
+        glossaryText: @escaping () -> String = { TranscriptionGlossary.defaultText },
+        onRecordingLevel: @escaping (Float) -> Void = { _ in },
+        onTranscript: @escaping (String) -> Void = { _ in },
+        onFailure: @escaping (DictationErrorPresentation) -> Void = { _ in },
+        transcriber: WhisperTranscriber = WhisperTranscriber()
+    ) {
+        let store = ContextualCorrectionStore(fileURL: FileManager.default.temporaryDirectory
+            .appendingPathComponent("ResenhaTests/\(UUID().uuidString)/contextual.json"))
+        let policy = ContextualCorrectionPolicy()
+        let time = ContinuousContextualTime()
+        let resolver = ContextualCorrectionResolver(
+            store: store,
+            policy: policy,
+            provider: DisabledCoordinatorDecisionProvider(),
+            storeGeneration: { store.generation },
+            time: time
+        )
+        self.init(
+            permissions: permissions,
+            panel: panel,
+            showsHUD: showsHUD,
+            soundsEnabled: soundsEnabled,
+            language: language,
+            glossaryText: glossaryText,
+            onRecordingLevel: onRecordingLevel,
+            onTranscript: onTranscript,
+            onFailure: onFailure,
+            transcriber: transcriber,
+            outputSink: TextInjector(),
+            contextualResolver: resolver,
+            contextualTokenSource: { _ in policy.issueToken(scope: .disabled) },
+            contextualStoreGeneration: { store.generation }
+        )
+    }
+}
+
 final class WhisperKeyTests: XCTestCase {
     func testApprovedBrandAssetsLoadAndMenuBarImageIsTemplateSized() throws {
         XCTAssertNotNil(NSImage(named: "ResenhaMark"))
@@ -3698,6 +3753,400 @@ extension ContextualTransportCorpusTests {
         let fixture = try SyntheticDiagnosticFixture.load(from: .main)
         XCTAssertEqual(fixture.id, SyntheticDiagnosticFixture.id)
         XCTAssertEqual(fixture.language, "pt")
+    }
+}
+
+@MainActor
+private final class CoordinatorPipelineProbe: DictationOutputSink {
+    enum Event: Equatable {
+        case providerInput(String)
+        case staged(String)
+        case history(String)
+        case inserted
+        case completed(String)
+    }
+
+    var events: [Event] = []
+    var shouldSuspendInsertion = false
+    private var insertionContinuation: CheckedContinuation<Void, Never>?
+
+    func stage(_ text: String) throws -> Int {
+        events.append(.staged(text))
+        return 7
+    }
+
+    func insertStaged(into target: NSRunningApplication?, changeCount: Int) async throws {
+        XCTAssertEqual(changeCount, 7)
+        events.append(.inserted)
+        if shouldSuspendInsertion {
+            await withCheckedContinuation { insertionContinuation = $0 }
+        }
+    }
+
+    func resumeInsertion() {
+        insertionContinuation?.resume()
+        insertionContinuation = nil
+    }
+}
+
+private actor ControlledCoordinatorProvider: ContextualDecisionProvider {
+    enum Mode { case replace, failure, suspended }
+
+    private let mode: Mode
+    private let probe: CoordinatorPipelineProbe
+    private var started = false
+    private var startWaiters: [CheckedContinuation<Void, Never>] = []
+    private var decisionContinuation: CheckedContinuation<Void, Never>?
+    private(set) var calls = 0
+
+    init(mode: Mode, probe: CoordinatorPipelineProbe) {
+        self.mode = mode
+        self.probe = probe
+    }
+
+    func decide(
+        sentence: String,
+        language: String,
+        occurrences: [ContextualCorrectionOccurrence],
+        deadline: ContextualInstant
+    ) async throws -> ContextualDecisionReceipt {
+        calls += 1
+        await MainActor.run { probe.events.append(.providerInput(sentence)) }
+        started = true
+        let waiters = startWaiters
+        startWaiters.removeAll()
+        waiters.forEach { $0.resume() }
+        switch mode {
+        case .failure:
+            throw OpenRouterDecisionsError.transportUnavailable
+        case .suspended:
+            await withCheckedContinuation { decisionContinuation = $0 }
+        case .replace:
+            break
+        }
+        return .init(
+            decisions: occurrences.map {
+                .init(
+                    questionID: $0.questionID,
+                    choice: .replace,
+                    confidence: 0.99,
+                    chosenProbability: 0.99,
+                    runnerUpProbability: 0.01
+                )
+            },
+            resolvedModel: "fixture/deterministic",
+            inputTokens: nil,
+            outputTokens: nil,
+            costUSD: nil
+        )
+    }
+
+    func waitUntilStarted() async {
+        if started { return }
+        await withCheckedContinuation { startWaiters.append($0) }
+    }
+
+    func resume() {
+        decisionContinuation?.resume()
+        decisionContinuation = nil
+    }
+}
+
+@MainActor
+final class ContextualCoordinatorTests: XCTestCase {
+    private struct Harness {
+        let store: ContextualCorrectionStore
+        let policy: ContextualCorrectionPolicy
+        let probe: CoordinatorPipelineProbe
+        let provider: ControlledCoordinatorProvider
+        let coordinator: DictationCoordinator
+    }
+
+    private func makeHarness(
+        providerMode: ControlledCoordinatorProvider.Mode,
+        store: ContextualCorrectionStore? = nil,
+        policy: ContextualCorrectionPolicy? = nil,
+        scope: ContextualTransportScope = .testDouble
+    ) -> Harness {
+        let actualPolicy = policy ?? ContextualCorrectionPolicy()
+        let actualStore = store ?? ContextualCorrectionStore(
+            fileURL: FileManager.default.temporaryDirectory
+                .appendingPathComponent("ResenhaTests/\(UUID().uuidString)/contextual.json")
+        )
+        if actualStore.snapshot.health == .healthy, actualStore.examples.isEmpty {
+            XCTAssertTrue(actualStore.save(.init(
+                id: UUID(), language: "pt", heard: "rosto", canonical: "Hostel",
+                sentence: "Reservei um rosto.", occurrenceOrdinal: 1
+            )).isSuccess)
+        }
+        actualStore.onMutation = { actualPolicy.invalidate(.storeMutated) }
+        let probe = CoordinatorPipelineProbe()
+        let provider = ControlledCoordinatorProvider(mode: providerMode, probe: probe)
+        let time = ContinuousContextualTime()
+        let resolver = ContextualCorrectionResolver(
+            store: actualStore,
+            policy: actualPolicy,
+            provider: provider,
+            storeGeneration: { actualStore.generation },
+            time: time
+        )
+        let coordinator = DictationCoordinator(
+            permissions: PermissionService(),
+            panel: FloatingPanelController(),
+            showsHUD: { true },
+            soundsEnabled: { false },
+            language: { .portuguese },
+            onTranscript: { probe.events.append(.history($0)) },
+            outputSink: probe,
+            contextualResolver: resolver,
+            contextualTokenSource: { _ in actualPolicy.issueToken(scope: scope) },
+            contextualStoreGeneration: { actualStore.generation }
+        )
+        coordinator.onCompleted = { probe.events.append(.completed($0.text)) }
+        return .init(
+            store: actualStore,
+            policy: actualPolicy,
+            probe: probe,
+            provider: provider,
+            coordinator: coordinator
+        )
+    }
+
+    private func begin(_ coordinator: DictationCoordinator) -> UUID {
+        coordinator.transition(to: .recording)
+        coordinator.transition(to: .transcribing)
+        return coordinator.attemptID
+    }
+
+    func testCoordinatorUsesRealResolverAndOneResolvedStringForClipboardHistoryAndCompletion() async throws {
+        let harness = makeHarness(providerMode: .replace)
+        let attempt = begin(harness.coordinator)
+        try await harness.coordinator.finishTranscription(
+            "Reservei um rosto.", attemptID: attempt, language: .portuguese
+        )
+        XCTAssertEqual(harness.probe.events, [
+            .providerInput("Reservei um rosto."),
+            .staged("Reservei um Hostel."),
+            .history("Reservei um Hostel."),
+            .inserted,
+            .completed("Reservei um Hostel.")
+        ])
+    }
+
+    func testClockCompositionRejectsDistinctOriginsAndSharesOneManualClock() throws {
+        XCTAssertThrowsError(try ContextualTimeComposition(
+            resolver: ManualContextualTime(),
+            diagnostic: ManualContextualTime(),
+            transport: ManualContextualTime()
+        )) { XCTAssertEqual($0 as? ContextualTimeCompositionError, .mismatchedOrigins) }
+        let time = ManualContextualTime()
+        let composition = try ContextualTimeComposition(
+            resolver: time, diagnostic: time, transport: time
+        )
+        XCTAssertTrue(composition.shared === time)
+        _ = URLSessionDecisionsStreamingTransport(time: composition.shared)
+    }
+
+    func testCoordinatorProductionTokenSourceUsesOnlyDisabledOrPersonalScope() {
+        let policy = ContextualCorrectionPolicy()
+        let optIn = ContextualOptInStoreStub(enabled: false)
+        let source = DictationCoordinator.productionContextualTokenSource(
+            policy: policy,
+            isEnabled: { optIn.contextualCorrectionsEnabled }
+        )
+        XCTAssertEqual(source(UUID()).scope, .disabled)
+        try? optIn.persistContextualCorrectionsEnabled(true)
+        XCTAssertEqual(source(UUID()).scope, .personalDictation)
+    }
+
+    func testCoordinatorTestTokenSourceUsesTestDoubleScope() async throws {
+        let harness = makeHarness(providerMode: .replace, scope: .testDouble)
+        let attempt = begin(harness.coordinator)
+        try await harness.coordinator.finishTranscription(
+            "Reservei um rosto.", attemptID: attempt, language: .portuguese
+        )
+        let providerCalls = await harness.provider.calls
+        XCTAssertEqual(providerCalls, 1)
+    }
+
+    func testCoordinatorRejectsStoreMutationWhileResolverSuspended() async throws {
+        let harness = makeHarness(providerMode: .suspended)
+        let attempt = begin(harness.coordinator)
+        let task = Task {
+            try await harness.coordinator.finishTranscription(
+                "Reservei um rosto.", attemptID: attempt, language: .portuguese
+            )
+        }
+        await harness.provider.waitUntilStarted()
+        XCTAssertTrue(harness.store.save(.init(
+            id: UUID(), language: "pt", heard: "sessão", canonical: "seção",
+            sentence: "Abra a sessão financeira.", occurrenceOrdinal: 1
+        )).isSuccess)
+        await harness.provider.resume()
+        try await task.value
+        XCTAssertEqual(harness.probe.events, [.providerInput("Reservei um rosto.")])
+        XCTAssertEqual(harness.coordinator.phase, .idle)
+    }
+
+    func testCoordinatorUnhealthyStoreKeepsOriginalUntilVerifiedReload() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ResenhaTests/\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let file = directory.appendingPathComponent("contextual.json")
+        try Data("not-json".utf8).write(to: file)
+        let store = ContextualCorrectionStore(fileURL: file)
+        let harness = makeHarness(providerMode: .replace, store: store)
+
+        for _ in 0..<2 {
+            let attempt = begin(harness.coordinator)
+            try await harness.coordinator.finishTranscription(
+                "Reservei um rosto.", attemptID: attempt, language: .portuguese
+            )
+            if store.error != nil {
+                try? FileManager.default.removeItem(at: file)
+                let writer = ContextualCorrectionStore(fileURL: file)
+                XCTAssertTrue(writer.save(.init(
+                    id: UUID(), language: "pt", heard: "rosto", canonical: "Hostel",
+                    sentence: "Reservei um rosto.", occurrenceOrdinal: 1
+                )).isSuccess)
+            }
+        }
+        let callsBeforeReload = await harness.provider.calls
+        XCTAssertEqual(callsBeforeReload, 0)
+        XCTAssertTrue(store.reload())
+        let attempt = begin(harness.coordinator)
+        try await harness.coordinator.finishTranscription(
+            "Reservei um rosto.", attemptID: attempt, language: .portuguese
+        )
+        let callsAfterReload = await harness.provider.calls
+        XCTAssertEqual(callsAfterReload, 1)
+        XCTAssertEqual(harness.probe.events.filter {
+            if case .staged = $0 { true } else { false }
+        }, [
+            .staged("Reservei um rosto."),
+            .staged("Reservei um rosto."),
+            .staged("Reservei um Hostel.")
+        ])
+    }
+
+    func testCoordinatorIgnoresLateCompletionFromCancelledAttempt() async throws {
+        let harness = makeHarness(providerMode: .suspended)
+        let attempt = begin(harness.coordinator)
+        let task = Task {
+            try await harness.coordinator.finishTranscription(
+                "Reservei um rosto.", attemptID: attempt, language: .portuguese
+            )
+        }
+        await harness.provider.waitUntilStarted()
+        harness.coordinator.cancel()
+        let nextAttempt = begin(harness.coordinator)
+        await harness.provider.resume()
+        _ = try? await task.value
+        XCTAssertEqual(harness.probe.events, [.providerInput("Reservei um rosto.")])
+        XCTAssertEqual(harness.coordinator.phase, .transcribing)
+        XCTAssertEqual(harness.coordinator.attemptID, nextAttempt)
+        harness.coordinator.cancel()
+
+        let afterStage = makeHarness(providerMode: .replace)
+        afterStage.probe.shouldSuspendInsertion = true
+        let stagedAttempt = begin(afterStage.coordinator)
+        let stagedTask = Task {
+            try await afterStage.coordinator.finishTranscription(
+                "Reservei um rosto.", attemptID: stagedAttempt, language: .portuguese
+            )
+        }
+        while !afterStage.probe.events.contains(.inserted) { await Task.yield() }
+        afterStage.coordinator.cancel()
+        afterStage.probe.resumeInsertion()
+        try await stagedTask.value
+        XCTAssertFalse(afterStage.probe.events.contains(.completed("Reservei um Hostel.")))
+        XCTAssertEqual(afterStage.coordinator.phase, .idle)
+    }
+
+    func testContextualPolicyInvalidationCancelsResolverAndDiagnosticAndRejectsOldTokens() async throws {
+        for reason in [
+            ContextualPolicyInvalidationReason.optedOut,
+            .credentialDeleted,
+            .storeMutated,
+            .appTerminated
+        ] {
+            let policy = ContextualCorrectionPolicy()
+            let resolver = policy.issueToken(scope: .testDouble)
+            let diagnostic = policy.issueToken(scope: .syntheticDiagnostic)
+            var observed: [(String, UInt64)] = []
+            XCTAssertTrue(policy.register(resolver) {
+                observed.append(("resolver", policy.generation))
+            })
+            XCTAssertTrue(policy.register(diagnostic) {
+                observed.append(("diagnostic", policy.generation))
+            })
+            policy.invalidate(reason)
+            XCTAssertEqual(policy.generation, 1)
+            XCTAssertEqual(observed.map(\.0).sorted(), ["diagnostic", "resolver"])
+            XCTAssertTrue(observed.allSatisfy { $0.1 == 1 })
+            XCTAssertFalse(policy.isCurrent(resolver))
+            XCTAssertFalse(policy.isCurrent(diagnostic))
+            policy.finish(resolver)
+            policy.finish(diagnostic)
+            XCTAssertEqual(observed.count, 2)
+        }
+
+        let mutationPolicy = ContextualCorrectionPolicy()
+        let store = ContextualCorrectionStore(
+            fileURL: FileManager.default.temporaryDirectory
+                .appendingPathComponent("ResenhaTests/\(UUID().uuidString)/contextual.json")
+        )
+        store.onMutation = { mutationPolicy.invalidate(.storeMutated) }
+        let first = ContextualCorrectionExample(
+            id: UUID(), language: "pt", heard: "rosto", canonical: "Hostel",
+            sentence: "Reservei um rosto.", occurrenceOrdinal: 1
+        )
+        XCTAssertTrue(store.save(first).isSuccess)
+        XCTAssertEqual(mutationPolicy.generation, 1)
+        XCTAssertTrue(store.delete(id: first.id))
+        XCTAssertEqual(mutationPolicy.generation, 2)
+        XCTAssertTrue(store.save(first).isSuccess)
+        XCTAssertTrue(store.deleteAll())
+        XCTAssertEqual(mutationPolicy.generation, 4)
+
+        let optOutPolicy = ContextualCorrectionPolicy()
+        let optIn = ContextualOptInStoreStub(enabled: true)
+        let optOutOwner = SyntheticDiagnosticAuthorizationOwner(
+            optInStore: optIn,
+            credentialStore: InMemoryCredentialStore(),
+            guardStore: SyntheticGuardSpy(),
+            policy: optOutPolicy
+        )
+        try await optOutOwner.setLocalBetaEnabled(false)
+        XCTAssertEqual(optOutPolicy.generation, 1)
+
+        let deletionPolicy = ContextualCorrectionPolicy()
+        let credential = InMemoryCredentialStore()
+        try credential.save("disposable-test-key")
+        let deletionOwner = SyntheticDiagnosticAuthorizationOwner(
+            optInStore: ContextualOptInStoreStub(enabled: true),
+            credentialStore: credential,
+            guardStore: SyntheticGuardSpy(),
+            policy: deletionPolicy
+        )
+        try await deletionOwner.removeSyntheticDiagnosticCredential()
+        XCTAssertEqual(deletionPolicy.generation, 1)
+        XCTAssertNil(try credential.load())
+    }
+
+    func testCoordinatorProviderFailureFlowsOriginalExactlyOnce() async throws {
+        let harness = makeHarness(providerMode: .failure)
+        let attempt = begin(harness.coordinator)
+        try await harness.coordinator.finishTranscription(
+            "Reservei um rosto.", attemptID: attempt, language: .portuguese
+        )
+        XCTAssertEqual(harness.probe.events, [
+            .providerInput("Reservei um rosto."),
+            .staged("Reservei um rosto."),
+            .history("Reservei um rosto."),
+            .inserted,
+            .completed("Reservei um rosto.")
+        ])
     }
 }
 
