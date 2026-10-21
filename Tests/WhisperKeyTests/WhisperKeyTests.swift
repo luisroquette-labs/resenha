@@ -2731,3 +2731,519 @@ final class ContextualStoreTests: XCTestCase {
         XCTAssertGreaterThan(store.generation, healthyGeneration)
     }
 }
+
+final class ManualContextualTime: ContextualMonotonicTime, @unchecked Sendable {
+    private struct Waiter {
+        let id: UUID
+        let deadline: ContextualInstant
+        let continuation: CheckedContinuation<Void, Error>
+    }
+    private let lock = NSLock()
+    private var instant = ContextualInstant(offset: .zero)
+    private var waiters: [Waiter] = []
+    private var cancelledIDs: Set<UUID> = []
+
+    func now() -> ContextualInstant { lock.withLock { instant } }
+
+    func sleep(until deadline: ContextualInstant) async throws {
+        let id = UUID()
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                lock.withLock {
+                    if cancelledIDs.remove(id) != nil {
+                        continuation.resume(throwing: CancellationError())
+                    } else if instant >= deadline { continuation.resume() }
+                    else { waiters.append(.init(id: id, deadline: deadline, continuation: continuation)) }
+                }
+            }
+        } onCancel: { [weak self] in self?.cancel(id) }
+    }
+
+    func advance(milliseconds: Int64) {
+        let ready: [Waiter] = lock.withLock {
+            instant = .init(offset: .milliseconds(milliseconds))
+            let ready = waiters.filter { $0.deadline <= instant }
+            waiters.removeAll { $0.deadline <= instant }
+            return ready
+        }
+        ready.forEach { $0.continuation.resume() }
+    }
+
+    private func cancel(_ id: UUID) {
+        let waiter: Waiter? = lock.withLock {
+            guard let index = waiters.firstIndex(where: { $0.id == id }) else {
+                cancelledIDs.insert(id)
+                return nil
+            }
+            return waiters.remove(at: index)
+        }
+        waiter?.continuation.resume(throwing: CancellationError())
+    }
+}
+
+@MainActor
+private final class ContextualMatcherCounter {
+    var value = 0
+}
+
+private final class ContextualFailingFileManager: FileManager, @unchecked Sendable {
+    var failSetAttributes = false
+
+    override func setAttributes(_ attributes: [FileAttributeKey: Any], ofItemAtPath path: String) throws {
+        if failSetAttributes { throw CocoaError(.fileWriteUnknown) }
+        try super.setAttributes(attributes, ofItemAtPath: path)
+    }
+}
+
+actor ResolverDecisionProviderStub: ContextualDecisionProvider {
+    private(set) var requestCount = 0
+    private(set) var captured: [ContextualCorrectionOccurrence] = []
+    private(set) var capturedSentence: String?
+    let decisions: [ContextualDecision]
+
+    init(_ decisions: [ContextualDecision]) { self.decisions = decisions }
+
+    func decide(
+        sentence: String,
+        language: String,
+        occurrences: [ContextualCorrectionOccurrence],
+        deadline: ContextualInstant
+    ) async throws -> ContextualDecisionReceipt {
+        requestCount += 1
+        captured = occurrences
+        capturedSentence = sentence
+        return .init(
+            decisions: decisions,
+            resolvedModel: "fixture/deterministic",
+            inputTokens: nil,
+            outputTokens: nil,
+            costUSD: nil
+        )
+    }
+}
+
+actor SuspendedResolverProvider: ContextualDecisionProvider {
+    private var requestWaiters: [CheckedContinuation<Void, Never>] = []
+    private var receiptContinuation: CheckedContinuation<ContextualDecisionReceipt, Error>?
+    private(set) var requestCount = 0
+
+    func decide(
+        sentence: String,
+        language: String,
+        occurrences: [ContextualCorrectionOccurrence],
+        deadline: ContextualInstant
+    ) async throws -> ContextualDecisionReceipt {
+        requestCount += 1
+        let waiters = requestWaiters
+        requestWaiters.removeAll()
+        waiters.forEach { $0.resume() }
+        return try await withCheckedThrowingContinuation { receiptContinuation = $0 }
+    }
+
+    func waitForRequest() async {
+        if requestCount > 0 { return }
+        await withCheckedContinuation { requestWaiters.append($0) }
+    }
+
+    func resume(_ receipt: ContextualDecisionReceipt) {
+        receiptContinuation?.resume(returning: receipt)
+        receiptContinuation = nil
+    }
+}
+
+@MainActor
+final class ContextualResolverTests: XCTestCase {
+    private func example(
+        index: Int = 0,
+        heard: String = "rosto",
+        canonical: String = "Hostel",
+        sentence: String = "Reservei um rosto perto da estacao."
+    ) -> ContextualCorrectionExample {
+        .init(
+            id: UUID(uuidString: String(format: "10000000-0000-0000-0000-%012d", index + 1))!,
+            language: "pt",
+            heard: heard,
+            canonical: canonical,
+            sentence: sentence,
+            occurrenceOrdinal: 1
+        )
+    }
+
+    private func fixture(
+        examples: [ContextualCorrectionExample]? = nil,
+        provider: any ContextualDecisionProvider,
+        time: ManualContextualTime = .init(),
+        matcher: ContextualCorrectionResolver.CandidateMatcher? = nil,
+        fileManager: FileManager = .default
+    ) -> (ContextualCorrectionResolver, ContextualCorrectionStore, ContextualCorrectionPolicy, ManualContextualTime, URL) {
+        let file = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ResenhaTests/\(UUID().uuidString)/ContextualCorrections/v1.json")
+        let store = ContextualCorrectionStore(fileURL: file, fileManager: fileManager)
+        for item in examples ?? [example()] { XCTAssertTrue(store.save(item).isSuccess) }
+        let policy = ContextualCorrectionPolicy()
+        let resolver: ContextualCorrectionResolver
+        if let matcher {
+            resolver = .init(
+                store: store,
+                policy: policy,
+                provider: provider,
+                storeGeneration: { store.generation },
+                candidateMatcher: matcher,
+                time: time
+            )
+        } else {
+            resolver = .init(
+                store: store,
+                policy: policy,
+                provider: provider,
+                storeGeneration: { store.generation },
+                time: time
+            )
+        }
+        return (resolver, store, policy, time, file)
+    }
+
+    private func request(
+        _ text: String,
+        store: ContextualCorrectionStore,
+        policy: ContextualCorrectionPolicy,
+        scope: ContextualTransportScope = .testDouble
+    ) -> ContextualResolutionRequest {
+        .init(
+            attemptID: UUID(),
+            text: text,
+            language: "pt",
+            policyToken: policy.issueToken(scope: scope),
+            storeGenerationAtStart: store.generation
+        )
+    }
+
+    private func decision(
+        _ id: String,
+        _ choice: ContextualDecisionChoice,
+        confidence: Double = 0.99,
+        probability: Double = 0.99
+    ) -> ContextualDecision {
+        .init(
+            questionID: id,
+            choice: choice,
+            confidence: confidence,
+            chosenProbability: probability,
+            runnerUpProbability: 1 - probability
+        )
+    }
+
+    private func assertResolution(
+        _ name: String,
+        examples: [ContextualCorrectionExample]? = nil,
+        input: String,
+        decisions: [ContextualDecision],
+        expected: String,
+        expectedRequests: Int,
+        expectedSentence: String? = nil,
+        matcher: ContextualCorrectionResolver.CandidateMatcher? = nil
+    ) async {
+        let provider = ResolverDecisionProviderStub(decisions)
+        let item = fixture(examples: examples, provider: provider, matcher: matcher)
+        let output = await item.0.resolve(request(input, store: item.1, policy: item.2))
+        let requestCount = await provider.requestCount
+        let sentence = await provider.capturedSentence
+        XCTAssertEqual(output, expected, name)
+        XCTAssertEqual(requestCount, expectedRequests, name)
+        if let expectedSentence { XCTAssertEqual(sentence, expectedSentence, name) }
+    }
+
+    func testResolverKeepsCommonRostoAndChangesOnlySupportedSecondOccurrence() async {
+        let provider = ResolverDecisionProviderStub([
+            decision("o1", .keepOriginal), decision("o2", .replace)
+        ])
+        let item = fixture(provider: provider)
+        let input = "Lavei o rosto antes de voltar ao rosto perto da estacao."
+        let output = await item.0.resolve(request(input, store: item.1, policy: item.2))
+        XCTAssertEqual(output, "Lavei o rosto antes de voltar ao Hostel perto da estacao.")
+    }
+
+    func testResolverOrdersMultiPairOccurrencesByRangeAndAssignsUniqueQuestionIDs() async {
+        let provider = ResolverDecisionProviderStub([
+            decision("o1", .keepOriginal), decision("o2", .keepOriginal), decision("o3", .keepOriginal)
+        ])
+        let examples = [
+            example(index: 1, heard: "rosto", canonical: "Hostel"),
+            example(index: 2, heard: "sexta", canonical: "cesta", sentence: "Cheguei na sexta porta."),
+            example(index: 3, heard: "cesta", canonical: "sexta", sentence: "A cesta ficou na mesa.")
+        ]
+        let item = fixture(examples: examples, provider: provider)
+        let input = "A cesta do rosto fica ao lado da sexta porta."
+        let output = await item.0.resolve(request(input, store: item.1, policy: item.2))
+        XCTAssertEqual(output, input)
+        let captured = await provider.captured
+        XCTAssertEqual(captured.map(\.questionID), ["o1", "o2", "o3"])
+        XCTAssertEqual(captured.map(\.heard), ["cesta", "rosto", "sexta"])
+    }
+
+    func testResolverRejectsInvalidUnicodeSpanConflictAndSentenceSets() async {
+        await assertResolution(
+            "nfc", input: "Reservei um rosto perto da estação.",
+            decisions: [decision("o1", .replace)],
+            expected: "Reservei um Hostel perto da estação.", expectedRequests: 1
+        )
+        await assertResolution(
+            "nfd", input: "Reservei um rosto perto da estac\u{327}a\u{303}o.",
+            decisions: [decision("o1", .replace)],
+            expected: "Reservei um Hostel perto da estac\u{327}a\u{303}o.", expectedRequests: 1
+        )
+        await assertResolution(
+            "punctuation", input: "(rosto)!", decisions: [decision("o1", .replace)],
+            expected: "(Hostel)!", expectedRequests: 1
+        )
+        await assertResolution(
+            "substring", input: "Os rostos ficaram vermelhos.", decisions: [],
+            expected: "Os rostos ficaram vermelhos.", expectedRequests: 0
+        )
+        await assertResolution(
+            "zero-candidate", input: "Reservei um hotel.", decisions: [],
+            expected: "Reservei um hotel.", expectedRequests: 0
+        )
+        await assertResolution(
+            "invalid-ordinal", input: "Reservei um rosto.", decisions: [],
+            expected: "Reservei um rosto.", expectedRequests: 0,
+            matcher: { _, text, _ in
+                [.init(questionID: "o1", heard: "rosto", canonical: "Hostel", ordinal: 0,
+                       range: text.range(of: "rosto")!)]
+            }
+        )
+        await assertResolution(
+            "out-of-range-ordinal", input: "Reservei um rosto.", decisions: [],
+            expected: "Reservei um rosto.", expectedRequests: 0,
+            matcher: { _, text, _ in
+                [.init(questionID: "o1", heard: "rosto", canonical: "Hostel", ordinal: 2,
+                       range: text.range(of: "rosto")!)]
+            }
+        )
+        await assertResolution(
+            "overlap", input: "Reservei um rosto.", decisions: [],
+            expected: "Reservei um rosto.", expectedRequests: 0,
+            matcher: { _, text, _ in
+                let range = text.range(of: "rosto")!
+                return [
+                    .init(questionID: "o1", heard: "rosto", canonical: "Hostel", ordinal: 1, range: range),
+                    .init(questionID: "o2", heard: "rosto", canonical: "Hostel", ordinal: 1, range: range)
+                ]
+            }
+        )
+        await assertResolution(
+            "multiple-sentences", input: "Vi meu rosto. Reservei um rosto.", decisions: [],
+            expected: "Vi meu rosto. Reservei um rosto.", expectedRequests: 0
+        )
+        let tooLong = String(repeating: "é", count: 594) + " rosto."
+        XCTAssertEqual(tooLong.count, 601)
+        await assertResolution(
+            "sentence-601", input: tooLong, decisions: [], expected: tooLong, expectedRequests: 0
+        )
+        await assertResolution(
+            "conflicting-destination",
+            examples: [
+                example(index: 1),
+                example(index: 2, canonical: "Hotel", sentence: "Outro rosto apareceu.")
+            ],
+            input: "Meu rosto ficou vermelho.", decisions: [],
+            expected: "Meu rosto ficou vermelho.", expectedRequests: 0
+        )
+        await assertResolution(
+            "immutable-outside-range", input: "🧭 Antes. Reservei um rosto. Depois, ação.",
+            decisions: [decision("o1", .replace)],
+            expected: "🧭 Antes. Reservei um Hostel. Depois, ação.", expectedRequests: 1,
+            expectedSentence: "Reservei um rosto. "
+        )
+    }
+
+    func testResolverAbstainsEntireInputAboveThreeCandidateOccurrencesWithoutRequest() async {
+        let provider = ResolverDecisionProviderStub([])
+        let item = fixture(provider: provider)
+        let input = "rosto, rosto, rosto e rosto"
+        let output = await item.0.resolve(request(input, store: item.1, policy: item.2))
+        let requestCount = await provider.requestCount
+        XCTAssertEqual(output, input)
+        XCTAssertEqual(requestCount, 0)
+    }
+
+    func testResolverAppliesDollarAndBackslashCanonicalsLiterally() async {
+        let provider = ResolverDecisionProviderStub([decision("o1", .replace)])
+        let item = fixture(
+            examples: [example(canonical: #"Hostel $1 \\ Centro"#)],
+            provider: provider
+        )
+        let output = await item.0.resolve(
+            request("Reservei um rosto.", store: item.1, policy: item.2)
+        )
+        XCTAssertEqual(output, #"Reservei um Hostel $1 \\ Centro."#)
+    }
+
+    func testResolverRejectsDisabledAndPersonalScopesBeforeProvider() async {
+        let provider = ResolverDecisionProviderStub([decision("o1", .replace)])
+        let item = fixture(provider: provider)
+        for scope in [ContextualTransportScope.disabled, .personalDictation] {
+            let input = "Reservei um rosto."
+            let output = await item.0.resolve(request(input, store: item.1, policy: item.2, scope: scope))
+            XCTAssertEqual(output, input)
+        }
+        let requestCount = await provider.requestCount
+        XCTAssertEqual(requestCount, 0)
+    }
+
+    func testResolverRejectsUnhealthyStoreBeforeMatchingOrProvider() async throws {
+        for row in ["corrupt", "oversized", "unsupported-schema", "rollback-failed"] {
+            let provider = ResolverDecisionProviderStub([decision("o1", .replace)])
+            let matchCount = ContextualMatcherCounter()
+            let failingFileManager = ContextualFailingFileManager()
+            let item = fixture(provider: provider, matcher: { _, _, _ in
+                matchCount.value += 1
+                return []
+            }, fileManager: failingFileManager)
+            let current = item.1.examples[0]
+            switch row {
+            case "corrupt":
+                try Data("broken".utf8).write(to: item.4, options: .atomic)
+                XCTAssertFalse(item.1.reload(), row)
+            case "oversized":
+                try Data(repeating: 0, count: ContextualCorrectionStore.maximumFileBytes + 1)
+                    .write(to: item.4)
+                XCTAssertFalse(item.1.reload(), row)
+            case "unsupported-schema":
+                try Data(#"{"schemaVersion":2,"examples":[]}"#.utf8)
+                    .write(to: item.4, options: .atomic)
+                XCTAssertFalse(item.1.reload(), row)
+            default:
+                failingFileManager.failSetAttributes = true
+                _ = item.1.save(example(index: 90, sentence: "Outro rosto apareceu."))
+                failingFileManager.failSetAttributes = false
+                XCTAssertEqual(item.1.snapshot.health, .unhealthy(.rollbackFailed), row)
+            }
+            let input = "Reservei um rosto."
+            let output = await item.0.resolve(request(input, store: item.1, policy: item.2))
+            let requestCount = await provider.requestCount
+            XCTAssertEqual(output, input, row)
+            XCTAssertEqual(matchCount.value, 0, row)
+            XCTAssertEqual(requestCount, 0, row)
+            XCTAssertEqual(item.1.examples, [current], row)
+        }
+    }
+
+    func testResolverRecoversOnlyAfterExplicitVerifiedStoreReload() async throws {
+        let provider = ResolverDecisionProviderStub([decision("o1", .replace)])
+        let item = fixture(provider: provider)
+        let valid = try Data(contentsOf: item.4)
+        try Data("broken".utf8).write(to: item.4, options: .atomic)
+        XCTAssertFalse(item.1.reload())
+        try valid.write(to: item.4, options: .atomic)
+        let input = "Reservei um rosto."
+        let beforeReload = await item.0.resolve(request(input, store: item.1, policy: item.2))
+        XCTAssertEqual(beforeReload, input)
+        XCTAssertTrue(item.1.reload())
+        let afterReload = await item.0.resolve(request(input, store: item.1, policy: item.2))
+        XCTAssertEqual(afterReload, "Reservei um Hostel.")
+    }
+
+    func testResolverRequiresConfidenceAndSelectedProbabilityAtThreshold() async {
+        for row in [(0.899, 1.0, false), (1.0, 0.899, false), (0.9, 0.9, true), (1.0, 1.0, true)] {
+            let provider = ResolverDecisionProviderStub([
+                decision("o1", .replace, confidence: row.0, probability: row.1)
+            ])
+            let item = fixture(provider: provider)
+            let output = await item.0.resolve(request("Reservei um rosto.", store: item.1, policy: item.2))
+            XCTAssertEqual(output, row.2 ? "Reservei um Hostel." : "Reservei um rosto.")
+        }
+    }
+
+    func testResolverRejectsMalformedProbabilityAndAnswerSets() async {
+        let rows: [(String, String, [ContextualDecision])] = [
+            ("finite", "Reservei um rosto.", [decision("o1", .replace, confidence: .nan)]),
+            ("range", "Reservei um rosto.", [
+                .init(questionID: "o1", choice: .replace, confidence: 1,
+                      chosenProbability: 1.1, runnerUpProbability: -0.1)
+            ]),
+            ("total", "Reservei um rosto.", [
+                .init(questionID: "o1", choice: .replace, confidence: 1,
+                      chosenProbability: 0.9, runnerUpProbability: 0.2)
+            ]),
+            ("tie", "Reservei um rosto.", [
+                .init(questionID: "o1", choice: .replace, confidence: 1,
+                      chosenProbability: 0.5, runnerUpProbability: 0.5)
+            ]),
+            ("missing", "Reservei um rosto.", []),
+            ("extra", "Reservei um rosto.", [decision("o1", .replace), decision("o2", .replace)]),
+            ("unknown", "Reservei um rosto.", [decision("unknown", .replace)]),
+            ("inconsistent", "rosto e rosto", [decision("o2", .replace), decision("o1", .replace)]),
+            ("mixed", "rosto e rosto", [
+                decision("o1", .replace), decision("o2", .replace, confidence: 0.89)
+            ])
+        ]
+        for row in rows {
+            let provider = ResolverDecisionProviderStub(row.2)
+            let item = fixture(provider: provider)
+            let input = row.1
+            let output = await item.0.resolve(request(input, store: item.1, policy: item.2))
+            XCTAssertEqual(output, input, row.0)
+        }
+    }
+
+    func testResolverDeadlineReturnsWithoutAwaitingLateProvider() async {
+        for milliseconds in [899, 900, 901] {
+            let provider = SuspendedResolverProvider()
+            let time = ManualContextualTime()
+            let item = fixture(provider: provider, time: time)
+            let input = "Reservei um rosto."
+            let task = Task { await item.0.resolve(request(input, store: item.1, policy: item.2)) }
+            await provider.waitForRequest()
+            time.advance(milliseconds: Int64(milliseconds))
+            if milliseconds == 899 {
+                await provider.resume(.init(
+                    decisions: [decision("o1", .replace)], resolvedModel: "on-time",
+                    inputTokens: nil, outputTokens: nil, costUSD: nil
+                ))
+            }
+            let output = await task.value
+            XCTAssertEqual(
+                output,
+                milliseconds == 899 ? "Reservei um Hostel." : input,
+                "deadline-\(milliseconds)"
+            )
+            XCTAssertEqual(time.now().offset, .milliseconds(milliseconds), "deadline-\(milliseconds)")
+            if milliseconds >= 900 {
+                await provider.resume(.init(
+                    decisions: [decision("o1", .replace)], resolvedModel: "late",
+                    inputTokens: nil, outputTokens: nil, costUSD: nil
+                ))
+            }
+        }
+
+        let provider = SuspendedResolverProvider()
+        let time = ManualContextualTime()
+        let item = fixture(provider: provider, time: time)
+        let input = "Reservei um rosto."
+        let task = Task { await item.0.resolve(request(input, store: item.1, policy: item.2)) }
+        await provider.waitForRequest()
+        time.advance(milliseconds: 900)
+        let original = await task.value
+        await provider.resume(.init(
+            decisions: [decision("o1", .replace)], resolvedModel: "noncooperative-late",
+            inputTokens: nil, outputTokens: nil, costUSD: nil
+        ))
+        XCTAssertEqual(original, input, "noncooperative-late")
+    }
+
+    func testResolverRejectsStoreGenerationChangedDuringSuspension() async {
+        let provider = SuspendedResolverProvider()
+        let item = fixture(provider: provider)
+        let input = "Reservei um rosto."
+        let task = Task { await item.0.resolve(request(input, store: item.1, policy: item.2)) }
+        await provider.waitForRequest()
+        XCTAssertTrue(item.1.save(example(index: 9, sentence: "Vi um rosto no espelho.")).isSuccess)
+        await provider.resume(.init(
+            decisions: [decision("o1", .replace)], resolvedModel: "fixture",
+            inputTokens: nil, outputTokens: nil, costUSD: nil
+        ))
+        let output = await task.value
+        XCTAssertEqual(output, input)
+    }
+}
