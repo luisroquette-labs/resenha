@@ -37,6 +37,17 @@ for service in com.apple.testmanagerd.control com.apple.dt.testmanagerd.runner c
   expect_rejected validate_release_entitlements "<?xml version=\"1.0\"?><plist version=\"1.0\"><dict>$audio_input<key>com.apple.security.temporary-exception.mach-lookup.global-name</key><array><string>$service</string></array></dict></plist>"
 done
 
+# LaunchServices can briefly return -600 after replacing a running app at the same path.
+zsh -c '
+  source "$1/Scripts/install-local-release.sh"
+  probe_target=/Applications/Resenha.app; typeset -gi launch_calls=0
+  open() { (( launch_calls += 1 )); (( launch_calls >= 2 )); }
+  sleep() { :; }
+  installed_processes() { (( launch_calls >= 2 )) && print "7|$probe_target/Contents/MacOS/Resenha"; }
+  start_installed_app "$probe_target"
+  [[ "$launch_calls" == 2 ]]
+' fixture "$root"
+
 # Fixtures override only OS interactions; all copying, hashing, swaps and traps are real.
 run_install() {
   local scenario="$1" fail_at="$2" case_root

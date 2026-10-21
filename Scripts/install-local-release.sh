@@ -36,8 +36,17 @@ stop_installed_app() {
 }
 
 start_installed_app() {
-  local target="$1" attempts
-  open -n "$target" || return 1
+  local target="$1" attempts launch_attempt launched=0
+  for launch_attempt in {1..3}; do
+    if open -n "$target"; then
+      launched=1; break
+    fi
+    if [[ -n "$(installed_processes)" ]]; then
+      launched=1; break
+    fi
+    sleep 0.5
+  done
+  (( launched )) || { release_fail "LaunchServices recusou iniciar o Release após 3 tentativas"; return 1; }
   for attempts in {1..100}; do
     if [[ -n "$(installed_processes)" ]]; then
       check_process_cardinality "$target" 1; return $?
