@@ -14,13 +14,20 @@ campo ativo com a permissão de Acessibilidade.
 - Áudio transitório, clipboard imediato e últimos 10 textos locais e opcionais.
 - HUD compacto com nível real do microfone, sons configuráveis e feedback de erro.
 - Atalho livre configurado dentro do app, inclusive Option direita isolada.
-- Sem conta, anúncios, analytics, backend ou chave de API.
+- Correções contextuais locais, desligadas por padrão e separadas do glossário.
+- Sem conta, anúncios, analytics ou backend. Uma chave descartável é aceita apenas para o diagnóstico sintético opcional.
 
 ## Privacidade
 
 O áudio nunca sai do Mac. O modelo de 181 MB é baixado uma vez da distribuição
 oficial do whisper.cpp e validado por tamanho e SHA-256. Resenha não coleta
 dados e não inclui SDKs de rastreamento. Leia a [política de privacidade](docs/PRIVACY.md).
+
+O beta guarda no máximo 100 exemplos locais, com frases de até 600 caracteres,
+todos apagáveis. Ditados pessoais nunca são enviados: neste beta, o resolvedor
+preserva o texto original. Somente um diagnóstico explícito e sintético pode
+consultar `typesafe/jev-1.14` via OpenRouter/TypeSafe, com limite de 900 ms e
+uma única tentativa. Esse diagnóstico não comprova qualidade em PT-BR.
 
 ## Rodar o projeto
 

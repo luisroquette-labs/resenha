@@ -66,6 +66,17 @@ After the final candidate passes the canonical gate and Phase 4 review, archive 
 
 Canonical gate remains `~/.local/bin/mac-gate xcodebuild -project WhisperKey.xcodeproj -scheme WhisperKey -destination 'platform=macOS' -derivedDataPath build test`. Fixtures are generated under the test process's temporary `ResenhaTests/ui-fixtures`; record their actual path/date, not an older sandbox directory. Reuse a passing unchanged candidate for documentation-only edits. Run `Scripts/site.test.mjs` only when covered site/scripts change. Current observed results and concrete pending cases belong in [UI-REFINEMENT-EVIDENCE](../testing/UI-REFINEMENT-EVIDENCE.md), not in an all-pass declaration here.
 
+## Contextual correction beta gate
+
+Automated ownership is split across the store, resolver, transport/corpus,
+lifecycle and feedback/settings suites. Acceptance requires the 100-case frozen
+corpus, zero false positives, unauthorized mutations and harmful span changes,
+plus recall at least 0.80 on the 20 evaluation positives. The resolver deadline
+is 900 ms. Fakes prove logic only; a single synthetic call to
+`typesafe/jev-1.14`, physical UI/focus/VoiceOver checks and provider-key
+revocation are distinct pre-merge evidence. See
+[`context-aware-corrections.md`](../testing/context-aware-corrections.md).
+
 ## Exit criteria
 
 No known deterministic test failure; `.app` launches locally; `CORE-001` passes in TextEdit. Browser compatibility may remain a separately recorded M0 limitation only if TextEdit passes.
