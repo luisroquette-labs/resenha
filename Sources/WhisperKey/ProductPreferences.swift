@@ -1,5 +1,6 @@
 import AppKit
 import AVFoundation
+import Combine
 import ServiceManagement
 import SwiftUI
 
@@ -103,10 +104,12 @@ final class ProductPreferences: ObservableObject {
         static let transcriptionLanguage = "resenha.transcriptionLanguage"
         static let transcriptionGlossary = "resenha.transcriptionGlossary"
         static let readySoundID = "resenha.readySoundID"
+        static let contextualCorrectionsEnabled = "resenha.contextualCorrectionsEnabled"
     }
     private let defaults: UserDefaults
     private var updatesGlossaryMemoryOnly = false
     @Published private(set) var canSaveTranscriptionCorrection = true
+    @Published private(set) var contextualCorrectionsEnabled: Bool
     var onShortcutChange: ((HotkeyShortcut) -> Void)?
     var onHUDChange: ((Bool) -> Void)?
     var onHistoryChange: ((Bool) -> Void)?
@@ -216,6 +219,15 @@ final class ProductPreferences: ObservableObject {
         return true
     }
 
+    func persistContextualCorrectionsEnabled(_ enabled: Bool) throws {
+        defaults.set(enabled, forKey: Key.contextualCorrectionsEnabled)
+        guard defaults.object(forKey: Key.contextualCorrectionsEnabled) is Bool,
+              defaults.bool(forKey: Key.contextualCorrectionsEnabled) == enabled else {
+            throw SyntheticDiagnosticAuthorizationError.localBetaDisabled
+        }
+        contextualCorrectionsEnabled = enabled
+    }
+
     private func verifiedGlossaryText(value: Any?) -> String? {
         guard value == nil || value is String else { return nil }
         let text = value as? String ?? TranscriptionGlossary.defaultText
@@ -242,6 +254,7 @@ final class ProductPreferences: ObservableObject {
         showsHUD = defaults.object(forKey: Key.showsHUD) as? Bool ?? true
         soundsEnabled = defaults.object(forKey: Key.soundsEnabled) as? Bool ?? true
         keepsHistory = defaults.object(forKey: Key.keepsHistory) as? Bool ?? true
+        contextualCorrectionsEnabled = defaults.object(forKey: Key.contextualCorrectionsEnabled) as? Bool ?? false
         transcriptionLanguage = TranscriptionLanguage(
             rawValue: defaults.string(forKey: Key.transcriptionLanguage) ?? ""
         ) ?? .portuguese
@@ -254,12 +267,128 @@ final class ProductPreferences: ObservableObject {
     }
 }
 
+extension ProductPreferences: ContextualOptInStore {}
+
+@MainActor
+func runSyntheticDiagnostic(
+    _ diagnostic: SyntheticDiagnosticController
+) async -> (result: SyntheticDiagnosticResult?, errorMessage: String?) {
+    do {
+        return (try await diagnostic.run(), nil)
+    } catch let error as SyntheticDiagnosticError {
+        let message: String? = switch error {
+        case .authorizationUnavailable: "Autorize novamente o diagnóstico sintético."
+        case .timedOut: "O diagnóstico sintético expirou."
+        case .providerRejected: "O provedor recusou o diagnóstico sintético."
+        case .transportUnavailable: "Não foi possível acessar o diagnóstico sintético."
+        case .invalidResponse: "O diagnóstico recebeu uma resposta inválida."
+        case .cancelled: nil
+        }
+        return (nil, message)
+    } catch {
+        return (nil, "Não foi possível concluir o diagnóstico sintético.")
+    }
+}
+
+@MainActor
+final class ContextualSettingsModel: ObservableObject {
+    static let disclosureLines = [
+        "Correções contextuais (beta)",
+        "Beta local, desligado por padrão: salva e organiza exemplos confirmados neste Mac.",
+        "Neste beta, esses exemplos ainda não aplicam correções automáticas ao ditado pessoal.",
+        "Diagnóstico de infraestrutura: envia somente a frase sintética identificada ao OpenRouter/TypeSafe, uma única vez.",
+        "O diagnóstico não recebe nem corrige seu ditado pessoal."
+    ]
+    static let diagnosticAccessibilityLabel = "Executar diagnóstico sintético uma vez"
+    static let deleteExampleAccessibilityLabel = "Apagar exemplo contextual"
+    static let deleteAllAccessibilityLabel = "Apagar todos os exemplos contextuais"
+    static let removeCredentialAccessibilityLabel = "Remover chave do diagnóstico"
+
+    let authorization: any SyntheticDiagnosticAuthorizationManaging
+    let diagnostic: SyntheticDiagnosticController
+    @Published var credential = ""
+    @Published private(set) var statusMessage: String?
+    @Published private(set) var errorMessage: String?
+    @Published private(set) var isRunningDiagnostic = false
+
+    init(
+        authorization: any SyntheticDiagnosticAuthorizationManaging,
+        diagnostic: SyntheticDiagnosticController
+    ) {
+        self.authorization = authorization
+        self.diagnostic = diagnostic
+    }
+
+    func setLocalBetaEnabled(_ enabled: Bool) async {
+        do {
+            try await authorization.setLocalBetaEnabled(enabled)
+            errorMessage = nil
+        } catch {
+            errorMessage = "Não foi possível alterar o beta local."
+        }
+    }
+
+    func authorizeDiagnostic() async {
+        do {
+            try await authorization.authorizeSyntheticDiagnostic(
+                explicitConsent: true,
+                credential: credential
+            )
+            credential = ""
+            statusMessage = "Diagnóstico sintético autorizado."
+            errorMessage = nil
+        } catch {
+            credential = ""
+            statusMessage = nil
+            errorMessage = "Não foi possível autorizar o diagnóstico sintético."
+        }
+    }
+
+    func removeCredential() async {
+        do {
+            try await authorization.removeSyntheticDiagnosticCredential()
+            credential = ""
+            statusMessage = "Chave do diagnóstico removida."
+            errorMessage = nil
+        } catch {
+            credential = ""
+            statusMessage = nil
+            errorMessage = "Não foi possível remover a chave do diagnóstico."
+        }
+    }
+
+    func runDiagnostic() async {
+        isRunningDiagnostic = true
+        defer { isRunningDiagnostic = false }
+        let observation = await runSyntheticDiagnostic(diagnostic)
+        errorMessage = observation.errorMessage
+        guard let result = observation.result else {
+            if observation.errorMessage == nil { statusMessage = nil }
+            return
+        }
+        statusMessage = "Diagnóstico concluído: \(result.outcome.category.rawValue). Modelo \(result.receipt.resolvedModel)."
+    }
+}
+
 struct ProductSettingsView: View {
     @ObservedObject var preferences: ProductPreferences
+    @ObservedObject var contextualStore: ContextualCorrectionStore
+    @StateObject private var contextualModel: ContextualSettingsModel
     @State private var selection = ProductSettingsSection.general
 
-    init(preferences: ProductPreferences, initialSection: ProductSettingsSection = .general) {
+    init(
+        preferences: ProductPreferences,
+        contextualStore: ContextualCorrectionStore,
+        authorization: any SyntheticDiagnosticAuthorizationManaging,
+        diagnostic: SyntheticDiagnosticController,
+        initialSection: ProductSettingsSection = .general
+    ) {
         self.preferences = preferences
+        self.contextualStore = contextualStore
+        _contextualModel = StateObject(wrappedValue: ContextualSettingsModel(
+            authorization: authorization,
+            diagnostic: diagnostic
+        ))
         _selection = State(initialValue: initialSection)
     }
 
@@ -319,7 +448,11 @@ struct ProductSettingsView: View {
                 case .shortcut: ShortcutSettingsPane(preferences: preferences)
                 case .sounds: SoundLibrarySettingsPane(preferences: preferences)
                 case .audio: AudioSettingsPane()
-                case .transcription: TranscriptionSettingsPane(preferences: preferences)
+                case .transcription: TranscriptionSettingsPane(
+                    preferences: preferences,
+                    contextualStore: contextualStore,
+                    contextualModel: contextualModel
+                )
                 case .about: AboutSettingsPane()
                 }
             }
@@ -462,6 +595,8 @@ private struct SoundLibrarySettingsPane: View {
 
 private struct TranscriptionSettingsPane: View {
     @ObservedObject var preferences: ProductPreferences
+    @ObservedObject var contextualStore: ContextualCorrectionStore
+    @ObservedObject var contextualModel: ContextualSettingsModel
     @ObservedObject private var modelManager = WhisperModelManager.shared
 
     var body: some View {
@@ -498,6 +633,52 @@ private struct TranscriptionSettingsPane: View {
                 Button("Restaurar vocabulário padrão") {
                     preferences.transcriptionGlossary = TranscriptionGlossary.defaultText
                 }
+                }
+                ResenhaRuleSection(ContextualSettingsModel.disclosureLines[0]) {
+                    Text(ContextualSettingsModel.disclosureLines[1]).font(.callout)
+                    Text(ContextualSettingsModel.disclosureLines[2]).font(.callout)
+                    Toggle("Ativar beta local", isOn: Binding(
+                        get: { preferences.contextualCorrectionsEnabled },
+                        set: { enabled in Task { await contextualModel.setLocalBetaEnabled(enabled) } }
+                    ))
+                    .accessibilityLabel("Ativar correções contextuais locais")
+                    Divider()
+                    Text(ContextualSettingsModel.disclosureLines[3]).font(.callout)
+                    Text(ContextualSettingsModel.disclosureLines[4]).font(.callout)
+                    SecureField("Chave descartável do OpenRouter", text: $contextualModel.credential)
+                        .accessibilityLabel("Chave do diagnóstico sintético")
+                    HStack {
+                        Button("Autorizar diagnóstico") {
+                            Task { await contextualModel.authorizeDiagnostic() }
+                        }
+                        Button("Executar uma vez") {
+                            Task { await contextualModel.runDiagnostic() }
+                        }
+                        .disabled(contextualModel.isRunningDiagnostic)
+                        .accessibilityLabel(ContextualSettingsModel.diagnosticAccessibilityLabel)
+                        Button("Remover chave") {
+                            Task { await contextualModel.removeCredential() }
+                        }
+                        .accessibilityLabel(ContextualSettingsModel.removeCredentialAccessibilityLabel)
+                    }
+                    ForEach(contextualStore.examples) { example in
+                        HStack {
+                            Text("\(example.heard) → \(example.canonical)")
+                            Spacer()
+                            Button("Apagar") { _ = contextualStore.delete(id: example.id) }
+                                .accessibilityLabel(ContextualSettingsModel.deleteExampleAccessibilityLabel)
+                        }
+                    }
+                    if !contextualStore.examples.isEmpty {
+                        Button("Apagar todos") { _ = contextualStore.deleteAll() }
+                            .accessibilityLabel(ContextualSettingsModel.deleteAllAccessibilityLabel)
+                    }
+                    if let status = contextualModel.statusMessage {
+                        Text(status).accessibilityLabel(status)
+                    }
+                    if let error = contextualModel.errorMessage {
+                        Text(error).foregroundStyle(ResenhaTheme.warning).accessibilityLabel(error)
+                    }
                 }
             }
         }
@@ -547,8 +728,21 @@ private struct TranscriptionSettingsPane: View {
 final class ProductSettingsWindowController {
     private(set) var window: NSWindow?
     private let preferences: ProductPreferences
+    private let contextualStore: ContextualCorrectionStore
+    private let authorization: any SyntheticDiagnosticAuthorizationManaging
+    private let diagnostic: SyntheticDiagnosticController
 
-    init(preferences: ProductPreferences) { self.preferences = preferences }
+    init(
+        preferences: ProductPreferences,
+        contextualStore: ContextualCorrectionStore,
+        authorization: any SyntheticDiagnosticAuthorizationManaging,
+        diagnostic: SyntheticDiagnosticController
+    ) {
+        self.preferences = preferences
+        self.contextualStore = contextualStore
+        self.authorization = authorization
+        self.diagnostic = diagnostic
+    }
 
     func show() {
         let window = window ?? makeWindow()
@@ -566,7 +760,12 @@ final class ProductSettingsWindowController {
         window.title = "Ajustes do Resenha"
         window.minSize = NSSize(width: 700, height: 500)
         window.isReleasedWhenClosed = false
-        window.contentView = NSHostingView(rootView: ProductSettingsView(preferences: preferences))
+        window.contentView = NSHostingView(rootView: ProductSettingsView(
+            preferences: preferences,
+            contextualStore: contextualStore,
+            authorization: authorization,
+            diagnostic: diagnostic
+        ))
         window.center()
         self.window = window
         return window

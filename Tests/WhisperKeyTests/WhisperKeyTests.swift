@@ -14,6 +14,65 @@ private actor DisabledCoordinatorDecisionProvider: ContextualDecisionProvider {
     }
 }
 
+private final class EphemeralContextualCredentialStore: ContextualCredentialStore, @unchecked Sendable {
+    private let lock = NSLock()
+    private var value: String?
+    func save(_ value: String) throws { lock.withLock { self.value = value } }
+    func load() throws -> String? { lock.withLock { value } }
+    func delete() throws { lock.withLock { value = nil } }
+}
+
+private actor NoopSyntheticDiagnosticProvider: SyntheticDiagnosticDecisionProvider {
+    func decideSynthetic(
+        sentence: String,
+        language: String,
+        occurrences: [ContextualCorrectionOccurrence],
+        deadline: ContextualInstant,
+        beforeTransportOpen: @escaping @Sendable () async -> Bool
+    ) async throws -> ContextualDecisionReceipt {
+        throw OpenRouterDecisionsError.transportUnavailable
+    }
+}
+
+@MainActor
+private final class TestSettingsComposition {
+    let store: ContextualCorrectionStore
+    let authorization: SyntheticDiagnosticAuthorizationOwner
+    let diagnostic: SyntheticDiagnosticController
+
+    init(preferences: ProductPreferences) {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ResenhaTests/\(UUID().uuidString)")
+        store = ContextualCorrectionStore(fileURL: root.appendingPathComponent("contextual.json"))
+        let policy = ContextualCorrectionPolicy()
+        let time = ContinuousContextualTime()
+        authorization = SyntheticDiagnosticAuthorizationOwner(
+            optInStore: preferences,
+            credentialStore: EphemeralContextualCredentialStore(),
+            guardStore: SyntheticDiagnosticGuard(directoryURL: root.appendingPathComponent("guard")),
+            policy: policy
+        )
+        diagnostic = SyntheticDiagnosticController(
+            policy: policy,
+            authorization: authorization,
+            client: NoopSyntheticDiagnosticProvider(),
+            validator: ContextualDecisionValidator(),
+            fixture: .init(
+                id: SyntheticDiagnosticFixture.id,
+                pairID: "rosto-hostel",
+                learningExampleIDs: ["learn-rosto-hostel-001"],
+                language: "pt",
+                input: "Reservei uma cama no rosto perto da estação.",
+                heard: "rosto",
+                canonical: "Hostel",
+                ordinal: 1,
+                expected: "Reservei uma cama no Hostel perto da estação."
+            ),
+            time: time
+        )
+    }
+}
+
 @MainActor
 private extension DictationCoordinator {
     convenience init(
@@ -677,11 +736,15 @@ final class WhisperKeyTests: XCTestCase {
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let preferences = ProductPreferences(defaults: defaults)
+        let contextual = TestSettingsComposition(preferences: preferences)
 
         for section in ProductSettingsSection.allCases {
             for (appearance, scheme) in [("light", ColorScheme.light), ("dark", ColorScheme.dark)] {
                 let view = NSHostingView(rootView: ProductSettingsView(
                     preferences: preferences,
+                    contextualStore: contextual.store,
+                    authorization: contextual.authorization,
+                    diagnostic: contextual.diagnostic,
                     initialSection: section
                 ).environment(\.colorScheme, scheme))
                 view.frame = CGRect(x: 0, y: 0, width: 760, height: 560)
@@ -833,7 +896,14 @@ final class WhisperKeyTests: XCTestCase {
 
     @MainActor
     func testProductSettingsReusesOneNativeWindow() throws {
-        let controller = ProductSettingsWindowController(preferences: ProductPreferences())
+        let preferences = ProductPreferences()
+        let contextual = TestSettingsComposition(preferences: preferences)
+        let controller = ProductSettingsWindowController(
+            preferences: preferences,
+            contextualStore: contextual.store,
+            authorization: contextual.authorization,
+            diagnostic: contextual.diagnostic
+        )
         controller.show()
         let first = try XCTUnwrap(controller.window)
         controller.show()
@@ -4150,6 +4220,352 @@ final class ContextualCoordinatorTests: XCTestCase {
     }
 }
 
+@MainActor
+final class ContextualFeedbackSettingsTests: XCTestCase {
+    private struct SettingsFixture {
+        let suiteName: String
+        let defaults: UserDefaults
+        let preferences: ProductPreferences
+
+        @MainActor static func make() throws -> Self {
+            let suiteName = "ContextualFeedbackSettingsTests.\(UUID().uuidString)"
+            let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+            return .init(
+                suiteName: suiteName,
+                defaults: defaults,
+                preferences: ProductPreferences(defaults: defaults)
+            )
+        }
+    }
+
+    private final class AuthorizationManagerSpy: SyntheticDiagnosticAuthorizationManaging {
+        enum Failure: Error { case requested }
+        var failure: Failure?
+        private(set) var localValues: [Bool] = []
+        private(set) var authorizedCredentials: [String] = []
+        private(set) var removalCount = 0
+
+        func setLocalBetaEnabled(_ enabled: Bool) async throws {
+            localValues.append(enabled)
+            if let failure { throw failure }
+        }
+
+        func authorizeSyntheticDiagnostic(explicitConsent: Bool, credential: String) async throws {
+            authorizedCredentials.append(credential)
+            if let failure { throw failure }
+        }
+
+        func removeSyntheticDiagnosticCredential() async throws {
+            removalCount += 1
+            if let failure { throw failure }
+        }
+    }
+
+    private func makeStore() -> (store: ContextualCorrectionStore, root: URL) {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ContextualFeedbackSettingsTests/\(UUID().uuidString)")
+        return (ContextualCorrectionStore(fileURL: root.appendingPathComponent("contextual.json")), root)
+    }
+
+    private func configurePanel(
+        store: ContextualCorrectionStore,
+        defaults: UserDefaults
+    ) -> FloatingPanelController {
+        let panel = FloatingPanelController()
+        panel.configureFeedback(preferences: ProductPreferences(defaults: defaults), store: store)
+        return panel
+    }
+
+    private func offer(
+        _ panel: FloatingPanelController,
+        text: String,
+        heard: String = "rosto",
+        canonical: String = "Hostel",
+        ordinal: Int? = nil
+    ) -> UUID {
+        let token = UUID()
+        panel.offerFeedback(.init(
+            id: token, targetApplication: nil, text: text, language: .portuguese
+        ))
+        panel.openCorrection(token: token)
+        panel.updateCorrectionDraft(token: token, heard: heard, canonical: canonical)
+        if let ordinal { panel.selectCorrectionOccurrence(token: token, ordinal: ordinal) }
+        return token
+    }
+
+    func testFeedbackSaveCreatesContextualExampleWithoutGlobalGlossaryRule() throws {
+        let suite = "ContextualFeedbackSettingsTests.Save.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let fixture = makeStore()
+        defer { try? FileManager.default.removeItem(at: fixture.root) }
+        let preferences = ProductPreferences(defaults: defaults)
+        let panel = FloatingPanelController()
+        panel.configureFeedback(preferences: preferences, store: fixture.store)
+        let baseline = preferences.transcriptionGlossary
+        defaults.set(7, forKey: "resenha.transcriptionGlossary")
+        XCTAssertFalse(preferences.reloadTranscriptionGlossaryForCorrection())
+        let token = offer(panel, text: "Reservei um rosto perto da estação.", ordinal: 1)
+        panel.saveCorrection(token: token)
+
+        XCTAssertEqual(fixture.store.examples.map(\.canonical), ["Hostel"])
+        XCTAssertEqual(preferences.transcriptionGlossary, baseline)
+    }
+
+    func testFeedbackRejectsAbsentMultipleUnselectedAndOversizedOccurrence() throws {
+        let fixture = try SettingsFixture.make()
+        defer { fixture.defaults.removePersistentDomain(forName: fixture.suiteName) }
+        let storage = makeStore()
+        defer { try? FileManager.default.removeItem(at: storage.root) }
+        let panel = configurePanel(store: storage.store, defaults: fixture.defaults)
+
+        let absent = offer(panel, text: "Reservei uma pousada.")
+        XCTAssertFalse(panel.canSaveCorrection, "absent")
+        panel.cancelFeedback(token: absent, restoreFocus: false)
+
+        let multiple = offer(panel, text: "rosto perto de outro rosto")
+        XCTAssertFalse(panel.canSaveCorrection, "multiple-unselected")
+        panel.selectCorrectionOccurrence(token: multiple, ordinal: 2)
+        XCTAssertTrue(panel.canSaveCorrection)
+        panel.cancelFeedback(token: multiple, restoreFocus: false)
+
+        let oversized = offer(panel, text: "rosto" + String(repeating: " x", count: 298))
+        panel.saveCorrection(token: oversized)
+        XCTAssertEqual(panel.correctionError, "A frase confirmada ultrapassa 600 caracteres")
+        XCTAssertTrue(panel.isEditingCorrection)
+    }
+
+    func testFeedbackPreservesDraftAcrossDuplicateConflictLimitAndWriteFailure() throws {
+        let fixture = try SettingsFixture.make()
+        defer { fixture.defaults.removePersistentDomain(forName: fixture.suiteName) }
+
+        let duplicateStorage = makeStore()
+        defer { try? FileManager.default.removeItem(at: duplicateStorage.root) }
+        let original = ContextualCorrectionExample(
+            id: UUID(), language: "pt", heard: "rosto", canonical: "Hostel",
+            sentence: "Reservei um rosto.", occurrenceOrdinal: 1
+        )
+        XCTAssertTrue(duplicateStorage.store.save(original).isSuccess)
+        let duplicatePanel = configurePanel(store: duplicateStorage.store, defaults: fixture.defaults)
+        let duplicate = offer(duplicatePanel, text: original.sentence, ordinal: 1)
+        duplicatePanel.saveCorrection(token: duplicate)
+        XCTAssertFalse(duplicatePanel.hasFeedback, "duplicate is an idempotent success")
+
+        let conflictPanel = configurePanel(store: duplicateStorage.store, defaults: fixture.defaults)
+        let conflict = offer(conflictPanel, text: original.sentence, canonical: "Hotel", ordinal: 1)
+        conflictPanel.saveCorrection(token: conflict)
+        XCTAssertEqual(conflictPanel.correctionDraft?.canonical, "Hotel")
+        XCTAssertTrue(conflictPanel.correctionError?.contains("outra correção") == true)
+
+        let limitStorage = makeStore()
+        defer { try? FileManager.default.removeItem(at: limitStorage.root) }
+        for index in 0..<ContextualCorrectionStore.maximumExamples {
+            XCTAssertTrue(limitStorage.store.save(.init(
+                id: UUID(), language: "pt", heard: "rosto", canonical: "Hostel",
+                sentence: "Reservei um rosto no quarto \(index).", occurrenceOrdinal: 1
+            )).isSuccess)
+        }
+        let limitPanel = configurePanel(store: limitStorage.store, defaults: fixture.defaults)
+        let limit = offer(limitPanel, text: "Reservei um rosto além do limite.", ordinal: 1)
+        limitPanel.saveCorrection(token: limit)
+        XCTAssertEqual(limitPanel.correctionDraft?.heard, "rosto")
+        XCTAssertTrue(limitPanel.correctionError?.contains("limite") == true)
+
+        let failureStorage = makeStore()
+        try FileManager.default.removeItem(at: failureStorage.root)
+        try Data("blocked".utf8).write(to: failureStorage.root)
+        defer { try? FileManager.default.removeItem(at: failureStorage.root) }
+        let failurePanel = configurePanel(store: failureStorage.store, defaults: fixture.defaults)
+        let failure = offer(failurePanel, text: "Reservei um rosto.", ordinal: 1)
+        failurePanel.saveCorrection(token: failure)
+        XCTAssertEqual(failurePanel.correctionDraft?.canonical, "Hostel")
+        XCTAssertNotNil(failurePanel.correctionError)
+    }
+
+    func testContextualFeedbackReleasesCompletionAcrossEveryExit() throws {
+        let fixture = try SettingsFixture.make()
+        defer { fixture.defaults.removePersistentDomain(forName: fixture.suiteName) }
+        let storage = makeStore()
+        defer { try? FileManager.default.removeItem(at: storage.root) }
+
+        for row in ["expiry", "approve", "save", "cancel", "replacement", "new-dictation", "hud-off", "termination"] {
+            var now: TimeInterval = 10
+            let panel = FloatingPanelController(clock: { now })
+            panel.configureFeedback(preferences: fixture.preferences, store: storage.store)
+            let released = expectation(description: "context released: \(row)")
+            weak var weakProbe: ContextRetentionProbe?
+            var token: UUID!
+            do {
+                let probe = ContextRetentionProbe { released.fulfill() }
+                weakProbe = probe
+                token = UUID()
+                panel.offerFeedback(.init(
+                    id: token, targetApplication: nil, text: "Reservei um rosto \(row).",
+                    language: .portuguese, retentionProbe: probe
+                ))
+            }
+            switch row {
+            case "expiry":
+                now = 20
+                panel.dismissIfCurrent(generation: panel.dismissal.generation, now: now)
+            case "approve": panel.approveFeedback(token: token)
+            case "save":
+                panel.openCorrection(token: token)
+                panel.updateCorrectionDraft(token: token, heard: "rosto", canonical: "Hostel")
+                panel.saveCorrection(token: token)
+            case "cancel": panel.cancelFeedback(token: token, restoreFocus: false)
+            case "replacement":
+                panel.offerFeedback(.init(id: UUID(), targetApplication: nil, text: "nova", language: .portuguese))
+                panel.hide()
+            case "new-dictation": panel.show(.listening)
+            case "hud-off", "termination": panel.hide()
+            default: XCTFail(row)
+            }
+            wait(for: [released], timeout: 1)
+            XCTAssertNil(weakProbe, row)
+        }
+    }
+
+    func testContextualSettingsLocalToggleNeverTouchesDiagnosticAuthorization() async throws {
+        let fixture = try SettingsFixture.make()
+        defer { fixture.defaults.removePersistentDomain(forName: fixture.suiteName) }
+        XCTAssertFalse(fixture.preferences.contextualCorrectionsEnabled, "default")
+        let manager = AuthorizationManagerSpy()
+        let model = ContextualSettingsModel(authorization: manager, diagnostic: makeDiagnostic())
+        await model.setLocalBetaEnabled(true)
+        XCTAssertEqual(manager.localValues, [true])
+        XCTAssertTrue(manager.authorizedCredentials.isEmpty)
+        XCTAssertEqual(manager.removalCount, 0)
+        try fixture.preferences.persistContextualCorrectionsEnabled(true)
+        XCTAssertTrue(ProductPreferences(defaults: fixture.defaults).contextualCorrectionsEnabled, "reopen")
+    }
+
+    func testContextualSettingsAuthorizationAndRemovalExposeSanitizedErrors() async throws {
+        let fixture = try SettingsFixture.make()
+        defer { fixture.defaults.removePersistentDomain(forName: fixture.suiteName) }
+        let manager = AuthorizationManagerSpy()
+        manager.failure = .requested
+        let model = ContextualSettingsModel(authorization: manager, diagnostic: makeDiagnostic())
+        model.credential = "secret-provider-body"
+        await model.authorizeDiagnostic()
+        XCTAssertEqual(model.errorMessage, "Não foi possível autorizar o diagnóstico sintético.")
+        XCTAssertFalse(model.errorMessage?.contains("secret-provider-body") == true)
+        XCTAssertTrue(model.credential.isEmpty)
+        await model.removeCredential()
+        XCTAssertEqual(model.errorMessage, "Não foi possível remover a chave do diagnóstico.")
+    }
+
+    func testContextualSettingsDiagnosticCatchesOnlySanitizedErrors() async throws {
+        let success = await runSyntheticDiagnostic(makeDiagnostic(provider: .receipt(validDiagnosticReceipt())))
+        XCTAssertNotNil(success.result)
+        XCTAssertNil(success.errorMessage)
+        let rows: [(SyntheticProviderMode, String?)] = [
+            (.openRouter(.timedOut), "O diagnóstico sintético expirou."),
+            (.openRouter(.invalidStatus(401)), "O provedor recusou o diagnóstico sintético."),
+            (.openRouter(.transportUnavailable), "Não foi possível acessar o diagnóstico sintético."),
+            (.receipt(validDiagnosticReceipt(decisions: [])), "O diagnóstico recebeu uma resposta inválida."),
+            (.cancellation, nil)
+        ]
+        for (provider, expected) in rows {
+            let observation = await runSyntheticDiagnostic(makeDiagnostic(provider: provider))
+            XCTAssertNil(observation.result)
+            XCTAssertEqual(observation.errorMessage, expected)
+        }
+        let unavailable = await runSyntheticDiagnostic(makeDiagnostic(authorizationMode: .failure))
+        XCTAssertEqual(unavailable.errorMessage, "Autorize novamente o diagnóstico sintético.")
+    }
+
+    func testContextualSettingsNeverEnablePersonalRemoteTransport() async throws {
+        let fixture = try SettingsFixture.make()
+        defer { fixture.defaults.removePersistentDomain(forName: fixture.suiteName) }
+        XCTAssertEqual(ContextualSettingsModel.disclosureLines, [
+            "Correções contextuais (beta)",
+            "Beta local, desligado por padrão: salva e organiza exemplos confirmados neste Mac.",
+            "Neste beta, esses exemplos ainda não aplicam correções automáticas ao ditado pessoal.",
+            "Diagnóstico de infraestrutura: envia somente a frase sintética identificada ao OpenRouter/TypeSafe, uma única vez.",
+            "O diagnóstico não recebe nem corrige seu ditado pessoal."
+        ])
+        let provider = SyntheticProviderStub(.receipt(validDiagnosticReceipt()))
+        let manager = AuthorizationManagerSpy()
+        let model = ContextualSettingsModel(
+            authorization: manager,
+            diagnostic: makeDiagnostic(providerObject: provider)
+        )
+        await model.setLocalBetaEnabled(true)
+        await model.setLocalBetaEnabled(false)
+        let requestCount = await provider.requestCount()
+        XCTAssertEqual(requestCount, 0)
+    }
+
+    func testContextualControlsHaveExactAccessibilityLabelsAndRestoreFocus() throws {
+        XCTAssertEqual(ContextualSettingsModel.diagnosticAccessibilityLabel, "Executar diagnóstico sintético uma vez")
+        XCTAssertEqual(ContextualSettingsModel.deleteExampleAccessibilityLabel, "Apagar exemplo contextual")
+        XCTAssertEqual(ContextualSettingsModel.deleteAllAccessibilityLabel, "Apagar todos os exemplos contextuais")
+        XCTAssertEqual(ContextualSettingsModel.removeCredentialAccessibilityLabel, "Remover chave do diagnóstico")
+        let fixture = try SettingsFixture.make()
+        defer { fixture.defaults.removePersistentDomain(forName: fixture.suiteName) }
+        let storage = makeStore()
+        defer { try? FileManager.default.removeItem(at: storage.root) }
+        let panel = configurePanel(store: storage.store, defaults: fixture.defaults)
+        let token = offer(panel, text: "Reservei um rosto.", ordinal: 1)
+        XCTAssertTrue(panel.cancelFeedback(token: token, restoreFocus: false))
+        XCTAssertFalse(panel.hasFeedback)
+    }
+
+    private func validDiagnosticReceipt(
+        decisions: [ContextualDecision]? = nil
+    ) -> ContextualDecisionReceipt {
+        .init(
+            decisions: decisions ?? [.init(
+                questionID: "o1", choice: .replace, confidence: 0.99,
+                chosenProbability: 0.99, runnerUpProbability: 0.01
+            )],
+            resolvedModel: "synthetic-test", inputTokens: 10, outputTokens: 5, costUSD: 0
+        )
+    }
+
+    private func makeDiagnostic(
+        authorizationMode: DiagnosticAuthorizationStub.Mode = .success,
+        provider: SyntheticProviderMode = .receipt(.init(
+            decisions: [.init(
+                questionID: "o1", choice: .replace, confidence: 0.99,
+                chosenProbability: 0.99, runnerUpProbability: 0.01
+            )],
+            resolvedModel: "synthetic-test", inputTokens: 10, outputTokens: 5, costUSD: 0
+        ))
+    ) -> SyntheticDiagnosticController {
+        makeDiagnostic(
+            authorizationMode: authorizationMode,
+            providerObject: SyntheticProviderStub(provider)
+        )
+    }
+
+    private func makeDiagnostic(
+        authorizationMode: DiagnosticAuthorizationStub.Mode = .success,
+        providerObject: SyntheticProviderStub
+    ) -> SyntheticDiagnosticController {
+        let policy = ContextualCorrectionPolicy()
+        return SyntheticDiagnosticController(
+            policy: policy,
+            authorization: DiagnosticAuthorizationStub(mode: authorizationMode, policy: policy),
+            client: providerObject,
+            validator: ContextualDecisionValidator(),
+            fixture: .init(
+                id: SyntheticDiagnosticFixture.id,
+                pairID: "rosto-hostel",
+                learningExampleIDs: ["learn-rosto-hostel-001"],
+                language: "pt",
+                input: "Reservei uma cama no rosto perto da estação.",
+                heard: "rosto",
+                canonical: "Hostel",
+                ordinal: 1,
+                expected: "Reservei uma cama no Hostel perto da estação."
+            ),
+            time: ContinuousContextualTime()
+        )
+    }
+}
+
 private final class InMemoryCredentialStore: ContextualCredentialStore, @unchecked Sendable {
     private let lock = NSLock()
     private var value: String?
@@ -4217,6 +4633,8 @@ private actor SyntheticProviderStub: SyntheticDiagnosticDecisionProvider {
     private(set) var beforeOpenResults: [Bool] = []
 
     init(_ mode: SyntheticProviderMode) { self.mode = mode }
+
+    func requestCount() -> Int { calls }
 
     func decideSynthetic(
         sentence: String,

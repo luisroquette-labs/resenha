@@ -7,16 +7,7 @@ struct WhisperKeyApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     var body: some Scene {
-        Settings { ProductSettingsView(preferences: appDelegate.preferences) }
-    }
-}
-
-@MainActor
-private final class AppContextualOptInStore: ContextualOptInStore {
-    private(set) var contextualCorrectionsEnabled = false
-
-    func persistContextualCorrectionsEnabled(_ enabled: Bool) throws {
-        contextualCorrectionsEnabled = enabled
+        Settings { appDelegate.productSettingsView }
     }
 }
 
@@ -37,7 +28,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let contextualTime = ContinuousContextualTime()
     private let contextualPolicy = ContextualCorrectionPolicy()
     private let contextualStore = ContextualCorrectionStore()
-    private let contextualOptIn = AppContextualOptInStore()
     private let contextualCredentialStore = KeychainContextualCredentialStore()
     private lazy var contextualTimeComposition: ContextualTimeComposition = {
         do {
@@ -63,7 +53,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     )
     private lazy var contextualAuthorization = SyntheticDiagnosticAuthorizationOwner(
-        optInStore: contextualOptIn,
+        optInStore: preferences,
         credentialStore: contextualCredentialStore,
         guardStore: SyntheticDiagnosticGuard(),
         policy: contextualPolicy
@@ -89,7 +79,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         requestPermissions: { [weak self] in self?.enablePermissions() },
         openSettings: { [weak self] permission in self?.openSettings(for: permission) }
     )
-    private lazy var settingsController = ProductSettingsWindowController(preferences: preferences)
+    private lazy var settingsController = ProductSettingsWindowController(
+        preferences: preferences,
+        contextualStore: contextualStore,
+        authorization: contextualAuthorization,
+        diagnostic: contextualDiagnosticController
+    )
+
+    var productSettingsView: ProductSettingsView {
+        ProductSettingsView(
+            preferences: preferences,
+            contextualStore: contextualStore,
+            authorization: contextualAuthorization,
+            diagnostic: contextualDiagnosticController
+        )
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         AudioRecorder.cleanupStaleRecordings()
@@ -125,7 +129,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             contextualResolver: contextualResolver,
             contextualTokenSource: DictationCoordinator.productionContextualTokenSource(
                 policy: contextualPolicy,
-                isEnabled: { [contextualOptIn] in contextualOptIn.contextualCorrectionsEnabled }
+                isEnabled: { [preferences] in preferences.contextualCorrectionsEnabled }
             ),
             contextualStoreGeneration: { [weak contextualStore] in contextualStore?.generation ?? 0 }
         ))
@@ -150,7 +154,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             guard let self, self.preferences.showsHUD else { return }
             self.panel.offerFeedback(context)
         }
-        panel.configureFeedback(preferences: preferences)
+        panel.configureFeedback(preferences: preferences, store: contextualStore)
         panel.onFeedbackChange = { [weak self] in self?.updateFeedbackMenu() }
         preferences.onHUDChange = { [weak self] visible in if !visible { self?.panel.hide() } }
     }

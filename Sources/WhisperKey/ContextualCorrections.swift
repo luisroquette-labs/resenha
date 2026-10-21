@@ -36,6 +36,23 @@ enum ContextualCorrectionSaveResult: Equatable, Sendable {
     }
 }
 
+extension ContextualCorrectionSaveResult {
+    var feedbackMessage: String {
+        switch self {
+        case .saved: "Correção contextual aprendida neste Mac"
+        case .alreadyExists: "Correção contextual já existente"
+        case .conflict: "Já existe outra correção para esta ocorrência"
+        case .limitReached: "O limite de 100 correções contextuais foi atingido"
+        case .invalid(.sentenceTooLong): "A frase confirmada ultrapassa 600 caracteres"
+        case .invalid(.occurrenceMissing): "A palavra ouvida não aparece na frase confirmada"
+        case .invalid(.occurrenceAmbiguous): "Selecione a ocorrência exata antes de salvar"
+        case .invalid: "Confira a palavra ouvida, a correção e a frase confirmada"
+        case .storageFailure(false): "Não foi possível salvar a correção contextual"
+        case .storageFailure(true): "Recarregue as correções contextuais antes de tentar novamente"
+        }
+    }
+}
+
 enum ContextualCorrectionStoreError: Error, Equatable, Sendable {
     case unavailable
     case oversized
