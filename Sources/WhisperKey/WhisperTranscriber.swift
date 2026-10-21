@@ -51,26 +51,97 @@ struct WhisperPaths: Sendable {
     }
 }
 
+final class WhisperExecutionControl: @unchecked Sendable {
+    private enum StopReason { case cancelled, timedOut }
+    private let lock = NSLock()
+    private var reason: StopReason?
+    private var callbackPolls = 0
+    private var callbackAborted = false
+    private let deadline: TimeInterval
+    private let clock: @Sendable () -> TimeInterval
+
+    init(maximumRuntime: TimeInterval = WhisperTranscriber.maximumRuntime,
+         clock: @escaping @Sendable () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }) {
+        self.clock = clock
+        deadline = clock() + max(0, maximumRuntime)
+    }
+
+    func cancel() {
+        lock.withLock {
+            if reason == nil { reason = clock() >= deadline ? .timedOut : .cancelled }
+        }
+    }
+
+    private func stopReason() -> StopReason? {
+        lock.withLock {
+            if reason == nil, clock() >= deadline { reason = .timedOut }
+            return reason
+        }
+    }
+
+    var shouldAbort: Bool {
+        lock.withLock {
+            if reason == nil, clock() >= deadline { reason = .timedOut }
+            callbackPolls += 1
+            if reason != nil { callbackAborted = true }
+            return reason != nil
+        }
+    }
+
+    var abortCallbackPolls: Int { lock.withLock { callbackPolls } }
+    var didAbortInference: Bool { lock.withLock { callbackAborted } }
+
+    func check() throws {
+        switch stopReason() {
+        case .cancelled: throw CancellationError()
+        case .timedOut: throw WhisperError.timedOut
+        case nil: return
+        }
+    }
+}
+
 struct WhisperTranscriber: Sendable {
     static let maximumRuntime: TimeInterval = 10 * 60
     private static let engine = EmbeddedWhisperEngine()
+    var infer: @Sendable ([Float], String, String, WhisperExecutionControl) throws -> String = { samples, language, prompt, control in
+        try WhisperTranscriber.engine.transcribe(samples: samples, model: WhisperPaths.resolve().model,
+            language: language, prompt: prompt, control: control)
+    }
+    var removeAudio: @Sendable (URL) throws -> Void = { url in
+        do { try FileManager.default.removeItem(at: url) }
+        catch let error as CocoaError where error.code == .fileNoSuchFile { }
+    }
 
+    // Consumes the captured WAV; callers that need a reusable fixture must pass a copy.
     func transcribe(
         audioURL: URL,
         language: TranscriptionLanguage = .portuguese,
-        glossaryText: String = TranscriptionGlossary.defaultText
-    ) throws -> String {
-        let paths = try WhisperPaths.resolve()
+        glossaryText: String = TranscriptionGlossary.defaultText,
+        control: WhisperExecutionControl = WhisperExecutionControl()
+    ) async throws -> String {
+        try await withTaskCancellationHandler {
+            try consumeRecording(audioURL: audioURL, language: language, glossaryText: glossaryText, control: control)
+        } onCancel: { control.cancel() }
+    }
+
+    private func consumeRecording(audioURL: URL, language: TranscriptionLanguage,
+                                  glossaryText: String, control: WhisperExecutionControl) throws -> String {
+        var removed = false
+        func removeRecording() throws {
+            guard !removed else { return }
+            try removeAudio(audioURL)
+            removed = true
+        }
+        defer { try? removeRecording() }
+        try control.check()
         let glossary = TranscriptionGlossary(text: glossaryText)
         let samples = try Self.readSamples(from: audioURL)
-        let raw = try Self.engine.transcribe(
-            samples: samples,
-            model: paths.model,
-            language: language.rawValue,
-            prompt: glossary.prompt,
-            maximumRuntime: Self.maximumRuntime
-        )
+        try removeRecording()
+        try control.check()
+        let raw = try infer(samples, language.rawValue, glossary.prompt, control)
+        try control.check()
         let transcript = TranscriptPostprocessor.process(raw, glossary: glossary)
+        try control.check()
         guard !transcript.isEmpty else { throw WhisperError.emptyTranscript }
         return transcript
     }
@@ -89,10 +160,18 @@ struct WhisperTranscriber: Sendable {
     }
 }
 
-private final class EmbeddedWhisperEngine: @unchecked Sendable {
-    private let lock = NSLock()
+final class EmbeddedWhisperEngine: @unchecked Sendable {
+    private let access = DispatchSemaphore(value: 1)
+    private let inference: (@Sendable (whisper_full_params, [Float]) throws -> String)?
+    private let onWait: (@Sendable () -> Void)?
     private var context: OpaquePointer?
     private var modelPath: String?
+
+    init(inference: (@Sendable (whisper_full_params, [Float]) throws -> String)? = nil,
+         onWait: (@Sendable () -> Void)? = nil) {
+        self.inference = inference
+        self.onWait = onWait
+    }
 
     deinit {
         if let context { whisper_free(context) }
@@ -103,13 +182,15 @@ private final class EmbeddedWhisperEngine: @unchecked Sendable {
         model: URL,
         language: String,
         prompt: String,
-        maximumRuntime: TimeInterval
+        control: WhisperExecutionControl
     ) throws -> String {
-        lock.lock()
-        defer { lock.unlock() }
-        if Task.isCancelled { throw CancellationError() }
-        let startedAt = Date()
-        let context = try loadContext(model: model)
+        try control.check()
+        while access.wait(timeout: .now() + .milliseconds(10)) == .timedOut {
+            onWait?()
+            try control.check()
+        }
+        defer { access.signal() }
+        try control.check()
         var params = whisper_full_default_params(WHISPER_SAMPLING_BEAM_SEARCH)
         params.n_threads = Int32(max(2, min(8, ProcessInfo.processInfo.activeProcessorCount - 2)))
         params.translate = false
@@ -121,6 +202,26 @@ private final class EmbeddedWhisperEngine: @unchecked Sendable {
         params.print_timestamps = false
         params.suppress_blank = true
         params.beam_search.beam_size = 5
+        let retained = Unmanaged.passRetained(control)
+        defer { retained.release() }
+        params.abort_callback_user_data = retained.toOpaque()
+        params.abort_callback = { pointer in
+            guard let pointer else { return true }
+            return Unmanaged<WhisperExecutionControl>.fromOpaque(pointer).takeUnretainedValue().shouldAbort
+        }
+
+        if let inference {
+            do {
+                let result = try inference(params, samples)
+                try control.check()
+                return result
+            } catch {
+                try control.check()
+                throw error
+            }
+        }
+        let context = try loadContext(model: model)
+        try control.check()
 
         let status = language.withCString { languagePointer in
             prompt.withCString { promptPointer in
@@ -131,12 +232,8 @@ private final class EmbeddedWhisperEngine: @unchecked Sendable {
                 }
             }
         }
-        if Task.isCancelled { throw CancellationError() }
-        guard !WhisperRuntimePolicy.hasTimedOut(
-            startedAt: startedAt,
-            now: Date(),
-            maximumRuntime: maximumRuntime
-        ) else { throw WhisperError.timedOut }
+        // whisper.cpp uses -6/-8/-9 for encode/decode failure and abort alike.
+        try control.check()
         guard status == 0 else { throw WhisperError.failed(status, "embedded whisper.cpp inference failed") }
 
         return (0..<whisper_full_n_segments(context)).compactMap { index in
@@ -158,12 +255,6 @@ private final class EmbeddedWhisperEngine: @unchecked Sendable {
         context = loaded
         modelPath = model.path
         return loaded
-    }
-}
-
-enum WhisperRuntimePolicy {
-    static func hasTimedOut(startedAt: Date, now: Date, maximumRuntime: TimeInterval) -> Bool {
-        now.timeIntervalSince(startedAt) >= max(0, maximumRuntime)
     }
 }
 
@@ -230,12 +321,12 @@ struct TranscriptionGlossary: Equatable, Sendable {
             case .empty: "Preencha os dois campos."
             case .identical: "Informe uma correção diferente do texto ouvido."
             case .invalidCharacters: "Use uma única linha, sem o caractere =, em cada campo."
-            case .lineLimit: "A regra deve ter no máximo 160 caracteres."
+            case .lineLimit: "Use até 160 caracteres e 2.560 bytes por campo. O texto anterior foi preservado."
             case .entryLimit: "O glossário atingiu 200 entradas. Revise-o em Ajustes → Transcrição."
             case .textLimit: "O glossário atingiu 20.000 caracteres. Revise-o em Ajustes → Transcrição."
             case .promptLimit: "O vocabulário excede 8.000 caracteres. Reduza o glossário em Ajustes → Transcrição."
-            case .conflict(let canonical): "Este termo já aponta para “\(canonical)”. Revise o glossário em Ajustes → Transcrição."
-            case .ineffective: "A regra não pode ser aplicada integralmente. Revise o glossário em Ajustes → Transcrição."
+            case .conflict: "Há uma substituição manual conflitante no glossário. Revise-a em Ajustes → Transcrição."
+            case .ineffective: "O termo não cabe integralmente no vocabulário. Revise o glossário em Ajustes → Transcrição."
             }
         }
     }
@@ -246,7 +337,17 @@ struct TranscriptionGlossary: Equatable, Sendable {
         case invalid(CorrectionValidationError)
     }
 
-    static func correctionCandidate(heard: String, canonical: String, existingText: String) -> CorrectionCandidate {
+    static let maximumCorrectionFieldCharacters = maximumLineCharacters
+    static let maximumCorrectionFieldBytes = maximumCorrectionFieldCharacters * 16
+
+    static func acceptsCorrectionField(_ text: String) -> Bool {
+        // Bound bytes first: a single grapheme can contain an unbounded combining sequence.
+        text.utf8.prefix(maximumCorrectionFieldBytes + 1).count <= maximumCorrectionFieldBytes
+            && text.prefix(maximumCorrectionFieldCharacters + 1).count <= maximumCorrectionFieldCharacters
+    }
+
+    static func feedbackVocabularyCandidate(heard: String, canonical: String, existingText: String) -> CorrectionCandidate {
+        guard acceptsCorrectionField(heard), acceptsCorrectionField(canonical) else { return .invalid(.lineLimit) }
         // Check before trimming so a pasted trailing newline cannot change the rule grammar.
         guard ![heard, canonical].contains(where: {
             $0.rangeOfCharacter(from: .newlines) != nil || $0.contains("=")
@@ -255,14 +356,12 @@ struct TranscriptionGlossary: Equatable, Sendable {
         let canonical = canonical.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !heard.isEmpty, !canonical.isEmpty else { return .invalid(.empty) }
         guard heard != canonical else { return .invalid(.identical) }
-        let line = "\(heard) = \(canonical)"
-        guard line.count <= maximumLineCharacters else { return .invalid(.lineLimit) }
-
-        let source = try? NSRegularExpression(
-            pattern: "\\A\(NSRegularExpression.escapedPattern(for: heard))\\z", options: [.caseInsensitive]
-        )
-        func matches(_ text: String) -> Bool {
-            source?.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil
+        guard existingText.prefix(ProductPreferences.maximumGlossaryCharacters + 1).count
+                <= ProductPreferences.maximumGlossaryCharacters else { return .invalid(.textLimit) }
+        func matches(_ text: String, _ source: String) -> Bool {
+            let regex = try? NSRegularExpression(
+                pattern: "\\A\(NSRegularExpression.escapedPattern(for: source))\\z", options: [.caseInsensitive])
+            return regex?.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil
         }
         let previous = Self(text: existingText)
         let rawLines = existingText.components(separatedBy: .newlines)
@@ -274,25 +373,27 @@ struct TranscriptionGlossary: Equatable, Sendable {
             let parts = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
                 .split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
                 .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
-            if let first = parts.first, let last = parts.last,
+            if parts.count == 2, let first = parts.first, let last = parts.last,
                !first.isEmpty, !last.isEmpty {
-                if matches(first), last != canonical { return .invalid(.conflict(existingCanonical: last)) }
-                if matches(last), last != canonical { return .invalid(.conflict(existingCanonical: last)) }
+                if matches(first, heard) || matches(first, canonical), last != canonical {
+                    return .invalid(.conflict(existingCanonical: last))
+                }
             }
-            for replacement in parsed.replacements where matches(replacement.heard) && replacement.canonical != canonical {
+            for replacement in parsed.replacements where matches(replacement.heard, canonical) && replacement.canonical != canonical {
                 return .invalid(.conflict(existingCanonical: replacement.canonical))
             }
         }
-        if previous.replacements.contains(where: { matches($0.heard) && $0.canonical == canonical }) {
+        if previous.terms.contains(canonical) {
             return .alreadyExists
         }
         guard acceptedCount < maximumTerms else { return .invalid(.entryLimit) }
         let separator = existingText.isEmpty || existingText.last?.isNewline == true ? "" : "\n"
-        let candidate = existingText + separator + line
-        guard candidate.count <= ProductPreferences.maximumGlossaryCharacters else { return .invalid(.textLimit) }
+        guard existingText.count + separator.count + canonical.count <= ProductPreferences.maximumGlossaryCharacters
+        else { return .invalid(.textLimit) }
+        let candidate = existingText + separator + canonical
         let parsed = Self(text: candidate)
         guard parsed.terms.joined(separator: ", ").count <= maximumPromptCharacters else { return .invalid(.promptLimit) }
-        guard parsed.replacements.contains(.init(heard: heard, canonical: canonical)),
+        guard parsed.terms.contains(canonical),
               previous.replacements.allSatisfy(parsed.replacements.contains) else { return .invalid(.ineffective) }
         return .added(text: candidate)
     }

@@ -96,97 +96,100 @@ final class WhisperKeyTests: XCTestCase {
 
     func testCorrectionCandidateValidatesFieldsAndPreservesExactExistingText() {
         for pair in [("", "Nome"), (" \t ", "Nome"), ("Nome", " ")] {
-            XCTAssertEqual(TranscriptionGlossary.correctionCandidate(heard: pair.0, canonical: pair.1, existingText: ""),
+            XCTAssertEqual(TranscriptionGlossary.feedbackVocabularyCandidate(heard: pair.0, canonical: pair.1, existingText: ""),
                            .invalid(.empty))
         }
         for invalid in ["nome\n", "\rnome", "no\u{2028}me", "no=me"] {
-            XCTAssertEqual(TranscriptionGlossary.correctionCandidate(heard: invalid, canonical: "Nome", existingText: ""),
+            XCTAssertEqual(TranscriptionGlossary.feedbackVocabularyCandidate(heard: invalid, canonical: "Nome", existingText: ""),
                            .invalid(.invalidCharacters))
-            XCTAssertEqual(TranscriptionGlossary.correctionCandidate(heard: "nome", canonical: invalid, existingText: ""),
+            XCTAssertEqual(TranscriptionGlossary.feedbackVocabularyCandidate(heard: "nome", canonical: invalid, existingText: ""),
                            .invalid(.invalidCharacters))
         }
-        XCTAssertEqual(TranscriptionGlossary.correctionCandidate(heard: " nome ", canonical: "nome", existingText: ""),
+        XCTAssertEqual(TranscriptionGlossary.feedbackVocabularyCandidate(heard: " nome ", canonical: "nome", existingText: ""),
                        .invalid(.identical))
-        XCTAssertEqual(TranscriptionGlossary.correctionCandidate(heard: " nome ", canonical: " Nome ", existingText: ""),
-                       .added(text: "nome = Nome"))
+        XCTAssertEqual(TranscriptionGlossary.feedbackVocabularyCandidate(heard: " nome ", canonical: " Nome ", existingText: ""),
+                       .added(text: "Nome"))
         for existing in ["  anterior = Anterior  ", "anterior = Anterior\n", "anterior = Anterior\r\n"] {
             let separator = existing.last?.isNewline == true ? "" : "\n"
-            XCTAssertEqual(TranscriptionGlossary.correctionCandidate(heard: " coisa ", canonical: " COESA ", existingText: existing),
-                           .added(text: existing + separator + "coisa = COESA"))
+            XCTAssertEqual(TranscriptionGlossary.feedbackVocabularyCandidate(heard: " coisa ", canonical: " COESA ", existingText: existing),
+                           .added(text: existing + separator + "COESA"))
         }
     }
 
     func testCorrectionCandidateFindsConflictsAndOnlyAcceptsEffectiveDuplicates() {
-        XCTAssertEqual(TranscriptionGlossary.correctionCandidate(heard: "COISA", canonical: "COESA", existingText: "coisa = COESA"),
+        XCTAssertEqual(TranscriptionGlossary.feedbackVocabularyCandidate(heard: "COISA", canonical: "COESA", existingText: "coisa = COESA"),
                        .alreadyExists)
-        XCTAssertEqual(TranscriptionGlossary.correctionCandidate(heard: "coesa", canonical: "COESA", existingText: "COESA"),
+        XCTAssertEqual(TranscriptionGlossary.feedbackVocabularyCandidate(heard: "coesa", canonical: "COESA", existingText: "COESA"),
                        .alreadyExists)
-        for existing in ["Coisa = Outra", "coisa = COESA\nCOISA = Outra", "Coisa", "outro = Coisa"] {
-            guard case .invalid(.conflict) = TranscriptionGlossary.correctionCandidate(
+        for existing in ["Coisa = Outra", "coisa = COESA\nCOISA = Outra", "COESA = Outra"] {
+            guard case .invalid(.conflict) = TranscriptionGlossary.feedbackVocabularyCandidate(
                 heard: "coisa", canonical: "COESA", existingText: existing
             ) else { return XCTFail("Conflito não identificado: \(existing)") }
         }
+        XCTAssertEqual(TranscriptionGlossary.feedbackVocabularyCandidate(heard: "rosto", canonical: "Hostel", existingText: "rosto"),
+                       .added(text: "rosto\nHostel"))
         let full = Array(repeating: "termo", count: 200).joined(separator: "\n")
-        XCTAssertEqual(TranscriptionGlossary.correctionCandidate(
+        XCTAssertEqual(TranscriptionGlossary.feedbackVocabularyCandidate(
             heard: "coisa", canonical: "COESA", existingText: full + "\ncoisa = COESA"
         ), .invalid(.entryLimit))
-        XCTAssertEqual(TranscriptionGlossary.correctionCandidate(
+        XCTAssertEqual(TranscriptionGlossary.feedbackVocabularyCandidate(
             heard: "coisa", canonical: "COESA", existingText: "coisa = COESA\n" + full + "\nCOISA = Outra"
         ), .invalid(.conflict(existingCanonical: "Outra")))
-        XCTAssertEqual(TranscriptionGlossary.correctionCandidate(
+        XCTAssertEqual(TranscriptionGlossary.feedbackVocabularyCandidate(
             heard: "coisa", canonical: "COESA", existingText: "coisa = COESA\n" + full
         ), .alreadyExists)
         // ICU case folding matches the replacement engine, including the Kelvin sign.
-        XCTAssertEqual(TranscriptionGlossary.correctionCandidate(
+        XCTAssertEqual(TranscriptionGlossary.feedbackVocabularyCandidate(
             heard: "K", canonical: "Kelvin", existingText: "K = Outra"
         ), .invalid(.conflict(existingCanonical: "Outra")))
     }
 
     func testCorrectionCandidateExactLineEntryTextAndPromptBoundaries() {
-        let canonical157 = String(repeating: "á", count: 156)
-        XCTAssertEqual(("x = " + canonical157).count, 160)
-        XCTAssertEqual(TranscriptionGlossary.correctionCandidate(heard: "x", canonical: canonical157, existingText: ""),
-                       .added(text: "x = " + canonical157))
-        XCTAssertEqual(TranscriptionGlossary.correctionCandidate(heard: "x", canonical: canonical157 + "á", existingText: ""),
+        let canonical157 = String(repeating: "á", count: 160)
+        XCTAssertEqual(canonical157.count, 160)
+        XCTAssertEqual(TranscriptionGlossary.feedbackVocabularyCandidate(heard: "x", canonical: canonical157, existingText: ""),
+                       .added(text: canonical157))
+        XCTAssertEqual(TranscriptionGlossary.feedbackVocabularyCandidate(heard: "x", canonical: canonical157 + "á", existingText: ""),
                        .invalid(.lineLimit))
         let entries199 = Array(repeating: "termo", count: 199).joined(separator: "\n")
-        guard case .added(let at200) = TranscriptionGlossary.correctionCandidate(
+        guard case .added(let at200) = TranscriptionGlossary.feedbackVocabularyCandidate(
             heard: "x", canonical: "Y", existingText: entries199
         ) else { return XCTFail("A entrada 200 deve ser aceita antes da deduplicação") }
         XCTAssertEqual(TranscriptionGlossary(text: at200).terms.count, 2)
-        XCTAssertEqual(TranscriptionGlossary.correctionCandidate(heard: "x", canonical: "Y", existingText: entries199 + "\ntermo"),
+        XCTAssertEqual(TranscriptionGlossary.feedbackVocabularyCandidate(heard: "x", canonical: "Y", existingText: entries199 + "\ntermo"),
                        .invalid(.entryLimit))
-        let textPrefix = String(repeating: " ", count: 19_992) + "\n"
-        guard case .added(let at20000) = TranscriptionGlossary.correctionCandidate(
+        let textPrefix = String(repeating: " ", count: 19_996) + "\n"
+        guard case .added(let at20000) = TranscriptionGlossary.feedbackVocabularyCandidate(
             heard: "x", canonical: "YES", existingText: textPrefix
         ) else { return XCTFail("20.000 caracteres devem ser aceitos") }
         XCTAssertEqual(at20000.count, 20_000)
-        XCTAssertEqual(TranscriptionGlossary.correctionCandidate(
+        XCTAssertEqual(TranscriptionGlossary.feedbackVocabularyCandidate(
             heard: "x", canonical: "YES", existingText: " " + textPrefix
         ), .invalid(.textLimit))
 
         let terms = (0..<50).map { String(format: "%02d", $0) + String(repeating: "a", count: 155) }
         let existing = terms.joined(separator: "\n")
         let finalTerm = String(repeating: "z", count: 50)
-        guard case .added(let at8000) = TranscriptionGlossary.correctionCandidate(
+        guard case .added(let at8000) = TranscriptionGlossary.feedbackVocabularyCandidate(
             heard: "x", canonical: finalTerm, existingText: existing
         ) else { return XCTFail("8.000 caracteres de prompt devem ser aceitos") }
         XCTAssertEqual(TranscriptionGlossary(text: at8000).terms.joined(separator: ", ").count, 8_000)
-        XCTAssertEqual(TranscriptionGlossary.correctionCandidate(heard: "x", canonical: finalTerm + "z", existingText: existing),
+        XCTAssertEqual(TranscriptionGlossary.feedbackVocabularyCandidate(heard: "x", canonical: finalTerm + "z", existingText: existing),
                        .invalid(.promptLimit))
     }
 
-    func testCorrectionCandidateKeepsEscapingUnicodeWholeTermsAndExistingCascade() {
+    func testFeedbackVocabularyNeverAddsMappingsAndLegacyParserKeepsEscapingAndCascade() {
         for pair in [("cifrão", "$COESA"), ("barra", #"C:\COESA"#), ("eriq", "Éric"), ("whisper.cp", "whisper.cpp")] {
-            guard case .added(let text) = TranscriptionGlossary.correctionCandidate(
+            guard case .added(let text) = TranscriptionGlossary.feedbackVocabularyCandidate(
                 heard: pair.0, canonical: pair.1, existingText: ""
             ) else { return XCTFail("Par representável recusado") }
             XCTAssertEqual(TranscriptPostprocessor.process("A \(pair.0) chegou.", glossary: .init(text: text)),
-                           "A \(pair.1) chegou.")
+                           "A \(pair.0) chegou.")
+            XCTAssertEqual(TranscriptPostprocessor.process("A \(pair.0) chegou.", glossary: .init(text: "\(pair.0) = \(pair.1)")),
+                           "A \(pair.1) chegou.", "Manual settings mappings remain supported")
+            XCTAssertTrue(TranscriptionGlossary(text: text).prompt.contains(pair.1))
         }
-        guard case .added(let text) = TranscriptionGlossary.correctionCandidate(
-            heard: "erro longo", canonical: "curto", existingText: "curto = Final"
-        ) else { return XCTFail("Cascata legada deve permanecer") }
+        let text = "erro longo = curto\ncurto = Final"
         XCTAssertEqual(TranscriptPostprocessor.process("erro longo", glossary: .init(text: text)), "Final")
     }
 
@@ -242,12 +245,14 @@ final class WhisperKeyTests: XCTestCase {
         defaults.glossaryWrites = 0
         XCTAssertEqual(preferences.saveTranscriptionCorrection(heard: " Coisa Energia ", canonical: " COESA Energia "), .saved)
         XCTAssertEqual(defaults.glossaryWrites, 1)
-        XCTAssertEqual(preferences.transcriptionGlossary, " anterior = Anterior \nCoisa Energia = COESA Energia")
+        XCTAssertEqual(preferences.transcriptionGlossary, " anterior = Anterior \nCOESA Energia")
         let restored = ProductPreferences(defaults: try XCTUnwrap(UserDefaults(suiteName: suite)))
         XCTAssertEqual(restored.transcriptionGlossary, preferences.transcriptionGlossary)
         XCTAssertEqual(TranscriptPostprocessor.process(
             "A Coisa Energia chegou. Coisa Energias ficou.", glossary: .init(text: restored.transcriptionGlossary)
-        ), "A COESA Energia chegou. Coisa Energias ficou.")
+        ), "A Coisa Energia chegou. Coisa Energias ficou.")
+        XCTAssertTrue(TranscriptionGlossary(text: restored.transcriptionGlossary).prompt.contains("COESA Energia"))
+        XCTAssertFalse(String(describing: defaults.persistentDomain(forName: suite)).contains("Coisa Energia"))
         var after = defaults.persistentDomain(forName: suite) ?? [:]
         after.removeValue(forKey: "resenha.transcriptionGlossary")
         var otherBefore = before
@@ -256,8 +261,8 @@ final class WhisperKeyTests: XCTestCase {
         XCTAssertFalse(restored.keepsHistory)
         XCTAssertEqual(preferences.saveTranscriptionCorrection(heard: "coisa energia", canonical: "COESA Energia"), .alreadyExists)
         XCTAssertEqual(preferences.saveTranscriptionCorrection(heard: "", canonical: "COESA"), .invalid(.empty))
-        XCTAssertEqual(preferences.saveTranscriptionCorrection(heard: "coisa energia", canonical: "Outra"),
-                       .invalid(.conflict(existingCanonical: "COESA Energia")))
+        XCTAssertEqual(preferences.saveTranscriptionCorrection(heard: "anterior", canonical: "Outra"),
+                       .invalid(.conflict(existingCanonical: "Anterior")))
         XCTAssertEqual(defaults.glossaryWrites, 1)
     }
 
@@ -280,6 +285,117 @@ final class WhisperKeyTests: XCTestCase {
             XCTAssertEqual(defaults.glossaryRemovals, original == nil ? 1 : 0)
             XCTAssertTrue(preferences.canSaveTranscriptionCorrection)
             XCTAssertEqual(ProductPreferences(defaults: try XCTUnwrap(UserDefaults(suiteName: suite))).transcriptionGlossary, previous)
+        }
+    }
+
+    @MainActor
+    func testFeedbackHostelStoresOnlyVocabularyAndNeverReplacesRosto() throws {
+        let suite = "ResenhaTermOnly.\(UUID())"
+        let defaults = try XCTUnwrap(CorrectionDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let preferences = ProductPreferences(defaults: defaults)
+        preferences.transcriptionGlossary = "  legado = Legado  "
+        defaults.glossaryWrites = 0
+        let before = defaults.persistentDomain(forName: suite) ?? [:]
+        XCTAssertEqual(preferences.saveTranscriptionCorrection(heard: "rosto", canonical: "Hostel"), .saved)
+        XCTAssertEqual(preferences.transcriptionGlossary, "  legado = Legado  \nHostel")
+        let restored = ProductPreferences(defaults: try XCTUnwrap(UserDefaults(suiteName: suite)))
+        let glossary = TranscriptionGlossary(text: restored.transcriptionGlossary)
+        XCTAssertTrue(glossary.prompt.contains("Hostel"))
+        XCTAssertEqual(TranscriptPostprocessor.process("Meu rosto está vermelho", glossary: glossary), "Meu rosto está vermelho")
+        XCTAssertFalse(glossary.replacements.contains { $0.heard == "rosto" })
+        let after = defaults.persistentDomain(forName: suite) ?? [:]
+        XCTAssertFalse(String(describing: after).contains("rosto"))
+        XCTAssertEqual(Set(after.keys), Set(before.keys))
+        XCTAssertEqual(preferences.saveTranscriptionCorrection(heard: "outro som", canonical: "Hostel"), .alreadyExists)
+        XCTAssertEqual(defaults.glossaryWrites, 1)
+        XCTAssertEqual(ProductPreferences.CorrectionSaveResult.saved.message, "Termo adicionado ao vocabulário")
+    }
+
+    @MainActor
+    func testCorrectionDraftRejectsOversizedPasteBeforeSaveWithoutKeepingOrTruncatingInput() throws {
+        let suite = "ResenhaDraftBound.\(UUID())"
+        let defaults = try XCTUnwrap(CorrectionDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let preferences = ProductPreferences(defaults: defaults)
+        let panel = FloatingPanelController()
+        defer { panel.hide() }
+        panel.configureFeedback(preferences: preferences)
+        let token = UUID()
+        panel.offerFeedback(.init(id: token, targetApplication: nil))
+        panel.openCorrection(token: token)
+        panel.updateCorrectionDraft(token: token, heard: "rosto", canonical: "Hostel")
+        let oversized = String(repeating: "x", count: 161)
+        let combining = "a" + String(repeating: "\u{0301}", count: TranscriptionGlossary.maximumCorrectionFieldBytes)
+        XCTAssertEqual(combining.count, 1)
+        for value in [oversized, combining, String(repeating: "z", count: 1_000_000)] {
+            for invalidHeard in [true, false] {
+                panel.updateCorrectionDraft(token: token, heard: invalidHeard ? value : "rosto",
+                                            canonical: invalidHeard ? "Hostel" : value)
+                XCTAssertEqual(panel.correctionDraft?.heard, "rosto")
+                XCTAssertEqual(panel.correctionDraft?.canonical, "Hostel")
+                XCTAssertFalse(panel.canSaveCorrection)
+                XCTAssertEqual(panel.correctionSession?.invalidField, invalidHeard ? .heard : .canonical)
+                XCTAssertTrue(panel.correctionError?.contains("160") == true)
+                panel.saveCorrection(token: token)
+                XCTAssertEqual(defaults.glossaryWrites, 0)
+                XCTAssertEqual(preferences.saveTranscriptionCorrection(heard: invalidHeard ? value : "rosto",
+                    canonical: invalidHeard ? "Hostel" : value), .invalid(.lineLimit))
+                panel.updateCorrectionDraft(token: token, heard: "rosto", canonical: "Hostel")
+                XCTAssertTrue(panel.canSaveCorrection)
+            }
+        }
+        let boundary = String(repeating: "x", count: 160)
+        panel.updateCorrectionDraft(token: token, heard: boundary, canonical: "Hostel")
+        XCTAssertEqual(panel.correctionDraft?.heard, boundary)
+        XCTAssertTrue(panel.canSaveCorrection)
+        XCTAssertEqual(defaults.glossaryWrites, 0)
+    }
+
+    @MainActor
+    func testCorrectionTerminalClearsRetainedSessionAndReleasesEditorClosures() async throws {
+        let suite = "ResenhaDraftRetention.\(UUID())"
+        let defaults = try XCTUnwrap(CorrectionDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let preferences = ProductPreferences(defaults: defaults)
+        for terminal in 0..<6 {
+            let panel = FloatingPanelController()
+            panel.configureFeedback(preferences: preferences)
+            let token = UUID()
+            panel.offerFeedback(.init(id: token, targetApplication: nil))
+            panel.openCorrection(token: token)
+            panel.updateCorrectionDraft(token: token, heard: "rosto", canonical: "Hostel\(terminal)")
+            var retainedSession = try XCTUnwrap(panel.correctionSession) as CorrectionSession?
+            weak var releasedSession = retainedSession
+            let oldWindow = try XCTUnwrap(panel.correctionWindow)
+            let writes = defaults.glossaryWrites
+            switch terminal {
+            case 0: panel.saveCorrection(token: token)
+            case 1: panel.cancelFeedback(token: token, restoreFocus: false)
+            case 2: oldWindow.performClose(nil)
+            case 3: panel.show(.listening)
+            case 4: panel.hide() // Same cleanup for HUD off/termination.
+            default:
+                defaults.glossaryWrites = 0
+                defaults.divergeAfterWrite = true
+                defaults.rejectRestoration = true
+                panel.saveCorrection(token: token)
+                XCTAssertFalse(panel.canSaveCorrection)
+                panel.cancelFeedback(token: token, restoreFocus: false)
+            }
+            XCTAssertNil(panel.correctionDraft)
+            XCTAssertEqual(retainedSession?.heard, "")
+            XCTAssertEqual(retainedSession?.canonical, "")
+            XCTAssertNil(retainedSession?.targetPID)
+            XCTAssertNil(retainedSession?.token)
+            XCTAssertNil(oldWindow.contentView)
+            panel.saveCorrection(token: token)
+            if terminal != 0 && terminal != 5 { XCTAssertEqual(defaults.glossaryWrites, writes) }
+            XCTAssertFalse(String(describing: defaults.persistentDomain(forName: suite)).contains("rosto"))
+            retainedSession = nil
+            try await Task.sleep(for: .milliseconds(20))
+            XCTAssertNil(releasedSession)
+            panel.hide()
         }
     }
 
@@ -327,10 +443,9 @@ final class WhisperKeyTests: XCTestCase {
             defaults.rejectRestoration = false
             XCTAssertTrue(preferences.reloadTranscriptionGlossaryForCorrection())
             XCTAssertTrue(preferences.canSaveTranscriptionCorrection)
-            XCTAssertEqual(preferences.transcriptionGlossary, previous + "\ncoisa = COESA")
+            XCTAssertEqual(preferences.transcriptionGlossary, previous + "\nCOESA")
             XCTAssertEqual(preferences.saveTranscriptionCorrection(heard: "coisa", canonical: "COESA"), .alreadyExists)
-            XCTAssertEqual(preferences.saveTranscriptionCorrection(heard: "coisa", canonical: "Outra"),
-                           .invalid(.conflict(existingCanonical: "COESA")))
+            XCTAssertFalse(preferences.transcriptionGlossary.contains("coisa"))
             XCTAssertEqual(defaults.glossaryWrites, writes)
             XCTAssertEqual(defaults.glossaryRemovals, removals)
         }
@@ -1074,7 +1189,8 @@ final class WhisperKeyTests: XCTestCase {
         let first = DictationCompletion(id: UUID(), targetApplication: nil)
         panel.offerFeedback(first)
         XCTAssertTrue(panel.hasFeedback)
-        XCTAssertFalse(panel.ignoresMouseEvents)
+        XCTAssertTrue(panel.ignoresMouseEvents)
+        XCTAssertEqual(panel.feedbackTargetWindows.count, 2)
         XCTAssertNotNil(panel.dismissal.deadline)
         panel.dismissIfCurrent(generation: timer, now: .greatestFiniteMagnitude)
         XCTAssertEqual(panel.feedbackToken, first.id)
@@ -1116,7 +1232,7 @@ final class WhisperKeyTests: XCTestCase {
         defer { panel.hide() }
         panel.configureFeedback(preferences: preferences)
         var menuToken: UUID?
-        panel.onFeedbackChange = { menuToken = panel.approvalActionToken }
+        panel.onFeedbackChange = { [weak panel] in menuToken = panel?.approvalActionToken }
         let first = DictationCompletion(id: UUID(), targetApplication: nil)
         panel.show(.inserting, target: .session(nil))
         let processingFrame = panel.frame
@@ -1175,7 +1291,7 @@ final class WhisperKeyTests: XCTestCase {
         XCTAssertEqual(panel.feedbackToken, next)
         XCTAssertEqual(panel.correctionDraft?.heard, "Coisa")
         XCTAssertEqual(panel.correctionError, error)
-        for state in [FloatingStatus.listening, .feedbackNotice("Regra salva")] {
+        for state in [FloatingStatus.listening, .feedbackNotice("Termo adicionado ao vocabulário")] {
             panel.offerFeedback(.init(id: UUID(), targetApplication: nil))
             let generation = panel.dismissal.generation
             panel.show(state)
@@ -1193,6 +1309,193 @@ final class WhisperKeyTests: XCTestCase {
         XCTAssertNil(panel.dismissal.deadline)
         XCTAssertEqual(defaults.glossaryWrites, 0)
         XCTAssertEqual((defaults.persistentDomain(forName: suite) ?? [:]) as NSDictionary, before as NSDictionary)
+    }
+
+    @MainActor
+    func testFeedbackFinitePhasesShareMonotonicDeadlineAndStopAtTerminal() {
+        var now: TimeInterval = 100
+        let panel = FloatingPanelController(clock: { now })
+        defer { panel.hide() }
+        panel.offerFeedback(.init(id: UUID(), targetApplication: nil))
+        let generation = panel.dismissal.generation
+        XCTAssertEqual(panel.dismissal.deadline, 104)
+        XCTAssertEqual(panel.feedbackPhase, .entering)
+        XCTAssertEqual(panel.activePresentationTaskCount, 1)
+        XCTAssertNil(panel.correctionDraft)
+        panel.advanceFeedbackPresentation(generation: generation)
+        XCTAssertEqual(panel.feedbackPhase, .resting)
+        now = 103.249
+        panel.advanceFeedbackPresentation(generation: generation)
+        XCTAssertEqual(panel.feedbackPhase, .resting)
+        now = 103.25
+        panel.advanceFeedbackPresentation(generation: generation)
+        XCTAssertEqual(panel.feedbackPhase, .exiting)
+        XCTAssertEqual(panel.dismissal.deadline, 104)
+        XCTAssertEqual(panel.feedbackTargetWindows.count, 2)
+        now = 104
+        panel.advanceFeedbackPresentation(generation: generation)
+        XCTAssertFalse(panel.isVisible)
+        XCTAssertEqual(panel.feedbackPhase, .hidden)
+        XCTAssertEqual(panel.activePresentationTaskCount, 0)
+        XCTAssertTrue(panel.feedbackTargetWindows.isEmpty)
+        now = 1_000_000
+        panel.advanceFeedbackPresentation(generation: generation)
+        XCTAssertEqual(panel.feedbackPhase, .hidden)
+    }
+
+    @MainActor
+    func testFeedbackOnlyTwoFixedNonactivatingTargetsReceiveActionsAndFollowScreenSpaceChanges() throws {
+        let suite = "ResenhaFeedbackTargets.\(UUID())"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let panel = FloatingPanelController()
+        defer { panel.hide() }
+        panel.configureFeedback(preferences: ProductPreferences(defaults: defaults))
+        let activePID = NSWorkspace.shared.frontmostApplication?.processIdentifier
+        let first = UUID()
+        panel.offerFeedback(.init(id: first, targetApplication: nil))
+        let targets = panel.feedbackTargetWindows
+        XCTAssertEqual(targets.count, 2)
+        XCTAssertEqual(NSWorkspace.shared.frontmostApplication?.processIdentifier, activePID)
+        let labels = [FloatingStatusView.approveLabel, FloatingStatusView.correctLabel]
+        for (index, target) in targets.enumerated() {
+            XCTAssertEqual(target.frame.size, CGSize(width: 44, height: 44))
+            XCTAssertEqual(target.frame.midY, panel.frame.midY)
+            XCTAssertEqual(target.frame.midX, panel.frame.midX + (index == 0 ? -30 : 30))
+            XCTAssertFalse(target.ignoresMouseEvents)
+            XCTAssertFalse(target.canBecomeKey)
+            XCTAssertFalse(target.canBecomeMain)
+            let visual = try XCTUnwrap(target.parent)
+            XCTAssertTrue(visual.ignoresMouseEvents)
+            XCTAssertEqual(target.level, visual.level)
+            XCTAssertEqual(target.collectionBehavior, visual.collectionBehavior)
+            let button = try XCTUnwrap(target.contentView as? NSButton)
+            XCTAssertEqual(button.accessibilityLabel(), labels[index])
+            XCTAssertFalse((button.accessibilityHelp() ?? "").isEmpty)
+            XCTAssertTrue(button.hitTest(NSPoint(x: 22, y: 22)) === button)
+            XCTAssertNil(button.hitTest(NSPoint(x: 45, y: 22)))
+        }
+        // The only event-receiving windows exclude the HUD background and gap.
+        for point in [CGPoint(x: panel.frame.minX + 8, y: panel.frame.midY),
+                      CGPoint(x: panel.frame.midX, y: panel.frame.midY),
+                      CGPoint(x: panel.frame.midX, y: panel.frame.maxY - 2)] {
+            XCTAssertFalse(targets.contains { $0.frame.contains(point) })
+        }
+        NotificationCenter.default.post(name: NSApplication.didChangeScreenParametersNotification, object: nil)
+        NSWorkspace.shared.notificationCenter.post(name: NSWorkspace.activeSpaceDidChangeNotification, object: nil)
+        XCTAssertEqual(panel.feedbackTargetWindows.map(\.frame), targets.map(\.frame))
+        XCTAssertEqual(targets[0].frame.midX, panel.frame.midX - 30)
+        let retiredButton = try XCTUnwrap(targets[0].contentView as? NSButton)
+        retiredButton.performClick(nil)
+        XCTAssertFalse(panel.hasFeedback)
+        XCTAssertEqual(panel.activePresentationTaskCount, 0)
+        XCTAssertTrue(targets.allSatisfy { !$0.isVisible && $0.parent == nil && $0.contentView == nil })
+
+        let next = UUID()
+        panel.offerFeedback(.init(id: next, targetApplication: nil))
+        retiredButton.performClick(nil)
+        XCTAssertEqual(panel.feedbackToken, next)
+        let correctionButton = try XCTUnwrap(panel.feedbackTargetWindows[1].contentView as? NSButton)
+        correctionButton.performClick(nil)
+        XCTAssertTrue(panel.isEditingCorrection)
+        XCTAssertEqual(panel.activePresentationTaskCount, 0)
+        XCTAssertEqual(panel.feedbackPhase, .hidden)
+        XCTAssertTrue(panel.feedbackTargetWindows.isEmpty)
+    }
+
+    private final class FeedbackApplicationProbe: NSRunningApplication, @unchecked Sendable {
+        var onDeinit: (() -> Void)?
+        override var processIdentifier: pid_t { 0 }
+        deinit { onDeinit?() }
+    }
+
+    @MainActor
+    func testFeedbackReleasesApplicationContextAndRetiredTargetHandlersOnEveryTerminal() throws {
+        let suite = "ResenhaFeedbackRetention.\(UUID())"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        for terminal in 0..<6 {
+            let panel = FloatingPanelController(clock: { 100 })
+            defer { panel.hide() }
+            panel.configureFeedback(preferences: ProductPreferences(defaults: defaults))
+            let token = UUID()
+            var releases = 0
+            autoreleasepool {
+                let application = FeedbackApplicationProbe()
+                application.onDeinit = { releases += 1 }
+                panel.offerFeedback(.init(id: token, targetApplication: application))
+            }
+            XCTAssertEqual(releases, 1, "The passive offer must retain only PID/token")
+            let generation = panel.dismissal.generation
+            let retiredTargets = panel.feedbackTargetWindows
+            let retiredButton = try XCTUnwrap(retiredTargets.first?.contentView as? NSButton)
+            switch terminal {
+            case 0: panel.approveFeedback(token: token)
+            case 1: panel.dismissIfCurrent(generation: generation, now: 104)
+            case 2: panel.show(.listening)
+            case 3: panel.show(.feedbackNotice("Termo adicionado ao vocabulário"))
+            case 4: panel.hide() // HUD off and application termination share this terminal.
+            default:
+                panel.openCorrection(token: token)
+                panel.cancelFeedback(token: token, restoreFocus: false)
+            }
+            XCTAssertFalse(panel.hasFeedback)
+            XCTAssertEqual(panel.activePresentationTaskCount, 0)
+            XCTAssertEqual(panel.feedbackPhase, .hidden)
+            XCTAssertTrue(retiredTargets.allSatisfy { !$0.isVisible && $0.contentView == nil })
+            retiredButton.performClick(nil)
+            XCTAssertFalse(panel.hasFeedback)
+        }
+    }
+
+    @MainActor
+    func testFeedbackControllerDeallocatesWithActiveTaskAndExternallyRetainedTarget() throws {
+        weak var releasedController: FloatingPanelController?
+        var target: NSPanel?
+        var button: NSButton?
+        autoreleasepool {
+            let controller = FloatingPanelController()
+            releasedController = controller
+            controller.offerFeedback(.init(id: UUID(), targetApplication: nil))
+            target = controller.feedbackTargetWindows.first
+            button = target?.contentView as? NSButton
+            XCTAssertEqual(controller.activePresentationTaskCount, 1)
+        }
+        XCTAssertNil(releasedController)
+        XCTAssertFalse(try XCTUnwrap(target).isVisible)
+        XCTAssertNil(target?.contentView)
+        XCTAssertNil(target?.parent)
+        button?.performClick(nil)
+    }
+
+    @MainActor
+    func testFeedbackVisualPhaseAndRetiredTargetsCannotReachNewOfferOrEditor() throws {
+        var now: TimeInterval = 100
+        let panel = FloatingPanelController(clock: { now })
+        defer { panel.hide() }
+        let suite = "ResenhaFeedbackVisualGeneration.\(UUID())"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        panel.configureFeedback(preferences: ProductPreferences(defaults: defaults))
+        panel.offerFeedback(.init(id: UUID(), targetApplication: nil))
+        let oldGeneration = panel.dismissal.generation
+        let oldButton = try XCTUnwrap(panel.feedbackTargetWindows[1].contentView as? NSButton)
+        now = 102
+        let current = UUID()
+        panel.offerFeedback(.init(id: current, targetApplication: nil))
+        panel.advanceFeedbackPresentation(generation: oldGeneration)
+        oldButton.performClick(nil)
+        XCTAssertEqual(panel.feedbackPhase, .entering)
+        XCTAssertEqual(panel.feedbackToken, current)
+        XCTAssertEqual(panel.dismissal.deadline, 106)
+        let currentGeneration = panel.dismissal.generation
+        panel.openCorrection(token: current)
+        now = 106
+        panel.advanceFeedbackPresentation(generation: currentGeneration)
+        XCTAssertTrue(panel.isEditingCorrection)
+        XCTAssertEqual(panel.feedbackPhase, .hidden)
+        XCTAssertEqual(panel.activePresentationTaskCount, 0)
+        XCTAssertTrue(panel.feedbackTargetWindows.isEmpty)
     }
 
     @MainActor
@@ -1223,7 +1526,7 @@ final class WhisperKeyTests: XCTestCase {
         panel.saveCorrection(token: context.id)
         XCTAssertFalse(panel.hasFeedback)
         XCTAssertNil(panel.correctionDraft)
-        XCTAssertTrue(panel.status.title.contains("Regra salva"))
+        XCTAssertTrue(panel.status.title.contains("Termo adicionado ao vocabulário"))
         let writes = defaults.glossaryWrites
         panel.saveCorrection(token: context.id)
         XCTAssertEqual(defaults.glossaryWrites, writes)
@@ -1232,7 +1535,7 @@ final class WhisperKeyTests: XCTestCase {
         panel.openCorrection(token: repeated.id)
         panel.updateCorrectionDraft(token: repeated.id, heard: "Coisa Energia", canonical: "COESA Energia")
         panel.saveCorrection(token: repeated.id)
-        XCTAssertTrue(panel.status.title.contains("Regra já existente"))
+        XCTAssertTrue(panel.status.title.contains("Termo já existente"))
         XCTAssertEqual(defaults.glossaryWrites, writes)
         panel.hide()
     }
@@ -1261,7 +1564,7 @@ final class WhisperKeyTests: XCTestCase {
         XCTAssertFalse(panel.isEditingCorrection)
         XCTAssertNil(panel.feedbackToken)
         XCTAssertTrue(panel.hasFeedback)
-        XCTAssertEqual(panel.correctionDraft?.heard, "Coisa")
+        XCTAssertNil(panel.correctionDraft)
         XCTAssertNil(panel.approvalActionToken)
         let recovery = try XCTUnwrap(panel.correctionActionToken)
         defaults.unreadable = true
@@ -1271,7 +1574,7 @@ final class WhisperKeyTests: XCTestCase {
         XCTAssertNil(panel.feedbackToken)
         panel.saveCorrection(token: original)
         panel.saveCorrection(token: recovery)
-        panel.cancelFeedback(token: recovery, restoreFocus: false)
+        panel.cancelFeedback(token: try XCTUnwrap(panel.correctionActionToken), restoreFocus: false)
         let retry = try XCTUnwrap(panel.correctionActionToken)
         XCTAssertNotEqual(retry, recovery)
         defaults.unreadable = false
@@ -1280,15 +1583,17 @@ final class WhisperKeyTests: XCTestCase {
         let renewed = try XCTUnwrap(panel.feedbackToken)
         XCTAssertNotEqual(renewed, original)
         XCTAssertTrue(panel.canSaveCorrection)
-        XCTAssertEqual(panel.correctionDraft?.canonical, "COESA")
+        XCTAssertEqual(panel.correctionDraft?.canonical, "")
+        XCTAssertEqual(panel.correctionDraft?.heard, "")
         panel.cancelFeedback(token: recovery)
         panel.saveCorrection(token: original)
         XCTAssertTrue(panel.isEditingCorrection)
         XCTAssertEqual(defaults.glossaryWrites, writes)
         XCTAssertEqual(defaults.glossaryRemovals, removals)
+        panel.updateCorrectionDraft(token: renewed, heard: "Coisa", canonical: "COESA")
         panel.saveCorrection(token: renewed)
         XCTAssertFalse(panel.hasFeedback)
-        XCTAssertTrue(panel.status.title.contains("Regra já existente"))
+        XCTAssertTrue(panel.status.title.contains("Termo já existente"))
         XCTAssertEqual(defaults.glossaryWrites, writes)
         panel.hide()
     }
@@ -1385,7 +1690,7 @@ final class WhisperKeyTests: XCTestCase {
             if event == 0 {
                 XCTAssertFalse(app.acceptHotkeyPress(targetIsSelf: true))
                 XCTAssertFalse(app.panel.isEditingCorrection)
-                XCTAssertNotNil(app.panel.correctionDraft)
+                XCTAssertNil(app.panel.correctionDraft)
                 XCTAssertFalse(app.acceptHotkeyPress(targetIsSelf: false))
                 app.handleHotkeyRelease()
             } else {
@@ -1457,7 +1762,7 @@ final class WhisperKeyTests: XCTestCase {
         XCTAssertEqual(FloatingStatus.feedback.title, "Avaliar transcrição")
         XCTAssertNil(FloatingStatus.feedback.secondary)
         XCTAssertFalse(FloatingStatus.feedback.isBusy)
-        for message in ["Regra salva", "Regra já existente", "Solte e pressione novamente para ditar"] {
+        for message in ["Termo adicionado ao vocabulário", "Termo já existente", "Solte e pressione novamente para ditar"] {
             let notice = FloatingStatus.feedbackNotice(message)
             XCTAssertEqual(notice.title, message)
             XCTAssertEqual(notice.accessibilityLabel, message)
@@ -1479,7 +1784,7 @@ final class WhisperKeyTests: XCTestCase {
         let smallScreen = CGSize(width: 320, height: 320)
         XCTAssertEqual(FloatingStatusView.panelSize(for: .feedback, available: smallScreen), CGSize(width: 280, height: 64))
         XCTAssertEqual(TranscriptionCorrectionView.panelSize(available: smallScreen), CGSize(width: 296, height: 296))
-        XCTAssertEqual(FloatingStatusView.panelSize(for: .feedbackNotice("Regra salva"), available: smallScreen),
+        XCTAssertEqual(FloatingStatusView.panelSize(for: .feedbackNotice("Termo adicionado ao vocabulário"), available: smallScreen),
             CGSize(width: 280, height: 64))
     }
 
@@ -1666,7 +1971,28 @@ final class WhisperKeyTests: XCTestCase {
         XCTAssertFalse(String(describing: subprocess).contains("PRIVATE RAW STDERR"))
     }
 
-    func testEmbeddedWhisperTranscribesOfficialFixtureWhenLocalModelIsAvailable() throws {
+    private final class WhisperExecutionProbe: @unchecked Sendable {
+        private let lock = NSLock()
+        private var entries: [String] = []
+        private var uptime: TimeInterval = 100
+        func record(_ event: String) -> Int {
+            lock.withLock { entries.append(event); return entries.filter { $0 == event }.count }
+        }
+        var events: [String] { lock.withLock { entries } }
+        var now: TimeInterval { lock.withLock { uptime } }
+        func advance(to value: TimeInterval) { lock.withLock { uptime = value } }
+    }
+
+    private func temporaryWhisperRecording() throws -> (directory: URL, audio: URL) {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let fixture = try XCTUnwrap(Bundle(for: WhisperKeyTests.self).url(forResource: "jfk", withExtension: "wav"))
+        let audio = directory.appendingPathComponent("recording.wav")
+        try FileManager.default.copyItem(at: fixture, to: audio)
+        return (directory, audio)
+    }
+
+    func testEmbeddedWhisperTranscribesOfficialFixtureWhenLocalModelIsAvailable() async throws {
         let home = FileManager.default.homeDirectoryForCurrentUser
         let model = home.appendingPathComponent(
             "Library/Application Support/WhisperKey/Models/ggml-small-q5_1.bin"
@@ -1675,32 +2001,274 @@ final class WhisperKeyTests: XCTestCase {
             throw XCTSkip("Local Whisper model is not installed")
         }
 
-        let fixture = try XCTUnwrap(
-            Bundle(for: WhisperKeyTests.self).url(forResource: "jfk", withExtension: "wav")
-        )
+        let recording = try temporaryWhisperRecording()
+        defer { try? FileManager.default.removeItem(at: recording.directory) }
 
-        let transcript = try WhisperTranscriber().transcribe(
-            audioURL: fixture,
+        let transcript = try await WhisperTranscriber().transcribe(
+            audioURL: recording.audio,
             language: .english,
             glossaryText: ""
         ).lowercased()
 
         XCTAssertTrue(transcript.contains("fellow americans"), transcript)
         XCTAssertTrue(transcript.contains("country"), transcript)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: recording.audio.path))
     }
 
     func testWhisperRuntimePolicyHasAnExactBound() {
-        let startedAt = Date(timeIntervalSinceReferenceDate: 100)
-        XCTAssertFalse(WhisperRuntimePolicy.hasTimedOut(
-            startedAt: startedAt,
-            now: Date(timeIntervalSinceReferenceDate: 699.999),
-            maximumRuntime: 600
-        ))
-        XCTAssertTrue(WhisperRuntimePolicy.hasTimedOut(
-            startedAt: startedAt,
-            now: Date(timeIntervalSinceReferenceDate: 700),
-            maximumRuntime: 600
-        ))
+        let clock = WhisperExecutionProbe()
+        let control = WhisperExecutionControl(maximumRuntime: 600, clock: { clock.now })
+        clock.advance(to: 699.999)
+        XCTAssertFalse(control.shouldAbort)
+        clock.advance(to: 700)
+        XCTAssertTrue(control.shouldAbort)
+        control.cancel()
+        XCTAssertThrowsError(try control.check()) { error in
+            guard case WhisperError.timedOut = error else { return XCTFail("Timeout cause must remain latched") }
+        }
+        let cancelled = WhisperExecutionControl(clock: { clock.now })
+        cancelled.cancel()
+        clock.advance(to: 2_000)
+        XCTAssertThrowsError(try cancelled.check()) { XCTAssertTrue($0 is CancellationError) }
+    }
+
+    func testRealWhisperCancellationAndDeadlineAbortThenRecoverOnSameEngine() async throws {
+        let model = WhisperPaths.modelDirectory.appendingPathComponent("ggml-small-q5_1.bin")
+        guard FileManager.default.fileExists(atPath: model.path) else {
+            throw XCTSkip("Local Whisper model is not installed")
+        }
+        let engine = EmbeddedWhisperEngine()
+        let removals = WhisperExecutionProbe()
+        let transcriber = WhisperTranscriber(infer: { samples, language, prompt, control in
+            try engine.transcribe(samples: samples, model: model, language: language, prompt: prompt, control: control)
+        }, removeAudio: { url in
+            _ = removals.record("removed")
+            try FileManager.default.removeItem(at: url)
+        })
+        for (index, interruption) in ["cancel", "timeout"].enumerated() {
+            let recording = try temporaryWhisperRecording()
+            defer { try? FileManager.default.removeItem(at: recording.directory) }
+            let clock = WhisperExecutionProbe()
+            let control = WhisperExecutionControl(maximumRuntime: 0.03, clock: { clock.now })
+            let task = Task.detached {
+                try await transcriber.transcribe(audioURL: recording.audio, language: .english,
+                    glossaryText: "", control: control)
+            }
+            // Only whisper_full can poll this control: this engine has no injected inference.
+            let startBound = ProcessInfo.processInfo.systemUptime + 20
+            while control.abortCallbackPolls == 0, ProcessInfo.processInfo.systemUptime < startBound {
+                try await Task.sleep(for: .milliseconds(5))
+            }
+            guard control.abortCallbackPolls > 0 else {
+                task.cancel()
+                _ = try? await task.value
+                return XCTFail("Real whisper_full did not reach its abort callback within 20 seconds")
+            }
+            XCTAssertFalse(control.didAbortInference)
+            XCTAssertFalse(FileManager.default.fileExists(atPath: recording.audio.path))
+            let interruptedAt = ProcessInfo.processInfo.systemUptime
+            if interruption == "cancel" { task.cancel() }
+            else { clock.advance(to: 101) }
+            do {
+                _ = try await task.value
+                XCTFail("Real interrupted inference must not deliver partial or late text")
+            } catch {
+                if interruption == "cancel" { XCTAssertTrue(error is CancellationError) }
+                else if case WhisperError.timedOut = error { }
+                else { XCTFail("Real deadline must map to WhisperError.timedOut") }
+            }
+            XCTAssertTrue(control.didAbortInference, "The real C callback must return abort, not just discard the final result")
+            XCTAssertLessThan(ProcessInfo.processInfo.systemUptime - interruptedAt, 5)
+
+            let next = try temporaryWhisperRecording()
+            defer { try? FileManager.default.removeItem(at: next.directory) }
+            let transcript = try await transcriber.transcribe(audioURL: next.audio, language: .english,
+                glossaryText: "", control: WhisperExecutionControl(maximumRuntime: 30)).lowercased()
+            XCTAssertTrue(transcript.contains("fellow americans"), transcript)
+            XCTAssertTrue(transcript.contains("country"), transcript)
+            XCTAssertFalse(FileManager.default.fileExists(atPath: next.audio.path))
+            XCTAssertEqual(removals.events.count, (index + 1) * 2)
+        }
+    }
+
+    func testWhisperCancellationAbortsCallbackReleasesEngineAndConsumesWAVOnce() async throws {
+        let recording = try temporaryWhisperRecording()
+        defer { try? FileManager.default.removeItem(at: recording.directory) }
+        let entered = expectation(description: "Whisper entered")
+        let aborted = expectation(description: "C callback aborted")
+        let probe = WhisperExecutionProbe()
+        let engine = EmbeddedWhisperEngine(inference: { params, samples in
+            let call = probe.record("entered")
+            XCTAssertFalse(samples.isEmpty)
+            XCTAssertFalse(FileManager.default.fileExists(atPath: recording.audio.path))
+            if call == 1 {
+                entered.fulfill()
+                let bound = ProcessInfo.processInfo.systemUptime + 2
+                while params.abort_callback?(params.abort_callback_user_data) != true {
+                    guard ProcessInfo.processInfo.systemUptime < bound else { throw WhisperError.failed(-999, "abort not observed") }
+                    Thread.sleep(forTimeInterval: 0.001)
+                }
+                _ = probe.record("aborted")
+                aborted.fulfill()
+                return "Partial result must be discarded."
+            }
+            return "Segunda tentativa."
+        })
+        let transcriber = WhisperTranscriber(infer: { samples, language, prompt, control in
+            try engine.transcribe(samples: samples, model: recording.directory, language: language, prompt: prompt, control: control)
+        }, removeAudio: { url in
+            XCTAssertEqual(url, recording.audio)
+            _ = probe.record("removed")
+            try FileManager.default.removeItem(at: url)
+        })
+        let task = Task.detached { try await transcriber.transcribe(audioURL: recording.audio, glossaryText: "") }
+        await fulfillment(of: [entered], timeout: 1)
+        task.cancel()
+        await fulfillment(of: [aborted], timeout: 1)
+        do { _ = try await task.value; XCTFail("Cancelled inference must not return partial text") }
+        catch { XCTAssertTrue(error is CancellationError) }
+        XCTAssertEqual(probe.events, ["removed", "entered", "aborted"])
+        let next = try temporaryWhisperRecording()
+        defer { try? FileManager.default.removeItem(at: next.directory) }
+        let second = WhisperTranscriber(infer: { samples, language, prompt, control in
+            try engine.transcribe(samples: samples, model: next.directory, language: language, prompt: prompt, control: control)
+        })
+        let result = try await second.transcribe(audioURL: next.audio, glossaryText: "")
+        XCTAssertEqual(result, "Segunda tentativa.")
+        XCTAssertEqual(probe.events, ["removed", "entered", "aborted", "entered"])
+        XCTAssertFalse(FileManager.default.fileExists(atPath: next.audio.path))
+    }
+
+    func testWhisperQueuedCancellationAndTimeoutDoNotWaitForEngineOwner() async throws {
+        let entered = expectation(description: "Owner holds engine")
+        let waiting = expectation(description: "Second attempt waits for engine")
+        let release = DispatchSemaphore(value: 0)
+        let probe = WhisperExecutionProbe()
+        let engine = EmbeddedWhisperEngine(inference: { _, _ in
+            if probe.record("entered") == 1 {
+                entered.fulfill()
+                guard release.wait(timeout: .now() + 2) == .success else { throw WhisperError.failed(-999, "owner not released") }
+            }
+            return "Resultado."
+        }, onWait: {
+            if probe.record("waiting") == 1 { waiting.fulfill() }
+        })
+        let model = FileManager.default.temporaryDirectory
+        let owner = Task.detached {
+            try engine.transcribe(samples: [0], model: model, language: "pt", prompt: "", control: WhisperExecutionControl())
+        }
+        defer { release.signal() }
+        await fulfillment(of: [entered], timeout: 1)
+        let recording = try temporaryWhisperRecording()
+        defer { try? FileManager.default.removeItem(at: recording.directory) }
+        let transcriber = WhisperTranscriber(infer: { samples, language, prompt, control in
+            try engine.transcribe(samples: samples, model: model, language: language, prompt: prompt, control: control)
+        })
+        let queued = Task.detached { try await transcriber.transcribe(audioURL: recording.audio) }
+        await fulfillment(of: [waiting], timeout: 1)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: recording.audio.path))
+        queued.cancel()
+        do { _ = try await queued.value; XCTFail("Queued cancellation must leave without acquiring engine") }
+        catch { XCTAssertTrue(error is CancellationError) }
+        let deadline = WhisperExecutionControl(maximumRuntime: 0.03)
+        let expired = Task.detached {
+            try engine.transcribe(samples: [0], model: model, language: "pt", prompt: "", control: deadline)
+        }
+        do { _ = try await expired.value; XCTFail("Queued deadline must expire while owner still holds engine") }
+        catch { guard case WhisperError.timedOut = error else { return XCTFail("Expected timeout") } }
+        XCTAssertEqual(probe.events.filter { $0 == "entered" }.count, 1)
+        release.signal()
+        _ = try await owner.value
+        let next = try engine.transcribe(samples: [0], model: model, language: "pt", prompt: "", control: WhisperExecutionControl())
+        XCTAssertEqual(next, "Resultado.")
+    }
+
+    func testWhisperDeadlineAbortsInferenceAndReleasesCallbackControl() async throws {
+        let recording = try temporaryWhisperRecording()
+        defer { try? FileManager.default.removeItem(at: recording.directory) }
+        let entered = expectation(description: "Deadline inference entered")
+        let aborted = expectation(description: "Deadline observed inside C callback")
+        let engine = EmbeddedWhisperEngine(inference: { params, _ in
+            entered.fulfill()
+            let bound = ProcessInfo.processInfo.systemUptime + 2
+            while params.abort_callback?(params.abort_callback_user_data) != true {
+                guard ProcessInfo.processInfo.systemUptime < bound else { throw WhisperError.failed(-999, "deadline not observed") }
+                Thread.sleep(forTimeInterval: 0.001)
+            }
+            aborted.fulfill()
+            throw WhisperError.failed(-8, "aborted decode")
+        })
+        let transcriber = WhisperTranscriber(infer: { samples, language, prompt, control in
+            try engine.transcribe(samples: samples, model: recording.directory, language: language, prompt: prompt, control: control)
+        })
+        let clock = WhisperExecutionProbe()
+        weak var retainedControl: WhisperExecutionControl?
+        do {
+            let control = WhisperExecutionControl(maximumRuntime: 0.03, clock: { clock.now })
+            retainedControl = control
+            let task = Task.detached { try await transcriber.transcribe(audioURL: recording.audio, control: control) }
+            await fulfillment(of: [entered], timeout: 1)
+            clock.advance(to: 101)
+            await fulfillment(of: [aborted], timeout: 1)
+            do { _ = try await task.value; XCTFail("Deadline cannot return text") }
+            catch { guard case WhisperError.timedOut = error else { return XCTFail("Expected timeout") } }
+        }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: recording.audio.path))
+        XCTAssertNil(retainedControl, "The C callback must not retain its control after inference returns")
+    }
+
+    func testWhisperConsumesOnlyOwnedWAVOnReadFailureEarlyCancellationAndInferenceFailure() async throws {
+        for scenario in ["read", "cancel", "inference"] {
+            let recording = try temporaryWhisperRecording()
+            let untouched = recording.directory.appendingPathComponent("untouched.wav")
+            try FileManager.default.copyItem(at: recording.audio, to: untouched)
+            if scenario == "read" { try Data("invalid WAV".utf8).write(to: recording.audio) }
+            let probe = WhisperExecutionProbe()
+            let transcriber = WhisperTranscriber(infer: { _, _, _, _ in
+                _ = probe.record("inference")
+                throw WhisperError.failed(-6, "fixture failure")
+            }, removeAudio: { url in
+                XCTAssertEqual(url, recording.audio)
+                _ = probe.record("removed")
+                try FileManager.default.removeItem(at: url)
+            })
+            let control = WhisperExecutionControl()
+            if scenario == "cancel" { control.cancel() }
+            do { _ = try await transcriber.transcribe(audioURL: recording.audio, control: control); XCTFail("Expected fixture failure") }
+            catch { if scenario == "cancel" { XCTAssertTrue(error is CancellationError) } }
+            XCTAssertEqual(probe.events.filter { $0 == "removed" }.count, 1)
+            XCTAssertEqual(probe.events.filter { $0 == "inference" }.count, scenario == "inference" ? 1 : 0)
+            XCTAssertFalse(FileManager.default.fileExists(atPath: recording.audio.path))
+            XCTAssertTrue(FileManager.default.fileExists(atPath: untouched.path))
+            try FileManager.default.removeItem(at: recording.directory)
+        }
+    }
+
+    @MainActor
+    func testCoordinatorImmediateCancellationConsumesWAVWithoutResettingNextAttempt() async throws {
+        let recording = try temporaryWhisperRecording()
+        defer { try? FileManager.default.removeItem(at: recording.directory) }
+        let removed = expectation(description: "Cancelled recording consumed")
+        let transcriber = WhisperTranscriber(infer: { _, _, _, _ in
+            XCTFail("Pre-cancelled attempt must not enter inference")
+            return "Obsolete."
+        }, removeAudio: { url in
+            try FileManager.default.removeItem(at: url)
+            removed.fulfill()
+        })
+        let coordinator = DictationCoordinator(permissions: PermissionService(), panel: FloatingPanelController(),
+            showsHUD: { false }, soundsEnabled: { false }, onTranscript: { _ in XCTFail("No stale history") },
+            transcriber: transcriber)
+        coordinator.transition(to: .recording)
+        coordinator.transcribeRecording(at: recording.audio)
+        coordinator.cancel()
+        let next = coordinator.attemptID
+        coordinator.transition(to: .recording)
+        await fulfillment(of: [removed], timeout: 1)
+        try await Task.sleep(for: .milliseconds(20))
+        XCTAssertEqual(coordinator.attemptID, next)
+        XCTAssertEqual(coordinator.phase, .recording)
+        coordinator.cancel()
     }
 
     @MainActor
@@ -1729,8 +2297,8 @@ final class WhisperKeyTests: XCTestCase {
             try data.write(to: directory.appendingPathComponent(name))
         }
         let states: [(String, FloatingStatus)] = [("ready", .ready), ("listening", .listening), ("listening-silence", .listening), ("listening-decay", .listening), ("transcribing", .transcribing), ("inserting", .inserting),
-            ("feedback", .feedback), ("feedback-saved", .feedbackNotice("Regra salva")),
-            ("feedback-existing", .feedbackNotice("Regra já existente")),
+            ("feedback", .feedback), ("feedback-saved", .feedbackNotice("Termo adicionado ao vocabulário")),
+            ("feedback-existing", .feedbackNotice("Termo já existente")),
             ("feedback-guidance", .feedbackNotice("Solte e pressione novamente para ditar")),
             ("failure", .failure("Permissão de Monitoramento de Entrada necessária")),
             ("long-failure", .failure("Permissão de Monitoramento de Entrada necessária para receber o atalho de ditado"))]

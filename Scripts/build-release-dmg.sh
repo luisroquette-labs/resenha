@@ -2,6 +2,9 @@
 set -euo pipefail
 
 project_root="${0:A:h:h}"
+source "$project_root/Scripts/validate-release-dmg.sh"
+source_sha="$(git -C "$project_root" rev-parse HEAD)"
+source_diff="$(git -C "$project_root" diff --binary HEAD -- Sources Config project.yml WhisperKey.xcodeproj | shasum -a 256 | awk '{print $1}')"
 version="${RESENHA_VERSION:-1.0.0}"
 build_number="${RESENHA_BUILD_NUMBER:-1}"
 identity="${RESENHA_SIGNING_IDENTITY:-Developer ID Application: luis roquette (S3YCFYY8SC)}"
@@ -22,9 +25,8 @@ security find-identity -v -p codesigning | grep -Fq "\"$identity\"" || fail "cer
 signing_hash="$(security find-identity -v -p codesigning | awk -v name="\"$identity\"" 'index($0, name) { print $2; exit }')"
 [[ "$signing_hash" =~ '^[[:xdigit:]]{40}$' ]] || fail "hash do certificado não encontrado"
 
+[[ ! -e "$archive" && ! -e "$export_dir" && ! -e "$staging" && ! -e "$dmg" ]] || fail "saída já existe; escolha RESENHA_OUTPUT_DIR novo para preservar artefatos"
 mkdir -p "$output_root"
-rm -rf "$archive" "$export_dir" "$staging"
-rm -f "$dmg"
 
 xcodebuild \
   -project "$project_root/WhisperKey.xcodeproj" \
@@ -48,7 +50,15 @@ xcodebuild \
 
 app="$export_dir/Resenha.app"
 [[ -d "$app" ]] || fail "Resenha.app não foi exportado"
-codesign --verify --deep --strict --verbose=2 "$app"
+[[ "$(git -C "$project_root" rev-parse HEAD)" == "$source_sha" ]] || fail "HEAD mudou durante o build"
+[[ "$(git -C "$project_root" diff --binary HEAD -- Sources Config project.yml WhisperKey.xcodeproj | shasum -a 256 | awk '{print $1}')" == "$source_diff" ]] || fail "fontes mudaram durante o build"
+provenance="$app/Contents/Resources/ResenhaBuild.plist"
+plutil -create xml1 "$provenance"
+plutil -insert SourceSHA -string "$source_sha" "$provenance"
+plutil -insert SourceDiffSHA256 -string "$source_diff" "$provenance"
+plutil -insert Configuration -string Release "$provenance"
+codesign --force --sign "$signing_hash" --options runtime --timestamp --preserve-metadata=entitlements,requirements "$app"
+validate_release_app "$app" "$source_sha"
 
 mkdir -p "$staging"
 ditto "$app" "$staging/Resenha.app"

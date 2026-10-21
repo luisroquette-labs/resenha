@@ -163,8 +163,8 @@ final class ProductPreferences: ObservableObject {
 
         var message: String {
             switch self {
-            case .saved: "Regra salva"
-            case .alreadyExists: "Regra já existente"
+            case .saved: "Termo adicionado ao vocabulário"
+            case .alreadyExists: "Termo já existente"
             case .invalid(let error): error.message
             case .storageFailure(false): "Não foi possível salvar. O glossário anterior foi restaurado. Tente novamente."
             case .storageFailure(true): "Não foi possível verificar o glossário. Feche e reabra a correção para recarregá-lo."
@@ -181,7 +181,7 @@ final class ProductPreferences: ObservableObject {
             return .storageFailure(recoveryRequired: true)
         }
         let candidate: String
-        switch TranscriptionGlossary.correctionCandidate(heard: heard, canonical: canonical, existingText: previousText) {
+        switch TranscriptionGlossary.feedbackVocabularyCandidate(heard: heard, canonical: canonical, existingText: previousText) {
         case .alreadyExists: return .alreadyExists
         case .invalid(let error): return .invalid(error)
         case .added(let text): candidate = text

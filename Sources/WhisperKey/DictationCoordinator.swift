@@ -55,7 +55,7 @@ struct DictationErrorPresentation: Equatable {
         case WhisperError.failed(let code, _):
             self.init(title: "Falha na transcrição", diagnostic: "Código de saída: \(code)", recovery: "Confira o Whisper e o modelo local e tente novamente.")
         case WhisperError.timedOut:
-            self.init(title: "Transcrição demorou demais", diagnostic: nil, recovery: "O processo local foi encerrado. Tente novamente com um áudio menor.")
+            self.init(title: "Transcrição demorou demais", diagnostic: nil, recovery: "A transcrição local foi interrompida. Tente novamente com um áudio menor.")
         case WhisperError.emptyTranscript, TextInjectionError.emptyText:
             self.init(title: "Nenhuma fala detectada", diagnostic: nil, recovery: "Segure seu atalho, fale e solte.")
         case WhisperError.invalidAudio:
@@ -83,7 +83,7 @@ final class DictationCoordinator {
     private let permissions: PermissionService
     private let panel: FloatingPanelController
     private let recorder = AudioRecorder()
-    private let transcriber = WhisperTranscriber()
+    private let transcriber: WhisperTranscriber
     private let injector = TextInjector()
     private let cuePlayer = DictationCuePlayer()
     private(set) var phase = DictationPhase.idle {
@@ -94,6 +94,7 @@ final class DictationCoordinator {
     private(set) var currentError: DictationErrorPresentation?
     private var targetApplication: NSRunningApplication?
     private var task: Task<Void, Never>?
+    private var executionControl: WhisperExecutionControl?
     private(set) var attemptID = UUID()
     private let showsHUD: () -> Bool
     private let soundsEnabled: () -> Bool
@@ -113,7 +114,8 @@ final class DictationCoordinator {
         glossaryText: @escaping () -> String = { TranscriptionGlossary.defaultText },
         onRecordingLevel: @escaping (Float) -> Void = { _ in },
         onTranscript: @escaping (String) -> Void = { _ in },
-        onFailure: @escaping (DictationErrorPresentation) -> Void = { _ in }
+        onFailure: @escaping (DictationErrorPresentation) -> Void = { _ in },
+        transcriber: WhisperTranscriber = WhisperTranscriber()
     ) {
         self.permissions = permissions
         self.panel = panel
@@ -123,6 +125,7 @@ final class DictationCoordinator {
         self.glossaryText = glossaryText
         self.onTranscript = onTranscript
         self.onFailure = onFailure
+        self.transcriber = transcriber
         recorder.onLevel = { [weak panel] level in
             panel?.updateRecordingLevel(level)
             onRecordingLevel(level)
@@ -156,48 +159,55 @@ final class DictationCoordinator {
     func hotkeyReleased() {
         guard phase == .recording else { return }
         do {
-            let audioURL = try recorder.stop()
-            transition(to: .transcribing)
-            if soundsEnabled() { cuePlayer.play(.stopped) }
-            if showsHUD() { panel.show(.transcribing, target: panelTarget) }
-            let attemptID = attemptID
-            let sessionLanguage = sessionLanguage
-            let glossaryText = glossaryText()
-
-            task = Task {
-                defer { try? FileManager.default.removeItem(at: audioURL) }
-                do {
-                    let transcriptionTask = Task.detached(priority: .userInitiated) {
-                        try self.transcriber.transcribe(
-                            audioURL: audioURL,
-                            language: sessionLanguage,
-                            glossaryText: glossaryText
-                        )
-                    }
-                    let transcript = try await withTaskCancellationHandler {
-                        try await transcriptionTask.value
-                    } onCancel: {
-                        transcriptionTask.cancel()
-                    }
-                    try Task.checkCancellation()
-                    guard self.attemptID == attemptID else { return }
-                    let changeCount = try self.injector.stage(transcript)
-                    self.onTranscript(transcript)
-                    self.transition(to: .inserting)
-                    if self.showsHUD() { self.panel.show(.inserting, target: self.panelTarget) }
-                    try await self.injector.insertStaged(into: self.targetApplication, changeCount: changeCount)
-                    try? FileManager.default.removeItem(at: audioURL)
-                    self.completeInsertion(attemptID: attemptID, isCancelled: Task.isCancelled)
-                } catch is CancellationError {
-                    guard self.attemptID == attemptID else { return }
-                    self.reset()
-                } catch {
-                    guard self.attemptID == attemptID else { return }
-                    self.fail(DictationErrorPresentation(error: error))
-                }
-            }
+            transcribeRecording(at: try recorder.stop())
         } catch {
             fail(DictationErrorPresentation(error: error))
+        }
+    }
+
+    func transcribeRecording(at audioURL: URL) {
+        precondition(phase == .recording)
+        let control = WhisperExecutionControl()
+        executionControl = control
+        transition(to: .transcribing)
+        if soundsEnabled() { cuePlayer.play(.stopped) }
+        if showsHUD() { panel.show(.transcribing, target: panelTarget) }
+        let attemptID = attemptID
+        let sessionLanguage = sessionLanguage
+        let glossaryText = glossaryText()
+        let transcriber = transcriber
+
+        task = Task {
+            do {
+                let transcriptionTask = Task.detached(priority: .userInitiated) {
+                    try await transcriber.transcribe(
+                        audioURL: audioURL,
+                        language: sessionLanguage,
+                        glossaryText: glossaryText,
+                        control: control
+                    )
+                }
+                let transcript = try await withTaskCancellationHandler {
+                    try await transcriptionTask.value
+                } onCancel: {
+                    control.cancel()
+                    transcriptionTask.cancel()
+                }
+                try Task.checkCancellation()
+                guard self.attemptID == attemptID else { return }
+                let changeCount = try self.injector.stage(transcript)
+                self.onTranscript(transcript)
+                self.transition(to: .inserting)
+                if self.showsHUD() { self.panel.show(.inserting, target: self.panelTarget) }
+                try await self.injector.insertStaged(into: self.targetApplication, changeCount: changeCount)
+                self.completeInsertion(attemptID: attemptID, isCancelled: Task.isCancelled)
+            } catch is CancellationError {
+                guard self.attemptID == attemptID else { return }
+                self.reset()
+            } catch {
+                guard self.attemptID == attemptID else { return }
+                self.fail(DictationErrorPresentation(error: error))
+            }
         }
     }
 
@@ -210,6 +220,7 @@ final class DictationCoordinator {
     }
 
     func cancel() {
+        executionControl?.cancel()
         task?.cancel()
         task = nil
         recorder.cancel()
@@ -249,6 +260,7 @@ final class DictationCoordinator {
     private func reset(clearError: Bool = true) {
         attemptID = UUID()
         task = nil
+        executionControl = nil
         targetApplication = nil
         panel.hide()
         if clearError { currentError = nil }

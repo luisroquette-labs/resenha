@@ -16,10 +16,13 @@ title: Add local transcription feedback and correction learning
 - Exibir essas ações como dois controles discretos dentro do mesmo HUD de processamento, sem cartão, título ou oferta visual separada, e dispensá-las automaticamente após 4 segundos.
 - Aprovação encerra o feedback sem persistir conteúdo adicional.
 - Reprovação abre uma correção curta com os campos “Saiu como” e “Correto é”.
-- Salvar uma correção confirmada adiciona uma regra local no formato já suportado pelo glossário.
-- A próxima transcrição deve aplicar a correção aprendida.
+- Salvar uma correção confirmada adiciona somente o termo canônico como dica local de vocabulário; nunca cria automaticamente uma substituição global `ouvido = correto`.
+- A próxima transcrição pode usar o termo canônico como contexto do Whisper, mas palavras comuns continuam intactas: ensinar “Hostel” a partir de “rosto” não autoriza trocar toda ocorrência de “rosto”.
 - Áudio, transcrição e feedback não podem ser enviados a servidores ou APIs externas.
 - Não adicionar analytics, login, dependência ou API paga.
+- A oferta passiva não pode manter animação contínua quando oculta, bloquear cliques fora dos alvos nem reter mais que token e PID necessários; o editor limita o draft antes de aceitar conteúdo excedente.
+- Cancelar ou atingir o limite da transcrição deve interromper `whisper_full`, liberar o engine para a tentativa seguinte e remover o WAV pelo único owner definido.
+- A versão instalada para uso cotidiano deve ser um produto Release, sem XCTest, `*.debug.dylib`, `get-task-allow` ou entitlements de `testmanagerd`.
 
 ## Description
 
@@ -29,8 +32,8 @@ Permitir que quem dita no Resenha avalie rapidamente o resultado no HUD e ensine
 
 - Like e dislike compactos após uma transcrição concluída e não vazia, associados ao resultado atual e incorporados à mesma superfície/posição do HUD de processamento.
 - Formulário curto com “Saiu como”, “Correto é”, salvar e cancelar; validação e confirmação local clara.
-- Regra explícita no glossário existente, preservando as demais entradas, seus limites e a compatibilidade com edição nas preferências.
-- Aplicação determinística da regra em transcrições seguintes, persistência entre aberturas e operação acessível por teclado e VoiceOver.
+- Termo canônico explícito no glossário existente, preservando as demais entradas, seus limites e a compatibilidade com edição nas preferências, sem persistir a forma ouvida como substituição global.
+- Disponibilização do termo canônico ao prompt das transcrições seguintes, persistência entre aberturas e operação acessível por teclado e VoiceOver; decisão contextual futura permanece fora desta task.
 - Proteção contra confirmação duplicada, callbacks obsoletos e perda silenciosa de regras; preservação da inserção, clipboard e política opcional de histórico.
 
 ### Scope Excluded
@@ -38,15 +41,17 @@ Permitir que quem dita no Resenha avalie rapidamente o resultado no HUD e ensine
 - Retreinamento do modelo, aprendizado por like/dislike sem confirmação, interpretação de instruções em texto livre e avaliação automática de qualidade.
 - Reescrita retroativa de texto já inserido em outro aplicativo ou de transcrições anteriores.
 - Conta, sincronização, servidor, API, analytics, novas dependências e serviços pagos.
-- Histórico persistente de notas, áudio ou conteúdo de feedback separado do glossário.
+- Histórico persistente de notas, áudio, forma ouvida ou conteúdo de feedback separado do glossário.
+- Inferência remota ou decisão contextual por JEV/OpenRouter; esta task apenas elimina a substituição global insegura e deixa o termo canônico como vocabulário local.
 
 ### User Scenarios
 
 1. Após ditar, a pessoa vê por 4 segundos dois controles discretos no mesmo HUD que acabou de processar a fala, aprova e encerra o feedback sem salvar nota ou conteúdo adicional. Ignorar faz somente a oferta desaparecer e permite continuar ditando normalmente.
-2. A pessoa reprova, informa “Coisa Energia” e “COESA Energia”, confirma e recebe indicação de salvamento. Uma próxima transcrição contendo o termo ouvido usa “COESA Energia”; a regra também permanece disponível após reabrir o app.
+2. A pessoa reprova, informa “Coisa Energia” e “COESA Energia”, confirma e recebe indicação de salvamento. “COESA Energia” passa a integrar o vocabulário local após reabrir o app, mas “Coisa Energia” não vira uma substituição global determinística.
 3. A pessoa abre a correção e cancela, fecha ou inicia outro ditado: nenhum rascunho vira regra e nenhuma confirmação obsoleta modifica o novo resultado.
 4. Um campo vazio, entrada incompatível com o formato ou limite excedido mantém o formulário com orientação acessível; nada é truncado, descartado ou anunciado como salvo. Uma regra idêntica já existente é tratada sem duplicação; uma forma ouvida já mapeada para outro destino exige resolução explícita, nunca substituição silenciosa.
 5. Quem usa teclado e VoiceOver consegue abrir, preencher, salvar e cancelar. O HUD não toma o foco durante gravação/inserção; ao abrir a correção o foco vai ao formulário e, ao sair, retorna de maneira previsível.
+6. A pessoa informa “rosto” → “Hostel”; o app conserva “rosto” quando essa é a palavra dita em contexto comum e persiste, no máximo, o termo “Hostel” como dica de vocabulário. A forma ouvida e a frase não sobrevivem ao encerramento do editor.
 
 ## Acceptance Criteria
 
@@ -58,20 +63,25 @@ Permitir que quem dita no Resenha avalie rapidamente o resultado no HUD e ensine
 | CK-2 | Like encerra o feedback sem persistir nota, áudio, transcrição ou conteúdo adicional e sem alterar o glossário? | hard_rule | essential |
 | CK-3 | Dislike abre exatamente os campos “Saiu como” e “Correto é”, e somente Salvar com confirmação válida aprende uma regra? | hard_rule | essential |
 | CK-4 | Campos vazios após trim, quebras de linha, delimitadores incompatíveis, termos iguais e entradas que excedem os limites efetivos do glossário são rejeitados com orientação, sem gravação parcial ou falso sucesso? | hard_rule | essential |
-| CK-5 | Salvar preserva entradas existentes, não duplica regra idêntica, não sobrescreve conflito silenciosamente e mantém a regra utilizável após reabrir o app? | hard_rule | essential |
-| CK-6 | A próxima transcrição aplica “Coisa Energia = COESA Energia” pelas regras existentes de termos completos, sem alterar palavras maiores não correspondentes nem texto já inserido? | hard_rule | essential |
+| CK-5 | Salvar preserva entradas existentes, persiste somente o termo canônico, não duplica dica idêntica e mantém esse vocabulário utilizável após reabrir o app, sem armazenar a forma ouvida? | hard_rule | essential |
+| CK-6 | A próxima transcrição recebe “COESA Energia” no prompt local sem criar a substituição global “Coisa Energia = COESA Energia”; em especial, “rosto” continua “rosto” após ensinar “Hostel”? | hard_rule | essential |
 | CK-7 | Cancelar, expirar, dispensar e trocar de ditado descartam a oferta/rascunho sem aprendizado, e timers, confirmações ou tokens repetidos/obsoletos não atingem nem ocultam outro resultado? | hard_rule | essential |
 | CK-8 | O fluxo completo funciona sem enviar áudio, transcrição ou feedback para rede, sem analytics, login, dependência nova ou API paga, persistindo apenas a regra confirmada além do comportamento já existente? | hard_rule | essential |
 | CK-9 | Teclado e VoiceOver operam os controles compactos e os campos por nomes acessíveis, foco e erros perceptíveis; os ícones não dependem só de forma/cor e Reduce Motion remove a transição sem alterar o timeout ou a disponibilidade? | principle | important |
 | CK-10 | Ditado posterior, inserção no aplicativo original, clipboard e histórico opcional conservam seu comportamento, com testes pelo mac-gate e evidência física distinguida de fixtures? | hard_rule | essential |
 | CK-11 | A oferta passiva expira exatamente após 4 segundos, enquanto dislike/editor cancela esse timeout; um timer antigo nunca fecha editor, notice, gravação ou oferta de uma sessão mais nova? | hard_rule | essential |
+| CK-12 | O HUD oculto não mantém relógio/renderização contínua, o prazo usa tempo monotônico e somente os dois alvos `44×44` interceptam mouse; fundo e área vazia deixam o clique chegar ao app subjacente? | hard_rule | essential |
+| CK-13 | Oferta/editor retêm somente token, PID e drafts limitados necessários; forma ouvida, app alvo e closures de sessão são liberados em like, expiração, cancelamento, nova tentativa, HUD off e encerramento? | hard_rule | essential |
+| CK-14 | Cancelamento e timeout interrompem de fato `whisper_full`, liberam o engine para a próxima tentativa e removem o WAV uma única vez, inclusive durante espera pelo lock e inferência bloqueante? | hard_rule | essential |
+| CK-15 | O candidato instalado é Release atribuível ao SHA, sem XCTest, `*.debug.dylib`, `get-task-allow` ou entitlements `testmanagerd`, com assinatura válida, backup recuperável e rollback comprovável? | hard_rule | essential |
 
 **Regular Checks:**
 
-- [X] CK-1–CK-11: executar `~/.local/bin/mac-gate xcodebuild -project WhisperKey.xcodeproj -scheme WhisperKey -destination 'platform=macOS' -derivedDataPath build test`, conforme README e SPEC-008; preparar framework embarcado e projeto Xcode pelas instruções existentes se ausentes. Não executar `next build` nem inventar script npm para o app nativo.
+- [X] CK-1–CK-15: executar `~/.local/bin/mac-gate xcodebuild -project WhisperKey.xcodeproj -scheme WhisperKey -destination 'platform=macOS' -derivedDataPath build test`, conforme README e SPEC-008; preparar framework embarcado e projeto Xcode pelas instruções existentes se ausentes. Não executar `next build` nem inventar script npm para o app nativo.
 - [X] CK-4–CK-8: revisar diff e testes de preferências/glossário para limites, preservação de dados, ausência de persistência de rascunho e ausência de chamadas de rede/telemetria introduzidas.
 - [ ] CK-1–CK-3, CK-7, CK-9–CK-11: validar app real em TextEdit, incluindo continuidade visual, timeout, teclado, VoiceOver, Reduce Motion, gravação seguinte, clipboard e foco; registrar ambiente, commit, resultado e limitações em evidência de teste, sem conteúdo pessoal.
 - [X] CK-10: executar `~/.local/bin/mac-gate node --test Scripts/site.test.mjs` somente se o diff atingir site/scripts cobertos pelo workflow existente. O workflow de site e eventual preview do site não provam comportamento do app nativo.
+- [ ] CK-12–CK-15: medir processo oculto, clique pass-through, liberação de probes, cancelamento bloqueante/WAV e validar o bundle Release antes de qualquer substituição de `/Applications/Resenha.app`; teste Debug não satisfaz CK-15.
 
 **Rubric:**
 
@@ -102,31 +112,31 @@ Anchors:
 
 ### Integridade e aplicação do glossário
 
-Avaliar CK-4–CK-6 e CK-10: a regra é representável, não destrói entradas e produz a substituição nas próximas transcrições pelo comportamento existente.
+Avaliar CK-4–CK-6, CK-10 e CK-13: o termo canônico é representável, não destrói entradas, não retém a forma ouvida e não cria substituição global determinística.
 
 Anchors:
 - score_2:
   ```text
-  Regra confirmada: Coisa Energia = COESA Energia. Próxima saída: “A Coisa Energia chegou.”
+  Correção confirmada: rosto → Hostel. Glossário persistido: “rosto = Hostel”. Próxima saída comum: “Meu Hostel está vermelho.”
   ```
 - score_4:
   ```text
-  Regra confirmada: Coisa Energia = COESA Energia. Próxima saída: “A COESA Energia chegou.”
+  Correção confirmada: rosto → Hostel. Glossário persistido: somente “Hostel”. Próxima saída comum: “Meu rosto está vermelho.”
   ```
-- contrast: substituição do termo aprendido na saída seguinte.
+- contrast: ausência de mapeamento global da forma ouvida e preservação da palavra comum.
 
 ### Privacidade local do aprendizado
 
-Avaliar CK-2 e CK-8: apenas a regra confirmada é persistida pelo novo fluxo; nenhum dado de feedback transita por rede ou alimenta analytics.
+Avaliar CK-2, CK-8 e CK-13: somente o termo canônico confirmado é persistido; forma ouvida, frase, rating e alvo são efêmeros e nenhum dado de feedback transita por rede ou alimenta analytics.
 
 Anchors:
 - score_2:
   ```text
-  Salvar correção → regra local gravada; requisições de feedback observadas: POST /feedback.
+  Salvar correção → forma ouvida e termo canônico gravados; requisições de feedback observadas: POST /feedback.
   ```
 - score_4:
   ```text
-  Salvar correção → regra local gravada; requisições de feedback observadas: nenhuma.
+  Salvar correção → somente termo canônico local gravado; forma ouvida liberada; requisições de feedback observadas: nenhuma.
   ```
 - contrast: emissão de requisição de feedback.
 
@@ -147,7 +157,7 @@ Anchors:
 
 ### Project Guidelines Alignment
 
-Avaliar CK-10 e os checks do projeto: gates nativos via mac-gate, Derived Data compartilhado e prova física identificada separadamente de fixtures; não acionar APIs pagas.
+Avaliar CK-10, CK-12, CK-14, CK-15 e os checks do projeto: gates nativos via mac-gate, lifecycle medido, cancelamento real e prova de bundle Release identificada separadamente de fixtures; não acionar APIs pagas.
 
 Anchors:
 - score_2:
@@ -190,12 +200,12 @@ Test Cases to Cover:
 - [integration] Exercitar fronteiras do limite de linha de 160 caracteres, de 200 termos e de 20.000 caracteres de preferências; regra que seria truncada ou ignorada é recusada integralmente. Cobrir entrada no limite e imediatamente acima.
 
 #### CK-5: Persistência sem perda
-- [integration] Salvar e reinstanciar preferências isoladas mantém a regra e todas as anteriores, inclusive última entrada sem quebra de linha.
-- [integration] Salvar duplicata não adiciona entrada; conflito não substitui destino existente sem decisão explícita; falha de validação nunca produz sucesso.
+- [integration] Salvar e reinstanciar preferências isoladas mantém somente o termo canônico e todas as entradas anteriores; a forma ouvida não aparece no domínio persistido.
+- [integration] Salvar termo canônico duplicado não adiciona entrada; falha de validação nunca produz sucesso nem mapeamento `ouvido = correto`.
 
 #### CK-6: Aprendizado aplicado
-- [integration] Com a regra salva, pós-processar “A Coisa Energia chegou.” produz “A COESA Energia chegou.” usando o glossário recarregado.
-- [integration] Termo dentro de palavra maior não é substituído; resultado já inserido não é reescrito pelo salvamento.
+- [integration] Com “Hostel” salvo como termo, o prompt recarregado o contém, mas pós-processar “Meu rosto está vermelho.” conserva “rosto”.
+- [integration] Nenhuma forma ouvida vira substituição; resultado já inserido não é reescrito pelo salvamento.
 
 #### CK-7: Cancelamento e isolamento entre ditados
 - [unit] Cancelar, dispensar e iniciar outro ditado descartam rascunho sem mudar preferências; confirmação do resultado anterior não altera o atual.
@@ -219,13 +229,34 @@ Test Cases to Cover:
 - [unit] Timer da oferta A não fecha oferta B, gravação, notice nem qualquer estado posterior; novo ditado e HUD off continuam encerrando a sessão atual pelos contratos existentes.
 - [manual] Ignorar os ícones faz somente a oferta desaparecer em aproximadamente 4 segundos; acionar dislike dentro da janela mantém o editor aberto até ação explícita.
 
+#### CK-12: Lifecycle e pass-through do HUD
+- [unit] Substituir `TimelineView(.animation)` por fases finitas dirigidas por estado; depois de ocultar/expirar não existe publisher, task ou clock visual vivo. Deadline e transições derivam de uptime/relógio monotônico injetável.
+- [integration] Clicar fora dos dois alvos `44×44` atravessa o HUD e alcança a janela subjacente; clicar dentro aciona exatamente a ação correspondente.
+- [manual] Medir o processo com HUD oculto por janela estável e registrar CPU sem atribuir ruído do sistema ao app; repetir clique no fundo e nos dois alvos.
+
+#### CK-13: Retenção mínima e limites antecipados
+- [unit] Probes de sessão/alvo/draft desalocam em like, expiração, cancelamento, nova tentativa, HUD off e término; callbacks SwiftUI capturam somente token/handlers fracos.
+- [unit] Digitação/colar além do limite é recusada antes de construir candidato persistível; nenhum draft sem limite fica retido e somente o termo canônico confirmado chega a UserDefaults.
+
+#### CK-14: Cancelamento real do Whisper
+- [unit] Engine bloqueante falso observa cancelamento e deadline monotônico, retorna prontamente e permite uma segunda inferência sem esperar a primeira.
+- [integration] Callback de aborto do whisper.cpp consulta controle lock-safe; cancelamento enquanto aguarda o engine e durante `whisper_full` converge para `CancellationError`/timeout sem resultado tardio.
+- [integration] WAV é removido pelo owner único após leitura ou em qualquer falha/cancelamento; dupla limpeza é idempotente e nenhuma tentativa nova herda arquivo/lock da anterior.
+
+#### CK-15: Release instalado endurecido
+- [integration] Validador rejeita fixtures com `*.debug.dylib`, `libXCTest*`, `get-task-allow=true` ou entitlements `testmanagerd`, e aceita somente bundle Release assinado com Hardened Runtime.
+- [manual] Build Release parte do SHA congelado; instalador confere hashes antes/depois, preserva backup recuperável, executa rollback em falha injetada e prova PID/caminho do bundle instalado.
+- [review] Testes continuam pelo `mac-gate`; build/install Release é etapa separada e nunca reutiliza `build/Build/Products/Debug/Resenha.app` produzido por `xcodebuild test`.
+
 **Definition of Done:**
 
-- [ ] CK-1–CK-11 demonstrados por casos acima; nenhuma regra é aprendida antes da confirmação e nenhum dado pessoal adicional é persistido ou enviado.
-- [X] Cenário “Coisa Energia” → “COESA Energia” provado com regra persistida e próxima saída corrigida, preservando entradas anteriores e texto já inserido.
-- [X] Gates locais aplicáveis verdes via mac-gate após o refinamento compacto/temporizado; erros conhecidos corrigidos sem afrouxar checks, dependências ou privacidade.
+- [ ] CK-1–CK-15 demonstrados por casos acima; nenhuma forma ouvida vira substituição global, nenhum dado pessoal adicional é persistido/enviado e nenhum trabalho visual oculto permanece ativo.
+- [X] Cenário “rosto” → “Hostel” prova persistência somente de “Hostel” e preservação de “rosto” em contexto comum, mantendo entradas anteriores e texto já inserido.
+- [X] Cancelamento/timeout preemptivo e ownership único do WAV provados sem bloquear a tentativa seguinte.
+- [X] Gates locais aplicáveis verdes via mac-gate após a Phase 5; erros conhecidos corrigidos sem afrouxar checks, dependências ou privacidade.
 - [ ] Evidência física datada por commit cobre ditado, foco, teclado e VoiceOver; itens não executados são declarados como pendência, nunca como sucesso.
-- [X] Spec, testes e documentação de uso/privacidade refletem o fluxo compacto e temporizado final; revisão do diff confirma escopo limitado e ausência de API paga, analytics ou novo serviço.
+- [ ] Bundle Release instalado e executado corresponde ao SHA final, passa validação negativa de artefatos/entitlements de teste e possui backup recuperável verificado.
+- [X] Spec, testes e documentação de uso/privacidade refletem o fluxo contextual-seguro, lifecycle finito, cancelamento real e instalação Release; revisão do diff confirma ausência de API paga, analytics ou novo serviço.
 
 ## Architecture Overview
 
@@ -238,6 +269,12 @@ Referências normativas deste plano: [skill de feedback](../../../.claude/skills
 Base inspecionada: `origin/main` em `9e674c3ddeee8f7e05b8289f2e5c20ceba55fbc5`. PR #9 e PR #13 são divergências a reavaliar contra a main atualizada antes da implementação, inclusive origem do binário instalado; não são dependências, nem autorização para integrar suas branches. Preservar o waveform de gravação da base efetiva. Testar um binário desta task não valida automaticamente o app instalado de PR #9.
 
 Para a Phase 4, o PR #13 permanece somente referência de leitura. Portar manualmente apenas a composição SwiftUI do orbe/auréola de `RecordingWaveformView.swift` no commit `758f9b13f272ed64d80981794c80dd15afe1440d`; não integrar a branch nem o PNG do site. O refinamento das bolhas usa somente recursos nativos e preserva os contratos de sessão, timeout e acessibilidade já entregues.
+
+### Phase 5 normative hardening
+
+A Phase 5 substitui quatro premissas históricas desta task. Primeiro, feedback confirmado não grava mais `heard = canonical`: persiste apenas o termo canônico como dica de vocabulário. A sintaxe de substituição continua compatível para regras manuais já existentes em Ajustes, mas deixa de ser output do fluxo de feedback. Segundo, a view não possui relógio contínuo; animações são finitas e o controller usa somente tempo monotônico. Terceiro, cancelar/timeout precisa abortar `whisper_full`, não apenas descartar seu resultado após retorno. Quarto, um app Debug/test host nunca é candidato instalável, mesmo com assinatura profunda válida.
+
+O guardrail term-only não implementa a task separada `add-context-aware-corrections` nem autoriza OpenRouter/JEV. Ele evita o dano global imediatamente, retém somente o termo canônico e deixa decisão por ocorrência para a especificação contextual futura. Nenhum texto abaixo que descreva “próxima saída corrigida” ou “regra `ouvido = correto`” permanece normativo para o feedback depois da Phase 5; esses trechos são evidência histórica das fases 1–4.
 
 ### Decisions and tradeoffs
 
@@ -269,6 +306,8 @@ Próximo hotkeyReleased → closure glossaryText atual → parser → pós-proce
 | `FloatingStatusView` e view de correção no mesmo arquivo | Recebem estado e ações; não escrevem preferências. Oferta reutiliza a superfície `280×64` de processamento, sem título/cartão vertical, e mostra somente dois botões discretos de ícone com labels/hints “Transcrição correta” e “Corrigir transcrição”. Formulário continua contendo exatamente “Saiu como”, “Correto é”, Salvar, Cancelar e mensagem de validação. Campos começam vazios; não copiar transcrição inteira. |
 | `AppDelegate` + `NativeMenuController` | Conectam conclusão, callbacks de gravação, preferência HUD, menu acessível, fechamento e hotkey. Menu reflete disponibilidade do token atual e usa os mesmos handlers do HUD; não cria sessão/histórico paralelo. |
 | `TranscriptionGlossary` + `ProductPreferences` | Helper puro constrói candidato ou retorna erro específico; método de save em `@MainActor` lê preferência atual, valida, atribui uma vez e confere round-trip. Resultado distingue regra adicionada, regra já existente e erro. Reusar constantes e parser; sem mudanças no motor de reconhecimento ou algoritmo de substituição. |
+
+Na Phase 5, o contrato desse último componente passa a produzir um candidato **term-only** para feedback. `TranscriptionGlossary` continua aceitando substituições manuais legadas, mas `ProductPreferences.saveTranscriptionCorrection` não pode serializar a forma ouvida. O contexto da sessão passa a ser value-type mínimo (`token`, PID opcional e drafts limitados); aplicativo alvo é resolvido pelo PID somente ao restaurar foco.
 
 Atividade do coordinator permanece `idle / recording / transcribing / inserting / failed`. Feedback não vira fase de gravação, não mantém `task`/arquivo de áudio vivo e não impede o próximo ditado. A conclusão captura apenas identidade/destino; o `reset()` normal pode continuar escondendo estados anteriores antes de a oferta nova ser mostrada.
 
@@ -346,6 +385,8 @@ Não emitir rede, telemetria ou logs contendo draft, frases, ratings ou transcri
 
 Dependências somente de leitura: `DictationInteraction.swift`, `TextInjector.swift`, `TranscriptHistory.swift`, `PanelPlacement.swift`, `ResenhaDesign.swift`, `RecordingWaveformView.swift`, `HotkeyMonitor.swift`, `project.yml`, projeto/scheme Xcode, README e workflow de site. Sem arquivo Swift novo, não há registro novo no projeto Xcode, export, entitlement, configuração de provider, migração, asset de site ou dependência a alterar.
 
+**Addendum Phase 5:** a contagem histórica acima descreve as fases 1–4. A Phase 5 pode modificar `DictationCoordinator.swift`, `FloatingPanel.swift`, `FloatingStatusView.swift`, `ProductPreferences.swift`, `WhisperTranscriber.swift`, `NativeMenuController.swift`, `Tests/WhisperKeyTests/WhisperKeyTests.swift`, `Scripts/build-release-dmg.sh`, `Scripts/validate-release-dmg.sh`, `docs/specs/06-floating-ui.md`, `docs/specs/08-testing.md`, `docs/specs/11-output-quality.md` e `docs/testing/UI-REFINEMENT-EVIDENCE.md`; pode criar somente `Scripts/install-local-release.sh` e um teste shell de release com nome definido pelo passo 10. Não alterar provider, rede, entitlements produtivos, dependências, site ou assets. Os passos 07/09 possuem arquivos de produto exclusivos e apenas regiões XCTest separadas; 08 roda depois deles por compartilhar editor/glossário; 10 possui scripts/docs e depende do código congelado.
+
 ## Implementation Process
 
 Lançar **um agente por passo**, passando o caminho atual desta task e o caminho do respectivo sub-task; usar exatamente o `Model` e o `Agent` indicados e implementar somente aquele passo. Lançar passos paralelos simultaneamente, com propriedade de arquivos/regiões descrita nos sub-tasks; não iniciar gate enquanto houver escrita concorrente. Ao concluir os passos de cada fase, executar **uma revisão de código por fase**, no `Reviewer model` da fase, usando diff, testes e evidências reais. Corrigir achados antes de avançar. A revisão não substitui o gate nativo nem prova física. Os caminhos de task nos sub-tasks devem acompanhar sua movimentação draft → todo → in-progress; o diretório de sub-tasks permanece fixo.
@@ -376,24 +417,37 @@ Phase 4 — auréola restaurada e feedback com profundidade
                 [06 orbe + bolhas 3D + regressões]
                                       |
                               review opus
+                                      |
+Phase 5 — hardening P0 de lifecycle, privacidade, cancelamento e instalação
+       [07 HUD lifecycle/pass-through]   [09 cancelamento Whisper/WAV]
+                         \               /
+                    [08 aprendizado term-only]
+                              |
+                    [10 Release + instalação]
+                              |
+                         review opus
 ```
 
 | Step | Phase | Model | Agent | Depends on | Parallel with | Sub-Task File |
 | --- | --- | --- | --- | --- | --- | --- |
-| 01 — Save local seguro [DONE] | 1 | opus | developer | None | 02 | [.specs/sub-tasks/add-transcription-feedback/01-safe-glossary-save.md](../../sub-tasks/add-transcription-feedback/01-safe-glossary-save.md) |
-| 02 — Views acessíveis [DONE] | 1 | sonnet | developer | None | 01 | [.specs/sub-tasks/add-transcription-feedback/02-feedback-views.md](../../sub-tasks/add-transcription-feedback/02-feedback-views.md) |
-| 03 — Sessão e integração nativa [DONE] | 2 | opus | developer | 01, 02 | None | [.specs/sub-tasks/add-transcription-feedback/03-native-feedback-lifecycle.md](../../sub-tasks/add-transcription-feedback/03-native-feedback-lifecycle.md) |
-| 04 — Prova e documentação [DONE] | 2 | sonnet | developer | 03 | None | [.specs/sub-tasks/add-transcription-feedback/04-physical-evidence-and-specs.md](../../sub-tasks/add-transcription-feedback/04-physical-evidence-and-specs.md) |
-| 05 — Feedback compacto e temporizado [DONE] | 3 | opus | developer | 04 | None | [.specs/sub-tasks/add-transcription-feedback/05-compact-timed-feedback.md](../../sub-tasks/add-transcription-feedback/05-compact-timed-feedback.md) |
-| 06 — Auréola animada e bolhas de feedback 3D | 4 | opus | developer | 05 | None | [.specs/sub-tasks/add-transcription-feedback/06-animated-halo-feedback-bubbles.md](../../sub-tasks/add-transcription-feedback/06-animated-halo-feedback-bubbles.md) |
+| `01-safe-glossary-save` [DONE] | Phase 1 | opus | developer | None | `02-feedback-views` | [.specs/sub-tasks/add-transcription-feedback/01-safe-glossary-save.md](../../sub-tasks/add-transcription-feedback/01-safe-glossary-save.md) |
+| `02-feedback-views` [DONE] | Phase 1 | sonnet | developer | None | `01-safe-glossary-save` | [.specs/sub-tasks/add-transcription-feedback/02-feedback-views.md](../../sub-tasks/add-transcription-feedback/02-feedback-views.md) |
+| `03-native-feedback-lifecycle` [DONE] | Phase 2 | opus | developer | `01-safe-glossary-save`, `02-feedback-views` | None | [.specs/sub-tasks/add-transcription-feedback/03-native-feedback-lifecycle.md](../../sub-tasks/add-transcription-feedback/03-native-feedback-lifecycle.md) |
+| `04-physical-evidence-and-specs` [DONE] | Phase 2 | sonnet | developer | `03-native-feedback-lifecycle` | None | [.specs/sub-tasks/add-transcription-feedback/04-physical-evidence-and-specs.md](../../sub-tasks/add-transcription-feedback/04-physical-evidence-and-specs.md) |
+| `05-compact-timed-feedback` [DONE] | Phase 3 | opus | developer | `04-physical-evidence-and-specs` | None | [.specs/sub-tasks/add-transcription-feedback/05-compact-timed-feedback.md](../../sub-tasks/add-transcription-feedback/05-compact-timed-feedback.md) |
+| `06-animated-halo-feedback-bubbles` | Phase 4 | opus | developer | `05-compact-timed-feedback` | None | [.specs/sub-tasks/add-transcription-feedback/06-animated-halo-feedback-bubbles.md](../../sub-tasks/add-transcription-feedback/06-animated-halo-feedback-bubbles.md) |
+| `07-hud-lifecycle-performance-hardening` | Phase 5 | opus | developer | `06-animated-halo-feedback-bubbles` | `09-preemptive-whisper-cancellation` | [.specs/sub-tasks/add-transcription-feedback/07-hud-lifecycle-performance-hardening.md](../../sub-tasks/add-transcription-feedback/07-hud-lifecycle-performance-hardening.md) |
+| `09-preemptive-whisper-cancellation` | Phase 5 | opus | developer | `06-animated-halo-feedback-bubbles` | `07-hud-lifecycle-performance-hardening` | [.specs/sub-tasks/add-transcription-feedback/09-preemptive-whisper-cancellation.md](../../sub-tasks/add-transcription-feedback/09-preemptive-whisper-cancellation.md) |
+| `08-safe-feedback-learning-and-privacy` | Phase 5 | opus | developer | `07-hud-lifecycle-performance-hardening`, `09-preemptive-whisper-cancellation` | None | [.specs/sub-tasks/add-transcription-feedback/08-safe-feedback-learning-and-privacy.md](../../sub-tasks/add-transcription-feedback/08-safe-feedback-learning-and-privacy.md) |
+| `10-release-candidate-install-hardening` | Phase 5 | opus | developer | `07-hud-lifecycle-performance-hardening`, `08-safe-feedback-learning-and-privacy`, `09-preemptive-whisper-cancellation` | None | [.specs/sub-tasks/add-transcription-feedback/10-release-candidate-install-hardening.md](../../sub-tasks/add-transcription-feedback/10-release-candidate-install-hardening.md) |
 
-Largura máxima real: **2**; caminhos críticos: **01 → 03 → 04 → 05 → 06** e **02 → 03 → 04 → 05 → 06**. 01/02 dividem somente o arquivo XCTest, em regiões diferentes, sem formatação global. 03 depende de ambos os contratos, 04 prova o primeiro candidato, 05 corrige o refinamento visual/temporal observado no uso real e 06 restaura o orbe e aprofunda apenas a apresentação dos controles; não há paralelismo adicional correto. Os passos 05/06 e suas revisões usam opus porque animação, timer, token, geometria, mouse e acessibilidade compartilham o lifecycle do painel; não são somente ajustes cosméticos.
+Largura máxima real: **2**; os caminhos críticos anteriores convergem em **06 → (07 ∥ 09) → 08 → 10**. 07 e 09 possuem produção disjunta (`FloatingPanel`/`FloatingStatusView` versus `DictationCoordinator`/engine Whisper) e regiões XCTest ancoradas separadamente; devem ser lançados simultaneamente e não executar gate enquanto houver escrita concorrente. 08 espera ambos porque reconcilia contexto mínimo, editor, preferências e a região de glossário do mesmo arquivo de transcriber. 10 espera todo o código, executa o único gate estabilizado da fase e trabalha em scripts/docs/artefatos Release. Todos usam opus devido a concorrência C/Swift, retenção, privacidade e instalação recuperável.
 
 ### Phase Overview
 
 #### Phase 1 — Save verificável e superfícies renderizáveis [REVIEWED]
 
-Steps: 01, 02.
+Steps: `01-safe-glossary-save`, `02-feedback-views`.
 
 Reviewer model: opus — o passo 01 exige integridade de dados; teto da escala. O passo 02 é sonnet, mas não reduz o tier da revisão.
 
@@ -414,7 +468,7 @@ Rubrics:
 
 #### Phase 2 — Feedback utilizável e evidência final [REVIEWED]
 
-Steps: 03, 04.
+Steps: `03-native-feedback-lifecycle`, `04-physical-evidence-and-specs`.
 
 Reviewer model: opus — 03 altera contrato compartilhado entre coordinator, panel, app e menu; teto da escala.
 
@@ -436,7 +490,7 @@ Rubrics:
 
 #### Phase 3 — Oferta compacta, temporizada e instalada [REVIEWED]
 
-Steps: 05.
+Steps: `05-compact-timed-feedback`.
 
 Reviewer model: opus — o diff visual é pequeno, mas a expiração compartilha estado e geração com notices, gravação, editor, menu e tokens; teto da escala para impedir regressão assíncrona silenciosa.
 
@@ -459,13 +513,15 @@ Rubrics:
 
 #### Phase 4 — Auréola restaurada e bolhas ascendentes
 
-Steps: 06.
+Steps: `06-animated-halo-feedback-bubbles`.
 
 Reviewer model: opus — o diff visual deve permanecer pequeno, mas precisa reconciliar o PR #13 divergente, animações SwiftUI, identidade de apresentação, timeout e targets acessíveis sem criar um segundo lifecycle.
 
-Revisão técnica: **4.66/5**. Implementação e gates automatizados aprovados; a fase continua em andamento porque a validação física permanece **NOT RUN** e não integra este score.
+Revisão técnica: **4.66/5**. Implementação e gates automatizados aprovados; a fase continua em andamento porque a validação física é parcial e não integra este score.
 
-Acceptance Criteria that should be fulfiled: o listening recupera o orbe/auréola reativo do piloto dentro do frame `340×72`; a oferta continua no mesmo HUD `280×64`, mas seus dois controles parecem pequenas bolhas 3D que emergem, sobem e desaparecem gradualmente durante a janela de 4 segundos. Reduce Motion remove deslocamento/stagger e conserva fade simples. O editor e todos os guards de geração+token permanecem iguais. Gate, fixtures, revisão e instalação usam o mesmo candidato; observação física não executada continua declarada como pendência.
+Evidência física confirmada em 2026-10-20: em um documento vazio do TextEdit, a pessoa pressionou Option direita, ditou e confirmou que a auréola animou e que os dois emojis subiram e desapareceram. Não houve confirmação de clique, editor, foco, VoiceOver, teclado alternativo, Reduce Motion, Increase Contrast ou clipboard.
+
+Acceptance Criteria that should be fulfiled: o listening recupera o orbe/auréola reativo do piloto dentro do frame `340×72`; a oferta continua no mesmo HUD `280×64`, mas seus dois controles parecem pequenas bolhas 3D que emergem, sobem e desaparecem gradualmente durante a janela de 4 segundos. Reduce Motion remove deslocamento/stagger e conserva fade simples. O editor e todos os guards de geração+token permanecem iguais. Gate, fixtures, revisão e instalação usam o mesmo candidato; observações físicas não executadas continuam declaradas como pendência.
 
 Checklist items:
 - CK-1: orbe no listening e bolhas no feedback sem salto de janela, cartão, título visível ou novo painel.
@@ -480,4 +536,27 @@ Rubrics:
 - Acessibilidade da correção.
 - Project Guidelines Alignment.
 
-O Checklist desta task contém CK-1–CK-11 e nenhum ID HR; não inventar HR. Esta seção distribui os critérios existentes, sem criar IDs adicionais na implementação.
+#### Phase 5 — Hardening P0 de lifecycle, privacidade, cancelamento e Release
+
+Steps: `07-hud-lifecycle-performance-hardening`, `09-preemptive-whisper-cancellation`, `08-safe-feedback-learning-and-privacy`, `10-release-candidate-install-hardening`.
+
+Reviewer model: opus — a fase cruza AppKit/SwiftUI, cancelamento C/Swift, integridade de preferências e instalação recuperável. A revisão ocorre uma única vez depois dos quatro passos e recebe os artefatos reportados por todos eles.
+
+Acceptance Criteria that should be fulfiled: o HUD não consome CPU oculto nem bloqueia cliques fora das ações; deadline/animação usam lifecycle monotônico e contexto mínimo. Feedback persiste somente termo canônico, com draft bounded e prova negativa `rosto → Hostel`. Cancelamento/timeout abortam o Whisper e liberam WAV/engine. O único candidato instalado é Release validado, atribuível ao SHA e recuperável. Testes XCTest rodam pelo `mac-gate`; build/install Release e prova física são etapas posteriores distintas. Nenhuma chamada paga, rede de feedback, push, merge, notarização ou publicação pertence à fase.
+
+Checklist items:
+- CK-12: animação finita, zero clock visual oculto, monotonicidade e pass-through apenas nos dois targets.
+- CK-13: contexto/token/PID/drafts mínimos, early bounds e liberação comprovada em todos os terminais.
+- CK-5, CK-6, CK-8: persistência term-only; forma ouvida ausente de storage/rede/log; `rosto` preservado e “Hostel” apenas no prompt.
+- CK-14: aborto preemptivo durante lock/inferência, timeout real, tentativa seguinte livre e ownership único do WAV.
+- CK-15: Release sem XCTest/debug/test entitlements, assinatura/hashes/PID verificáveis, backup e rollback recuperáveis.
+- CK-1–CK-4, CK-7, CK-9–CK-11: ausência de regressão no feedback, editor, acessibilidade, expiração, foco, clipboard, history e próximo ditado.
+
+Rubrics:
+- Feedback explícito e continuidade do ditado.
+- Integridade e aplicação do glossário.
+- Privacidade local do aprendizado.
+- Acessibilidade da correção.
+- Project Guidelines Alignment.
+
+O Checklist desta task contém CK-1–CK-15 e nenhum ID HR; não inventar HR. Esta seção distribui os critérios existentes, sem criar IDs adicionais na implementação.

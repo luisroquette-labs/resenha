@@ -8,7 +8,9 @@
 **Depends on:** 05
 **Parallel with:** None
 
-**Status:** in progress — revisão técnica 4.66/5 e gates automatizados aprovados; validação física **NOT RUN** permanece pendente.
+**Status:** in progress — revisão técnica 4.66/5 e gates automatizados aprovados; validação física parcial confirma somente o fluxo descrito abaixo.
+
+**Evidência física confirmada em 2026-10-20:** com um documento vazio no TextEdit, a pessoa pressionou Option direita, ditou e confirmou que a auréola animou e que os dois emojis subiram e desapareceram. Não foram confirmados clique, editor, foco, VoiceOver, teclado alternativo, Reduce Motion, Increase Contrast ou clipboard.
 
 ## Goal
 
@@ -26,10 +28,10 @@ Usar somente SwiftUI/AppKit, SF Symbols, cores/gradientes/sombras já suportados
 
 ## Success Criteria
 
-- [ ] CK-1: o HUD de feedback segue `280×64`, sem cartão/título visível, e mostra duas bolhas pequenas que emergem/sobem/desaparecem sem alterar posição ou tamanho do painel. O listening segue `340×72` e recupera o orbe/auréola do piloto.
-- [ ] CK-7/CK-11: o deadline continua exatamente `now + 4`; a animação decorativa não agenda dismiss. Oferta A → B, oferta → editor, oferta → recording/notice e HUD off continuam protegidos contra callbacks antigos.
+- [X] CK-1: o HUD de feedback segue `280×64`, sem cartão/título visível, e mostra duas bolhas pequenas que emergem/sobem/desaparecem sem alterar posição ou tamanho do painel. O listening segue `340×72` e recupera o orbe/auréola do piloto.
+- [X] CK-7/CK-11: o deadline continua exatamente `now + 4`; a animação decorativa não agenda dismiss. Oferta A → B, oferta → editor, oferta → recording/notice e HUD off continuam protegidos contra callbacks antigos.
 - [ ] CK-9: targets mínimos de `44×44`, labels/hints, foco de teclado e contraste são verificáveis. Reduce Motion remove deslocamento/stagger e conserva somente fade, sem mudar o prazo.
-- [ ] CK-2/CK-3/CK-8: ações e editor preservam o contrato existente; nenhuma nova persistência, rede, telemetria, API, asset, pacote ou configuração de projeto.
+- [X] CK-2/CK-3/CK-8: ações e editor preservam o contrato existente; nenhuma nova persistência, rede, telemetria, API, asset, pacote ou configuração de projeto.
 - [ ] CK-10: gate nativo verde, fixtures inspecionadas e app instalado atribuível ao SHA final; teste físico confirma auréola em silêncio/fala, bolhas subindo/fading, clique antes da expiração, editor persistente, foco e VoiceOver/Reduce Motion quando observáveis.
 
 ## Files and impact

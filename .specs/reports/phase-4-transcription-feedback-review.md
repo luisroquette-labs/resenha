@@ -56,4 +56,6 @@ The final review found no remaining issue in the reviewed source, deterministic 
 
 ## Evidence boundary
 
-Physical validation is **NOT RUN** for this installed Debug candidate. Live silence/speech halo response, the complete bubble motion, click during fade, actual OS Reduce Motion/Increase Contrast, keyboard focus, VoiceOver speech, TextEdit continuity and clipboard behavior are unverified. The 4.66/5 score covers the technical review and automated evidence only; it is not physical acceptance and does not justify `[DONE]` or `[REVIEWED]` markers.
+Physical validation is partial for this installed Debug candidate. On 2026-10-20, with an empty TextEdit document, the user pressed Right Option, dictated, and confirmed that the halo animated and the two emoji bubbles rose and disappeared. This observation, together with the existing deterministic tests and fixtures, satisfies the Step 06 CK-1 visual result; the automated lifecycle coverage satisfies CK-7/CK-11, and the existing source/test review satisfies CK-2/CK-3/CK-8.
+
+No click, editor persistence, focus behavior, VoiceOver speech, alternate keyboard path, actual OS Reduce Motion/Increase Contrast, contrast assessment or clipboard behavior was confirmed. Step 06 CK-9 and CK-10 therefore remain open, as do the task-level physical Regular Check and Definition of Done items that require keyboard, VoiceOver and focus evidence. The 4.66/5 score still covers the technical review and automated evidence only; this partial observation does not justify `[DONE]` or `[REVIEWED]` markers or merge.

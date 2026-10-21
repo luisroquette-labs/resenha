@@ -19,6 +19,8 @@ Brand resonance uses the existing microphone samples. Unit checks verify bounded
 
 All local test/build commands run through `~/.local/bin/mac-gate` and use `-derivedDataPath build`, so tests and manual launch share one signed app bundle.
 
+For a daily-use installation, that shared path is **test-host evidence only**. After the native gate, create a separate Release archive/export, run the [SPEC-022](22-direct-dmg-release.md) structural/signature checks and transactional installer, and use the exact installed Release for physical acceptance. A signed Debug app with XCTest, debug dylibs or test entitlements must be rejected. Installer rollback/negative shell tests also run via `mac-gate`; syntax checking alone does not replace XCTest or the real Release checks.
+
 Interface checks cover current-generation/deadline dismissal, obsolete callbacks, repeated hotkey-start failure feedback, menu/request/self-target guards with unconditional recording release, partial permission changes, Settings failure guidance, safe errors, negative display coordinates/fallback/disconnection, panel layout and accessible copy. These deterministic checks do not prove hardware/TCC/caret behavior.
 
 The NSHostingView fixture test renders six states across four configurations (24 PNGs in `build/ui-fixtures`). Overrides reproduce appearance values without changing system settings. Images are fixtures, not actual dictation screenshots; progress stills do not prove movement. Idle is verified as absence, not a seventh HUD image.

@@ -51,6 +51,7 @@ enum FloatingStatus: Equatable {
 final class FloatingPanelModel: ObservableObject {
     @Published var status: FloatingStatus = .ready
     @Published var recording = RecordingMeter()
+    @Published var feedbackPhase: FeedbackBubblePhase = .hidden
 
     func show(_ status: FloatingStatus, now: TimeInterval) {
         if status == .listening {
@@ -76,6 +77,18 @@ struct FeedbackBubbleVisualState: Equatable {
     let opacity: Double
     let offset: CGFloat
     let bubbleScale: CGFloat
+}
+
+enum FeedbackBubblePhase: Equatable {
+    case hidden, entering, resting, exiting
+
+    var elapsed: TimeInterval {
+        switch self {
+        case .hidden, .entering: 0
+        case .resting: 1
+        case .exiting: 4
+        }
+    }
 }
 
 enum FeedbackBubbleMotion {
@@ -113,6 +126,7 @@ struct FloatingStatusView: View {
     var fixtureReduceTransparency: Bool? = nil
     var fixtureReduceMotion: Bool? = nil
     var fixtureFeedbackElapsed: TimeInterval? = nil
+    var feedbackIsVisualOnly = false
     var onApprove: () -> Void = {}
     var onCorrect: () -> Void = {}
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
@@ -171,7 +185,9 @@ struct FloatingStatusView: View {
         .animation((fixtureReduceMotion ?? reduceMotion) ? nil : .easeOut(duration: 0.12),
                    value: model.status == .feedback)
         .transaction {
-            if fixtureReduceMotion ?? reduceMotion { $0.animation = nil; $0.disablesAnimations = true }
+            if (fixtureReduceMotion ?? reduceMotion) && model.status != .feedback {
+                $0.animation = nil; $0.disablesAnimations = true
+            }
         }
         .accessibilityElement(children: model.status == .feedback ? .contain : .ignore)
         .accessibilityLabel(model.status.accessibilityLabel)
@@ -182,8 +198,10 @@ struct FloatingStatusView: View {
             actions: feedbackActions,
             reduceMotion: fixtureReduceMotion ?? reduceMotion,
             increasedContrast: (fixtureContrast ?? contrast) == .increased,
-            fixtureElapsed: fixtureFeedbackElapsed
+            fixtureElapsed: fixtureFeedbackElapsed,
+            phase: model.feedbackPhase
         )
+        .accessibilityHidden(feedbackIsVisualOnly)
     }
 
     private var statusContent: some View {
@@ -221,23 +239,13 @@ private struct FeedbackBubblesView: View {
     let reduceMotion: Bool
     let increasedContrast: Bool
     let fixtureElapsed: TimeInterval?
-    @State private var startedAt = Date()
+    let phase: FeedbackBubblePhase
 
     var body: some View {
-        if let fixtureElapsed {
-            bubbles(elapsed: fixtureElapsed)
-        } else {
-            TimelineView(.animation(minimumInterval: 1.0 / 60.0)) { context in
-                bubbles(elapsed: context.date.timeIntervalSince(startedAt))
-            }
-        }
-    }
-
-    private func bubbles(elapsed: TimeInterval) -> some View {
         HStack(spacing: 16) {
             ForEach(Array(actions.enumerated()), id: \.element.id) { index, action in
                 let state = FeedbackBubbleMotion.state(
-                    elapsed: elapsed, index: index, reduceMotion: reduceMotion
+                    elapsed: fixtureElapsed ?? phase.elapsed, index: index, reduceMotion: reduceMotion
                 )
                 Button(action: action.perform) {
                     FeedbackBubble(action: action, index: index, increasedContrast: increasedContrast)
@@ -248,6 +256,10 @@ private struct FeedbackBubblesView: View {
                 .contentShape(Circle())
                 .opacity(state.opacity)
                 .offset(y: state.offset)
+                .animation(fixtureElapsed != nil ? nil :
+                    .easeInOut(duration: phase == .exiting ? 0.65 : (reduceMotion ? 0.14 : 0.28))
+                        .delay(phase == .resting && !reduceMotion ? Double(index) * 0.07 : 0),
+                    value: phase)
                 .accessibilityLabel(action.label)
                 .accessibilityHint(action.label == FloatingStatusView.approveLabel
                     ? "Encerra a avaliação sem salvar dados."
@@ -338,6 +350,8 @@ struct TranscriptionCorrectionView: View {
                     Text("Corrigir transcrição")
                         .font(.system(size: 22, weight: .semibold, design: .serif))
                         .accessibilityAddTraits(.isHeader)
+                    Text("Salvar adiciona somente o termo correto ao vocabulário local, sem criar uma substituição para o texto ouvido. O reconhecimento pode variar.")
+                        .font(.callout)
                     VStack(alignment: .leading, spacing: 6) {
                         Text(Field.heard.label)
                         TextField(Field.heard.label, text: $heard)
@@ -345,6 +359,8 @@ struct TranscriptionCorrectionView: View {
                             .accessibilityLabel(Field.heard.label)
                             .accessibilityHint(invalidField == .heard ? errorMessage ?? "" : "")
                             .focused($focusedField, equals: .heard)
+                        Text("\(heard.count)/\(TranscriptionGlossary.maximumCorrectionFieldCharacters) caracteres · até 2.560 bytes")
+                            .font(.caption).foregroundStyle(.secondary)
                     }
                     VStack(alignment: .leading, spacing: 6) {
                         Text(Field.canonical.label)
@@ -353,15 +369,17 @@ struct TranscriptionCorrectionView: View {
                             .accessibilityLabel(Field.canonical.label)
                             .accessibilityHint(invalidField == .canonical ? errorMessage ?? "" : "")
                             .focused($focusedField, equals: .canonical)
-                    }
-                    if let errorMessage {
-                        Label(errorMessage, systemImage: "exclamationmark.triangle")
-                            .font(.callout)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .accessibilityLabel("Não foi possível salvar. \(errorMessage)")
+                        Text("\(canonical.count)/\(TranscriptionGlossary.maximumCorrectionFieldCharacters) caracteres · até 2.560 bytes")
+                            .font(.caption).foregroundStyle(.secondary)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            if let errorMessage {
+                Label(errorMessage, systemImage: "exclamationmark.triangle")
+                    .font(.callout)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityLabel("Não foi possível salvar. \(errorMessage)")
             }
             HStack {
                 ForEach(actions) { action in

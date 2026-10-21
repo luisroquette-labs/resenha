@@ -1,5 +1,69 @@
 # Interface refinement — item 1 evidence
 
+## Phase 5 — candidata da revisão 2, 21/10/2026, 09:56–09:59 BRT
+
+**Gate completo e Release instalado agora correspondem ao diff revisado `b88ef172…`. Prova física continua pendente; não foi tentada nesta correção.** Os registros anteriores de 96 testes e build 2026102101 são históricos.
+
+Fonte congelada: base `0cf73d5834c8c4d0a3a9a8538d75d04a69fc5377` + `git diff --binary HEAD -- Sources Config project.yml WhisperKey.xcodeproj` SHA-256 **`b88ef1723ae82bdc684efabbe2e83d52ff3367a539b1affff9d0f58fe1f7a16c`**. A versão incluindo Sources/Tests/Config/projeto tem hash `f9f35f6ea7278bdd2b80fcb5aadd82c8609e509f9d43971964537b14389d545e`, verificado antes do gate e após a instalação. Runtime, XCTest, scripts e specs funcionais não foram alterados durante esta correção; somente evidência foi atualizada.
+
+Gate canônico, repetido pelo `mac-gate`: `~/.local/bin/mac-gate xcodebuild -project WhisperKey.xcodeproj -scheme WhisperKey -destination 'platform=macOS' -derivedDataPath build test` → **97 passed, 0 failed, 0 skipped**. Resultado `build/Logs/Test/Test-WhisperKey-2026.10.21_09-56-43--0300.xcresult`, confirmado por xcresulttool; log `/tmp/resenha-phase5-review2-native-20261021.log`. Inclui o novo teste real de CK-14. O resultado antigo de 96 casos não foi reutilizado para aprovar o diff atual.
+
+Depois do gate, `RESENHA_OUTPUT_DIR=<worktree>/build/direct-phase5-review2-20261021 RESENHA_BUILD_NUMBER=2026102102 ~/.local/bin/mac-gate zsh Scripts/build-release-dmg.sh` gerou um archive/export **Release 1.0.0 (2026102102)** separado e um novo DMG assinado. Ambos passaram a validação compartilhada. `Contents/Resources/ResenhaBuild.plist`, selado pela assinatura, contém `Configuration=Release`, a base Git acima e **SourceDiffSHA256=b88ef172…**. Log `/tmp/resenha-phase5-review2-release-20261021.log`; sem notarização/publicação.
+
+| Artefato atual | SHA-256 |
+|---|---|
+| Executável exportado/instalado `Contents/MacOS/Resenha` | `9617c803912e803a9f94279eea4ce5d90ba3680a4a212a9c3661a6d7266d6c15` |
+| `Contents/Resources/Assets.car` | `9327d3d789b6af3c04177ab2875a5de8da443f6738dc7699b084720ad002ec80` |
+| `Contents/_CodeSignature/CodeResources` | `639808d08153c0edb9710aea0a9b1accadde2113c8206dd63dcb4a9f90dd7437` |
+| DMG em `build/direct-phase5-review2-20261021` | `2543c2feeba4cf7412816c889711a0085eee75eb43f7c2f898dc4d58007e2b4a` |
+| Fingerprint agregado do bundle exportado/instalado | `e07318353b39794f9682087f2c58ba23737bd6df956664d5c7d7b4ba2f9276c9` |
+
+Instalação: `zsh Scripts/install-local-release.sh <worktree>/build/direct-phase5-review2-20261021/export/Resenha.app 0cf73d5834c8c4d0a3a9a8538d75d04a69fc5377 <worktree>/build/direct-phase5-review2-20261021/evidence`. Log `/tmp/resenha-phase5-review2-install-20261021.log`; único PID **51151**, executável exatamente `/Applications/Resenha.app/Contents/MacOS/Resenha`. Validações profundas antes/no stage/depois passaram: bundle ID `br.com.luisroquette.Resenha`, arm64/macOS 14, Developer ID/team S3YCFYY8SC, Hardened Runtime, entitlements **dict vazio**, sem XCTest/Testing/debug dylibs/get-task-allow/testmanagerd/coresymbolicationd. Manifestos source/installed comparados byte a byte, iguais. Staging preservado `/Applications/.resenha-stage.LTp0FYUe`; metadados, hashes, assinatura e entitlements persistidos em `build/direct-phase5-review2-20261021/evidence`.
+
+Novo backup recuperável: `/Applications/Resenha-backups/Resenha-20261021T125818Z-0cf73d5834c8.wK40De9o/previous-Resenha.app`. Contém o Release 2026102101, executável `23f2b1a3ab40485997b28358febca0efe45509d0992e8da885a83d8a8d793b66` e fingerprint agregado `a20b488c045b6ee8c71abd6bb7d4214bec6160ca6aa1ad1835d929e5954c5154`, coincidente com o inventário anterior à troca. Assinatura profunda válida. O backup anterior de Debug em `Resenha-20261021T124306Z-0cf73d5834c8.Wvn5LToR/previous-Resenha.app` continua presente, hash `457fc29f…`, e sua assinatura também foi verificada. Nenhum backup foi apagado; os testes de rollback da entrega inicial permanecem evidência dos mesmos scripts, cujos hashes não mudaram nesta correção.
+
+Pendência exata reobservada após instalar: menu nativo **`Resenha — Permissões necessárias`**. A entrega anterior identificou Microfone, Monitoramento de Entrada e Acessibilidade pendentes; nesta correção foi lido o status agregado, sem inferir que cada permissão individual continuou no mesmo estado. Não houve grant/reset/bypass TCC, ajuste de microfone, transcrição, clique de pass-through, cancelamento físico ou VoiceOver. Nenhum desses casos é contado como PASS. Chrome/Terminal/sessões foram preservados. `git diff --check` passou; sem commit/push.
+
+## Phase 5 — Release endurecido instalado, 21/10/2026, 09:37–09:46 BRT
+
+**Release instalado/validado; smoke de ditado/pass-through/cancelamento bloqueado por permissões.** Este registro substitui o uso de test host Debug como candidato cotidiano. Não afirma que as pendências físicas históricas foram encerradas.
+
+### Fonte, gates e artefatos
+
+Base Git `0cf73d5834c8c4d0a3a9a8538d75d04a69fc5377` com código 07/08/09 congelado. SHA-256 de `git diff --binary HEAD -- Sources Config project.yml WhisperKey.xcodeproj`: `5d43ee570b99824c938092d1598ea18ecb063afb3c1e83b8fba7320716b38fce`. O bundle contém esses valores e `Configuration=Release` em `Contents/Resources/ResenhaBuild.plist`, selado pela assinatura. A atribuição é **base + diff**, não um claim de checkout limpo; Step 10 não fez commit/push e não alterou Sources/XCTest.
+
+1. Gate nativo: `~/.local/bin/mac-gate xcodebuild -project WhisperKey.xcodeproj -scheme WhisperKey -destination 'platform=macOS' -derivedDataPath build test` → **96 passed, 0 failures, 0 skipped**, `build/Logs/Test/Test-WhisperKey-2026.10.21_09-40-35--0300.xcresult`; log `/tmp/resenha-phase5-step10-native-gate-final-20261021.log`. Primeira execução teve duas assertions do mesmo caso em Tests.swift:1371 (collectionBehavior 321 vs 257); owner 07 moveu a atribuição da política para depois de addChildWindow, sem afrouxar a assertion. O gate integral posterior passou.
+2. Shell gate: `~/.local/bin/mac-gate zsh Scripts/release-install.test.sh` → **PASS**; log `/tmp/resenha-step10-shell-tests-installed-final-20261021.log`, fixtures `/private/var/folders/7k/8wtpdcvn5f95c8s36d91t8k40000gn/T/resenha-install-test.L2xRu8c1`. Fixtures exercitam rejeição de cada marcador/entitlement, SHA/hash divergentes, múltiplos PIDs, instalação e falha antes da troca/depois do backup/depois da troca. Copy/hash/move/rollback são reais no root temporário; assinatura/processo/abertura têm seams de fixture. Backup e candidatos falhos ficam preservados. O Debug real também foi rejeitado (`Contents/Frameworks/Testing.framework`).
+3. Build separado: `RESENHA_OUTPUT_DIR=<worktree>/build/direct-phase5-20261021 RESENHA_BUILD_NUMBER=2026102101 ~/.local/bin/mac-gate zsh Scripts/build-release-dmg.sh` → archive/export Release e DMG assinados/validados, versão **1.0.0 (2026102101)**; log `/tmp/resenha-step10-release-build-20261021.log`. Nenhuma notarização, publicação, API paga ou integração foi executada. Site workflow cobre somente Scripts/site.mjs, Scripts/site.test.mjs e site/**, todos inalterados; não foi acionado.
+
+| Artefato | SHA-256 |
+|---|---|
+| Export e instalado `Contents/MacOS/Resenha` | `23f2b1a3ab40485997b28358febca0efe45509d0992e8da885a83d8a8d793b66` |
+| Export e instalado `Contents/Resources/Assets.car` | `9327d3d789b6af3c04177ab2875a5de8da443f6738dc7699b084720ad002ec80` |
+| Export e instalado `Contents/_CodeSignature/CodeResources` | `3cea1192f98aae7dfd88be8d47a71856458cba5f0e0c0c8ece65620e3795b30f` |
+| `Resenha-1.0.0-arm64.dmg` | `299a2bb721e5766de479d6569ea4fcee0c41537f5b731a9f297c03cdce5ac07c` |
+| Fingerprint agregado do manifesto do bundle export/instalado | `a20b488c045b6ee8c71abd6bb7d4214bec6160ca6aa1ad1835d929e5954c5154` |
+
+O validador compartilhado em `Scripts/validate-release-dmg.sh` aceita `--app /abs/Resenha.app [SourceSHA]` e o mesmo contrato é usado no DMG e pelo instalador. Release aprovado: bundle ID `br.com.luisroquette.Resenha`, arm64, mínimo macOS 14, Developer ID Application/team S3YCFYY8SC, Hardened Runtime, assinatura profunda estrita e entitlements XML com **dict vazio**. Não há XCTest/XCT/XCUI/Testing, `*.debug.dylib`, `__preview.dylib`, get-task-allow, testmanagerd ou coresymbolicationd. `otool -L` do executável mostra somente bibliotecas/frameworks Apple de produção; nenhum link de teste. Assinatura e ausência de marcadores foram verificadas antes do stage, no stage e na instalação; os manifestos source/installed são idênticos.
+
+### Instalação, backup e recuperação
+
+Comando: `zsh Scripts/install-local-release.sh <worktree>/build/direct-phase5-20261021/export/Resenha.app 0cf73d5834c8c4d0a3a9a8538d75d04a69fc5377 <worktree>/build/direct-phase5-20261021/evidence`. Log `/tmp/resenha-step10-install-20261021.log`. Exatamente um processo foi confirmado em `/Applications/Resenha.app/Contents/MacOS/Resenha`: **PID 25162**. Staging preservado: `/Applications/.resenha-stage.1czw3ehr`.
+
+Backup: `/Applications/Resenha-backups/Resenha-20261021T124306Z-0cf73d5834c8.Wvn5LToR/previous-Resenha.app`. Executável anterior `457fc29f25d00cade3507bf22a61e60ba2affcf323045ab0786120902a36e3fd`; fingerprint completo `8881c6477a9ed90c72e34561db2f6d8f882f0a3d97cdad60f4c4c21a3fc59947`, igual ao inventariado antes da troca. `codesign --verify --deep --strict` passou no backup. O anterior é o **Debug Apple Development preservado**, não um Release aprovado. Nenhum backup, candidato falho ou diretório amplo foi apagado.
+
+ERR/INT/TERM do instalador preservam o candidato já colocado como `failed-candidate.app`, copiam/verificam o backup antes de recolocar o destino e tentam reabrir a instalação anterior. Os testes injetaram falhas somente em fixtures; nenhuma falha artificial foi provocada em `/Applications`. Para recuperação manual, fechar apenas Resenha, preservar o Release atual em outro nome no mesmo diretório de backup, copiar o `previous-Resenha.app` para staging e recolocar `/Applications/Resenha.app` somente após conferir o fingerprint acima. Não executar o instalador Release para validar o backup Debug; ele deve rejeitá-lo por desenho.
+
+Manifestos individuais, hashes, assinatura, entitlements, metadados de instalação e amostras estão em `build/direct-phase5-20261021/evidence/`. O resultado gerado inicialmente usava separadores `\\n` literais; somente sua formatação foi normalizada, mantendo valores e log original, e o instalador passou a escrever um campo por linha. O teste shell foi repetido após essa correção.
+
+### Observação física e bloqueio concreto
+
+System Events confirmou `Resenha — Permissões necessárias`. A janela nativa “Configurar Resenha” do **Release instalado** mostrou Microfone, Monitoramento de Entrada e Acessibilidade pendentes, modelo local **Pronto** e “Configuração pendente”. Nenhum botão de grant foi acionado, nenhuma entrada TCC foi alterada/resetada e nenhuma proteção foi reduzida. CUA inicialmente retornou timeout sem janela; após abrir “Configurar Resenha…” pelo menu, a janela real foi lida. Onboarding foi fechado com “Agora não”.
+
+Com zero janelas acessíveis visíveis, seis amostras de `ps` a cada 2 segundos reportaram 0,0% CPU; acumulado 0:00.93 → 0:00.94 (**+0,01 s** no intervalo). Isso é somente uma observação limitada em idle, sem gravação/feedback disponível; não demonstra taxa de render, pass-through, multi-Space, VoiceOver nem cancelamento do modelo real. As respectivas regressões de lifecycle/cancelamento/WAV passaram no XCTest de 96 casos, mas não substituem o smoke físico.
+
+Ditado básico, clique dentro/fora dos dois alvos e cancelamento físico no Release: **NOT RUN / bloqueados pelas três permissões**. A entrada padrão observada era AirPods Pro de Eu #2 - Find My; Step 10 não alterou microfone/volume nem produziu transcrição. Chrome, Terminal e sessões existentes foram preservados. A próxima intervenção necessária é autorizar as três permissões para este Release e repetir o smoke no mesmo hash; não é necessário reinstalar Debug nem afrouxar assinatura.
+
 ## Animated halo and feedback bubbles Debug candidate — 20/10/2026, 19:45–19:46 BRT
 
 Step `06-animated-halo-feedback-bubbles`, installed source revision: `1a1a882365c87ea03204b4109138ba5126efb9f9`. This is a locally signed **Debug candidate**, not a release/store build and not physical acceptance evidence.
