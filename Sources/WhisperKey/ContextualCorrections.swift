@@ -15,6 +15,7 @@ enum ContextualCorrectionValidationError: Equatable, Sendable {
     case empty
     case identical
     case invalidCharacters
+    case multipleSentences
     case sentenceTooLong
     case occurrenceMissing
     case occurrenceAmbiguous
@@ -44,6 +45,7 @@ extension ContextualCorrectionSaveResult {
         case .conflict: "Já existe outra correção para esta ocorrência"
         case .limitReached: "O limite de 100 correções contextuais foi atingido"
         case .invalid(.sentenceTooLong): "A frase confirmada ultrapassa 600 caracteres"
+        case .invalid(.multipleSentences): "Confirme apenas a frase que contém a palavra corrigida"
         case .invalid(.occurrenceMissing): "A palavra ouvida não aparece na frase confirmada"
         case .invalid(.occurrenceAmbiguous): "Selecione a ocorrência exata antes de salvar"
         case .invalid: "Confira a palavra ouvida, a correção e a frase confirmada"
@@ -196,6 +198,7 @@ final class ContextualCorrectionStore: ObservableObject, ContextualCorrectionSto
         guard !heard.isEmpty, !canonical.isEmpty, !sentence.isEmpty else { return .empty }
         guard heard.caseInsensitiveCompare(canonical) != .orderedSame else { return .identical }
         guard TranscriptionLanguage(rawValue: example.language) != nil else { return .invalidCharacters }
+        guard ContextualSentenceBoundary.ranges(in: sentence).count == 1 else { return .multipleSentences }
         guard sentence.count <= Self.maximumSentenceCharacters else { return .sentenceTooLong }
         guard example.occurrenceOrdinal > 0 else { return .occurrenceAmbiguous }
         let matches = Self.wholeTermRanges(heard, in: sentence)
@@ -318,6 +321,19 @@ final class ContextualCorrectionStore: ObservableObject, ContextualCorrectionSto
         } catch {
             throw ContextualCorrectionStoreError.unavailable
         }
+    }
+}
+
+enum ContextualSentenceBoundary {
+    static func ranges(in text: String) -> [Range<String.Index>] {
+        var ranges: [Range<String.Index>] = []
+        text.enumerateSubstrings(
+            in: text.startIndex..<text.endIndex,
+            options: [.bySentences, .substringNotRequired]
+        ) { _, range, _, _ in
+            ranges.append(range)
+        }
+        return ranges
     }
 }
 

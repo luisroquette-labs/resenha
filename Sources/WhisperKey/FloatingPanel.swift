@@ -38,6 +38,22 @@ final class CorrectionSession: ObservableObject {
     @Published private(set) var selectedOrdinal: Int?
     private var retentionProbe: ContextRetentionProbe?
     var actionID: UUID { token ?? recoveryID }
+    var selectedContext: (sentence: String, occurrenceOrdinal: Int)? {
+        let ranges = Self.occurrenceRanges(of: heard, in: sentence)
+        guard let selectedOrdinal, ranges.indices.contains(selectedOrdinal - 1) else { return nil }
+        let selectedRange = ranges[selectedOrdinal - 1]
+        guard let sentenceRange = ContextualSentenceBoundary.ranges(in: sentence).first(where: {
+            $0.lowerBound <= selectedRange.lowerBound && $0.upperBound >= selectedRange.upperBound
+        }) else { return nil }
+        let localRanges = ranges.filter {
+            $0.lowerBound >= sentenceRange.lowerBound && $0.upperBound <= sentenceRange.upperBound
+        }
+        guard let localIndex = localRanges.firstIndex(of: selectedRange) else { return nil }
+        return (
+            String(sentence[sentenceRange]).trimmingCharacters(in: .whitespacesAndNewlines),
+            localIndex + 1
+        )
+    }
 
     init(
         token: UUID,
@@ -66,7 +82,8 @@ final class CorrectionSession: ObservableObject {
         }
         self.heard = heard
         self.canonical = canonical
-        candidateOrdinals = Self.occurrenceOrdinals(of: heard, in: sentence)
+        let occurrenceCount = Self.occurrenceRanges(of: heard, in: sentence).count
+        candidateOrdinals = occurrenceCount == 0 ? [] : Array(1...occurrenceCount)
         selectedOrdinal = candidateOrdinals.count == 1 ? candidateOrdinals[0] : nil
         if inputLimitField != nil { errorMessage = nil; inputLimitField = nil; invalidField = nil }
     }
@@ -92,7 +109,7 @@ final class CorrectionSession: ObservableObject {
         token = nil
     }
 
-    private static func occurrenceOrdinals(of term: String, in sentence: String) -> [Int] {
+    private static func occurrenceRanges(of term: String, in sentence: String) -> [Range<String.Index>] {
         let trimmed = term.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return [] }
         let escaped = NSRegularExpression.escapedPattern(for: trimmed)
@@ -100,11 +117,10 @@ final class CorrectionSession: ObservableObject {
             pattern: "(?<![\\p{L}\\p{N}])\(escaped)(?![\\p{L}\\p{N}])",
             options: [.caseInsensitive]
         )
-        let count = regex?.numberOfMatches(
+        return regex?.matches(
             in: sentence,
             range: NSRange(sentence.startIndex..<sentence.endIndex, in: sentence)
-        ) ?? 0
-        return count > 0 ? Array(1...count) : []
+        ).compactMap { Range($0.range, in: sentence) } ?? []
     }
 }
 
@@ -418,13 +434,14 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
         guard let session = feedback, session.token == token, canSaveCorrection,
               let preferences = correctionPreferences else { return }
         if let contextualStore {
+            guard let selectedContext = session.selectedContext else { return }
             let result = contextualStore.save(.init(
                 id: UUID(),
                 language: session.language.rawValue,
                 heard: session.heard,
                 canonical: session.canonical,
-                sentence: session.sentence,
-                occurrenceOrdinal: session.selectedOrdinal ?? 0
+                sentence: selectedContext.sentence,
+                occurrenceOrdinal: selectedContext.occurrenceOrdinal
             ))
             handleContextualSave(result, session: session)
             return

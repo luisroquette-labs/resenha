@@ -21,14 +21,6 @@ struct DictationCompletion {
         self.retentionProbe = retentionProbe
     }
 
-    init(id: UUID, targetApplication: NSRunningApplication?) {
-        self.init(
-            id: id,
-            targetApplication: targetApplication,
-            text: "",
-            language: .portuguese
-        )
-    }
 }
 
 final class ContextRetentionProbe {
@@ -332,15 +324,6 @@ final class DictationCoordinator {
         )
         reset()
         if showsHUD() { onCompleted?(completion) }
-    }
-
-    func completeInsertion(attemptID: UUID, isCancelled: Bool) {
-        completeInsertion(
-            attemptID: attemptID,
-            isCancelled: isCancelled,
-            text: "",
-            language: sessionLanguage
-        )
     }
 
     func cancel() {

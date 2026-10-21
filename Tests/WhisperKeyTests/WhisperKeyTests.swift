@@ -436,7 +436,7 @@ final class WhisperKeyTests: XCTestCase {
         defer { panel.hide() }
         panel.configureFeedback(preferences: preferences)
         let token = UUID()
-        panel.offerFeedback(.init(id: token, targetApplication: nil))
+        panel.offerFeedback(.init(id: token, targetApplication: nil, text: "Transcrição concluída.", language: .portuguese))
         panel.openCorrection(token: token)
         panel.updateCorrectionDraft(token: token, heard: "rosto", canonical: "Hostel")
         let oversized = String(repeating: "x", count: 161)
@@ -476,7 +476,7 @@ final class WhisperKeyTests: XCTestCase {
             let panel = FloatingPanelController()
             panel.configureFeedback(preferences: preferences)
             let token = UUID()
-            panel.offerFeedback(.init(id: token, targetApplication: nil))
+            panel.offerFeedback(.init(id: token, targetApplication: nil, text: "Transcrição concluída.", language: .portuguese))
             panel.openCorrection(token: token)
             panel.updateCorrectionDraft(token: token, heard: "rosto", canonical: "Hostel\(terminal)")
             var retainedSession = try XCTUnwrap(panel.correctionSession) as CorrectionSession?
@@ -1278,30 +1278,30 @@ final class WhisperKeyTests: XCTestCase {
             completed.append(context.id)
         }
         let original = coordinator.attemptID
-        coordinator.completeInsertion(attemptID: original, isCancelled: false)
+        coordinator.completeInsertion(attemptID: original, isCancelled: false, text: "Transcrição concluída.", language: .portuguese)
         XCTAssertTrue(completed.isEmpty)
         coordinator.transition(to: .recording)
         coordinator.transition(to: .transcribing)
         coordinator.transition(to: .inserting)
-        coordinator.completeInsertion(attemptID: original, isCancelled: true)
-        coordinator.completeInsertion(attemptID: UUID(), isCancelled: false)
+        coordinator.completeInsertion(attemptID: original, isCancelled: true, text: "Transcrição concluída.", language: .portuguese)
+        coordinator.completeInsertion(attemptID: UUID(), isCancelled: false, text: "Transcrição concluída.", language: .portuguese)
         XCTAssertTrue(completed.isEmpty)
         coordinator.cancel()
         coordinator.transition(to: .recording)
         coordinator.transition(to: .transcribing)
         coordinator.transition(to: .inserting)
-        coordinator.completeInsertion(attemptID: original, isCancelled: false)
+        coordinator.completeInsertion(attemptID: original, isCancelled: false, text: "Transcrição concluída.", language: .portuguese)
         XCTAssertEqual(coordinator.phase, .inserting, "A post-await stale completion cannot reset the next attempt")
         let current = coordinator.attemptID
-        coordinator.completeInsertion(attemptID: current, isCancelled: false)
+        coordinator.completeInsertion(attemptID: current, isCancelled: false, text: "Transcrição concluída.", language: .portuguese)
         XCTAssertEqual(completed, [current])
-        coordinator.completeInsertion(attemptID: current, isCancelled: false)
+        coordinator.completeInsertion(attemptID: current, isCancelled: false, text: "Transcrição concluída.", language: .portuguese)
         XCTAssertEqual(completed, [current])
         showsHUD = false
         coordinator.transition(to: .recording)
         coordinator.transition(to: .transcribing)
         coordinator.transition(to: .inserting)
-        coordinator.completeInsertion(attemptID: coordinator.attemptID, isCancelled: false)
+        coordinator.completeInsertion(attemptID: coordinator.attemptID, isCancelled: false, text: "Transcrição concluída.", language: .portuguese)
         XCTAssertEqual(completed, [current])
         for error in [WhisperError.emptyTranscript as Error, TextInjectionError.eventCreationFailed,
                       TextInjectionError.clipboardChanged, WhisperError.invalidAudio] {
@@ -1323,7 +1323,7 @@ final class WhisperKeyTests: XCTestCase {
         panel.configureFeedback(preferences: preferences)
         panel.showTemporarily(.ready)
         let timer = panel.dismissal.generation
-        let first = DictationCompletion(id: UUID(), targetApplication: nil)
+        let first = DictationCompletion(id: UUID(), targetApplication: nil, text: "Transcrição concluída.", language: .portuguese)
         panel.offerFeedback(first)
         XCTAssertTrue(panel.hasFeedback)
         XCTAssertTrue(panel.ignoresMouseEvents)
@@ -1334,7 +1334,7 @@ final class WhisperKeyTests: XCTestCase {
         panel.approveFeedback(token: first.id)
         XCTAssertFalse(panel.hasFeedback)
         XCTAssertTrue(panel.ignoresMouseEvents)
-        let next = DictationCompletion(id: UUID(), targetApplication: nil)
+        let next = DictationCompletion(id: UUID(), targetApplication: nil, text: "Transcrição concluída.", language: .portuguese)
         panel.offerFeedback(next)
         panel.approveFeedback(token: first.id)
         panel.openCorrection(token: first.id)
@@ -1370,7 +1370,7 @@ final class WhisperKeyTests: XCTestCase {
         panel.configureFeedback(preferences: preferences)
         var menuToken: UUID?
         panel.onFeedbackChange = { [weak panel] in menuToken = panel?.approvalActionToken }
-        let first = DictationCompletion(id: UUID(), targetApplication: nil)
+        let first = DictationCompletion(id: UUID(), targetApplication: nil, text: "Transcrição concluída.", language: .portuguese)
         panel.show(.inserting, target: .session(nil))
         let processingFrame = panel.frame
         panel.offerFeedback(first)
@@ -1406,11 +1406,11 @@ final class WhisperKeyTests: XCTestCase {
         let panel = FloatingPanelController(clock: { now })
         defer { panel.hide() }
         panel.configureFeedback(preferences: preferences)
-        panel.offerFeedback(.init(id: UUID(), targetApplication: nil))
+        panel.offerFeedback(.init(id: UUID(), targetApplication: nil, text: "Transcrição concluída.", language: .portuguese))
         let oldGeneration = panel.dismissal.generation
         now = 102
         let next = UUID()
-        panel.offerFeedback(.init(id: next, targetApplication: nil))
+        panel.offerFeedback(.init(id: next, targetApplication: nil, text: "Transcrição concluída.", language: .portuguese))
         let currentGeneration = panel.dismissal.generation
         panel.dismissIfCurrent(generation: oldGeneration, now: 104)
         XCTAssertEqual(panel.feedbackToken, next)
@@ -1429,7 +1429,7 @@ final class WhisperKeyTests: XCTestCase {
         XCTAssertEqual(panel.correctionDraft?.heard, "Coisa")
         XCTAssertEqual(panel.correctionError, error)
         for state in [FloatingStatus.listening, .feedbackNotice("Termo adicionado ao vocabulário")] {
-            panel.offerFeedback(.init(id: UUID(), targetApplication: nil))
+            panel.offerFeedback(.init(id: UUID(), targetApplication: nil, text: "Transcrição concluída.", language: .portuguese))
             let generation = panel.dismissal.generation
             panel.show(state)
             panel.dismissIfCurrent(generation: generation, now: .greatestFiniteMagnitude)
@@ -1437,7 +1437,7 @@ final class WhisperKeyTests: XCTestCase {
             XCTAssertTrue(panel.isVisible)
             XCTAssertFalse(panel.hasFeedback)
         }
-        panel.offerFeedback(.init(id: UUID(), targetApplication: nil))
+        panel.offerFeedback(.init(id: UUID(), targetApplication: nil, text: "Transcrição concluída.", language: .portuguese))
         let hiddenGeneration = panel.dismissal.generation
         panel.hide()
         panel.dismissIfCurrent(generation: hiddenGeneration, now: .greatestFiniteMagnitude)
@@ -1453,7 +1453,7 @@ final class WhisperKeyTests: XCTestCase {
         var now: TimeInterval = 100
         let panel = FloatingPanelController(clock: { now })
         defer { panel.hide() }
-        panel.offerFeedback(.init(id: UUID(), targetApplication: nil))
+        panel.offerFeedback(.init(id: UUID(), targetApplication: nil, text: "Transcrição concluída.", language: .portuguese))
         let generation = panel.dismissal.generation
         XCTAssertEqual(panel.dismissal.deadline, 104)
         XCTAssertEqual(panel.feedbackPhase, .entering)
@@ -1490,7 +1490,7 @@ final class WhisperKeyTests: XCTestCase {
         panel.configureFeedback(preferences: ProductPreferences(defaults: defaults))
         let activePID = NSWorkspace.shared.frontmostApplication?.processIdentifier
         let first = UUID()
-        panel.offerFeedback(.init(id: first, targetApplication: nil))
+        panel.offerFeedback(.init(id: first, targetApplication: nil, text: "Transcrição concluída.", language: .portuguese))
         let targets = panel.feedbackTargetWindows
         XCTAssertEqual(targets.count, 2)
         XCTAssertEqual(NSWorkspace.shared.frontmostApplication?.processIdentifier, activePID)
@@ -1534,7 +1534,7 @@ final class WhisperKeyTests: XCTestCase {
         XCTAssertTrue(targets.allSatisfy { !$0.isVisible && $0.parent == nil && $0.contentView == nil })
 
         let next = UUID()
-        panel.offerFeedback(.init(id: next, targetApplication: nil))
+        panel.offerFeedback(.init(id: next, targetApplication: nil, text: "Transcrição concluída.", language: .portuguese))
         retiredButton.performClick(nil)
         XCTAssertEqual(panel.feedbackToken, next)
         let correctionButton = try XCTUnwrap(panel.feedbackTargetWindows[1].contentView as? NSButton)
@@ -1561,7 +1561,7 @@ final class WhisperKeyTests: XCTestCase {
         underneath.orderFrontRegardless()
         defer { underneath.close() }
         let token = UUID()
-        panel.offerFeedback(.init(id: token, targetApplication: nil))
+        panel.offerFeedback(.init(id: token, targetApplication: nil, text: "Transcrição concluída.", language: .portuguese))
         let targets = panel.feedbackTargetWindows
         targets.forEach { $0.displayIfNeeded() }
         // Let the WindowServer commit the pixels before asking which window receives a real mouse-down.
@@ -1618,7 +1618,7 @@ final class WhisperKeyTests: XCTestCase {
             autoreleasepool {
                 let application = FeedbackApplicationProbe()
                 application.onDeinit = { releases += 1 }
-                panel.offerFeedback(.init(id: token, targetApplication: application))
+                panel.offerFeedback(.init(id: token, targetApplication: application, text: "Transcrição concluída.", language: .portuguese))
             }
             XCTAssertEqual(releases, 1, "The passive offer must retain only PID/token")
             let generation = panel.dismissal.generation
@@ -1651,7 +1651,7 @@ final class WhisperKeyTests: XCTestCase {
         autoreleasepool {
             let controller = FloatingPanelController()
             releasedController = controller
-            controller.offerFeedback(.init(id: UUID(), targetApplication: nil))
+            controller.offerFeedback(.init(id: UUID(), targetApplication: nil, text: "Transcrição concluída.", language: .portuguese))
             target = controller.feedbackTargetWindows.first
             button = target?.contentView as? NSButton
             XCTAssertEqual(controller.activePresentationTaskCount, 1)
@@ -1672,12 +1672,12 @@ final class WhisperKeyTests: XCTestCase {
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         panel.configureFeedback(preferences: ProductPreferences(defaults: defaults))
-        panel.offerFeedback(.init(id: UUID(), targetApplication: nil))
+        panel.offerFeedback(.init(id: UUID(), targetApplication: nil, text: "Transcrição concluída.", language: .portuguese))
         let oldGeneration = panel.dismissal.generation
         let oldButton = try XCTUnwrap(panel.feedbackTargetWindows[1].contentView as? NSButton)
         now = 102
         let current = UUID()
-        panel.offerFeedback(.init(id: current, targetApplication: nil))
+        panel.offerFeedback(.init(id: current, targetApplication: nil, text: "Transcrição concluída.", language: .portuguese))
         panel.advanceFeedbackPresentation(generation: oldGeneration)
         oldButton.performClick(nil)
         XCTAssertEqual(panel.feedbackPhase, .entering)
@@ -1701,7 +1701,7 @@ final class WhisperKeyTests: XCTestCase {
         let preferences = ProductPreferences(defaults: defaults)
         let panel = FloatingPanelController()
         panel.configureFeedback(preferences: preferences)
-        let context = DictationCompletion(id: UUID(), targetApplication: nil)
+        let context = DictationCompletion(id: UUID(), targetApplication: nil, text: "Transcrição concluída.", language: .portuguese)
         panel.offerFeedback(context)
         panel.openCorrection(token: context.id)
         panel.saveCorrection(token: context.id)
@@ -1725,7 +1725,7 @@ final class WhisperKeyTests: XCTestCase {
         let writes = defaults.glossaryWrites
         panel.saveCorrection(token: context.id)
         XCTAssertEqual(defaults.glossaryWrites, writes)
-        let repeated = DictationCompletion(id: UUID(), targetApplication: nil)
+        let repeated = DictationCompletion(id: UUID(), targetApplication: nil, text: "Transcrição concluída.", language: .portuguese)
         panel.offerFeedback(repeated)
         panel.openCorrection(token: repeated.id)
         panel.updateCorrectionDraft(token: repeated.id, heard: "Coisa Energia", canonical: "COESA Energia")
@@ -1744,7 +1744,7 @@ final class WhisperKeyTests: XCTestCase {
         let panel = FloatingPanelController()
         panel.configureFeedback(preferences: preferences)
         let original = UUID()
-        panel.offerFeedback(.init(id: original, targetApplication: nil))
+        panel.offerFeedback(.init(id: original, targetApplication: nil, text: "Transcrição concluída.", language: .portuguese))
         panel.openCorrection(token: original)
         panel.updateCorrectionDraft(token: original, heard: "Coisa", canonical: "COESA")
         defaults.divergeAfterWrite = true
@@ -1799,12 +1799,12 @@ final class WhisperKeyTests: XCTestCase {
         let coordinator = DictationCoordinator(permissions: PermissionService(), panel: app.panel)
         app.observeCoordinator(coordinator)
         let original = UUID()
-        app.panel.offerFeedback(.init(id: original, targetApplication: nil))
+        app.panel.offerFeedback(.init(id: original, targetApplication: nil, text: "Transcrição concluída.", language: .portuguese))
         XCTAssertTrue(app.acceptHotkeyPress(targetIsSelf: false), "An ignored offer retires on the same accepted press")
         XCTAssertFalse(app.panel.hasFeedback)
         app.handleHotkeyRelease()
         let editing = UUID()
-        app.panel.offerFeedback(.init(id: editing, targetApplication: nil))
+        app.panel.offerFeedback(.init(id: editing, targetApplication: nil, text: "Transcrição concluída.", language: .portuguese))
         app.panel.openCorrection(token: editing)
         app.panel.updateCorrectionDraft(token: editing, heard: "Coisa", canonical: "COESA")
         XCTAssertFalse(app.acceptHotkeyPress(targetIsSelf: true))
@@ -1818,7 +1818,7 @@ final class WhisperKeyTests: XCTestCase {
         XCTAssertTrue(app.acceptHotkeyPress(targetIsSelf: false))
         app.handleHotkeyRelease()
         let altTab = UUID()
-        app.panel.offerFeedback(.init(id: altTab, targetApplication: nil))
+        app.panel.offerFeedback(.init(id: altTab, targetApplication: nil, text: "Transcrição concluída.", language: .portuguese))
         app.panel.openCorrection(token: altTab)
         XCTAssertTrue(app.acceptHotkeyPress(targetIsSelf: false), "Alt-Tab permits immediate external dictation")
         XCTAssertFalse(app.panel.hasFeedback)
@@ -1834,13 +1834,13 @@ final class WhisperKeyTests: XCTestCase {
         let menu = NativeMenuController(delegate: app)
         menu.configure()
         let original = UUID()
-        app.panel.offerFeedback(.init(id: original, targetApplication: nil))
+        app.panel.offerFeedback(.init(id: original, targetApplication: nil, text: "Transcrição concluída.", language: .portuguese))
         menu.updateFeedback(approvalToken: app.panel.approvalActionToken, correctionToken: app.panel.correctionActionToken)
         let oldApprove = try XCTUnwrap(menu.approvalMenuItem)
         let oldCorrect = try XCTUnwrap(menu.correctionMenuItem)
         XCTAssertTrue(oldApprove.isEnabled)
         let current = UUID()
-        app.panel.offerFeedback(.init(id: current, targetApplication: nil))
+        app.panel.offerFeedback(.init(id: current, targetApplication: nil, text: "Transcrição concluída.", language: .portuguese))
         menu.updateFeedback(approvalToken: app.panel.approvalActionToken, correctionToken: app.panel.correctionActionToken)
         XCTAssertFalse(oldApprove === menu.approvalMenuItem)
         app.approveTranscription(oldApprove)
@@ -1857,7 +1857,7 @@ final class WhisperKeyTests: XCTestCase {
         XCTAssertFalse(app.applyPermissionSnapshot(.init(microphone: false, inputMonitoring: true)))
         XCTAssertFalse(app.panel.hasFeedback)
         XCTAssertNil(app.panel.correctionDraft)
-        app.panel.offerFeedback(.init(id: UUID(), targetApplication: nil))
+        app.panel.offerFeedback(.init(id: UUID(), targetApplication: nil, text: "Transcrição concluída.", language: .portuguese))
         app.applicationWillTerminate(Notification(name: NSApplication.willTerminateNotification))
         XCTAssertFalse(app.panel.hasFeedback)
         XCTAssertNil(app.panel.correctionDraft)
@@ -1876,7 +1876,7 @@ final class WhisperKeyTests: XCTestCase {
             app.observeCoordinator(DictationCoordinator(permissions: PermissionService(), panel: app.panel))
             app.panel.configureFeedback(preferences: preferences)
             let token = UUID()
-            app.panel.offerFeedback(.init(id: token, targetApplication: nil))
+            app.panel.offerFeedback(.init(id: token, targetApplication: nil, text: "Transcrição concluída.", language: .portuguese))
             app.panel.openCorrection(token: token)
             app.panel.updateCorrectionDraft(token: token, heard: "Coisa", canonical: "COESA")
             defaults.divergeAfterWrite = true
@@ -2802,6 +2802,10 @@ final class ContextualStoreTests: XCTestCase {
         XCTAssertEqual(store.save(example(canonical: "ROSTO")), .invalid(.identical))
         XCTAssertEqual(store.save(example(heard: "rosto\n")), .invalid(.invalidCharacters))
         XCTAssertEqual(store.save(example(sentence: "Reservei um rosto.\nOutro trecho.")), .invalid(.invalidCharacters))
+        XCTAssertEqual(
+            store.save(example(sentence: "Reservei um rosto. Outro trecho.")),
+            .invalid(.multipleSentences)
+        )
         XCTAssertEqual(store.save(example(sentence: "Reservei um hotel.")), .invalid(.occurrenceMissing))
         XCTAssertEqual(store.save(example(sentence: "rosto e rosto", ordinal: 3)), .invalid(.occurrenceAmbiguous))
         XCTAssertEqual(store.save(example(language: "xx")), .invalid(.invalidCharacters))
@@ -4324,6 +4328,25 @@ final class ContextualFeedbackSettingsTests: XCTestCase {
         XCTAssertEqual(preferences.transcriptionGlossary, baseline)
     }
 
+    func testFeedbackStoresOnlySentenceContainingSelectedOccurrence() throws {
+        let fixture = try SettingsFixture.make()
+        defer { fixture.defaults.removePersistentDomain(forName: fixture.suiteName) }
+        let storage = makeStore()
+        defer { try? FileManager.default.removeItem(at: storage.root) }
+        let panel = configurePanel(store: storage.store, defaults: fixture.defaults)
+
+        let token = offer(
+            panel,
+            text: "Vi meu rosto no espelho. Reservei um rosto perto da estação.",
+            ordinal: 2
+        )
+        panel.saveCorrection(token: token)
+
+        XCTAssertEqual(storage.store.examples.count, 1)
+        XCTAssertEqual(storage.store.examples.first?.sentence, "Reservei um rosto perto da estação.")
+        XCTAssertEqual(storage.store.examples.first?.occurrenceOrdinal, 1)
+    }
+
     func testFeedbackRejectsAbsentMultipleUnselectedAndOversizedOccurrence() throws {
         let fixture = try SettingsFixture.make()
         defer { fixture.defaults.removePersistentDomain(forName: fixture.suiteName) }
@@ -4465,6 +4488,31 @@ final class ContextualFeedbackSettingsTests: XCTestCase {
         XCTAssertTrue(model.credential.isEmpty)
         await model.removeCredential()
         XCTAssertEqual(model.errorMessage, "Não foi possível remover a chave do diagnóstico.")
+    }
+
+    func testContextualSettingsExposeDeleteFailures() throws {
+        let manager = AuthorizationManagerSpy()
+        let model = ContextualSettingsModel(authorization: manager, diagnostic: makeDiagnostic())
+
+        let single = makeStore()
+        let example = ContextualCorrectionExample(
+            id: UUID(), language: "pt", heard: "rosto", canonical: "Hostel",
+            sentence: "Reservei um rosto.", occurrenceOrdinal: 1
+        )
+        XCTAssertTrue(single.store.save(example).isSuccess)
+        try FileManager.default.removeItem(at: single.root)
+        try Data("blocked".utf8).write(to: single.root)
+        defer { try? FileManager.default.removeItem(at: single.root) }
+        model.deleteExample(id: example.id, from: single.store)
+        XCTAssertEqual(model.errorMessage, "Não foi possível apagar a correção contextual.")
+
+        let all = makeStore()
+        XCTAssertTrue(all.store.save(example).isSuccess)
+        try FileManager.default.removeItem(at: all.root)
+        try Data("blocked".utf8).write(to: all.root)
+        defer { try? FileManager.default.removeItem(at: all.root) }
+        model.deleteAll(from: all.store)
+        XCTAssertEqual(model.errorMessage, "Não foi possível apagar as correções contextuais.")
     }
 
     func testContextualSettingsDiagnosticCatchesOnlySanitizedErrors() async throws {

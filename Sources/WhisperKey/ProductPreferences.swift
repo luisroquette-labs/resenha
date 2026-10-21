@@ -368,6 +368,14 @@ final class ContextualSettingsModel: ObservableObject {
         }
         statusMessage = "Diagnóstico concluído: \(result.outcome.category.rawValue). Modelo \(result.receipt.resolvedModel)."
     }
+
+    func deleteExample(id: UUID, from store: ContextualCorrectionStore) {
+        errorMessage = store.delete(id: id) ? nil : "Não foi possível apagar a correção contextual."
+    }
+
+    func deleteAll(from store: ContextualCorrectionStore) {
+        errorMessage = store.deleteAll() ? nil : "Não foi possível apagar as correções contextuais."
+    }
 }
 
 struct ProductSettingsView: View {
@@ -665,12 +673,12 @@ private struct TranscriptionSettingsPane: View {
                         HStack {
                             Text("\(example.heard) → \(example.canonical)")
                             Spacer()
-                            Button("Apagar") { _ = contextualStore.delete(id: example.id) }
+                            Button("Apagar") { contextualModel.deleteExample(id: example.id, from: contextualStore) }
                                 .accessibilityLabel(ContextualSettingsModel.deleteExampleAccessibilityLabel)
                         }
                     }
                     if !contextualStore.examples.isEmpty {
-                        Button("Apagar todos") { _ = contextualStore.deleteAll() }
+                        Button("Apagar todos") { contextualModel.deleteAll(from: contextualStore) }
                             .accessibilityLabel(ContextualSettingsModel.deleteAllAccessibilityLabel)
                     }
                     if let status = contextualModel.statusMessage {
