@@ -27,6 +27,7 @@
 		73B3AA17549C4AF0E03C6F25 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = B63B342300F9037E5752DC51 /* PrivacyInfo.xcprivacy */; };
 		86DFF8F34B535D75107AB91C /* AudioRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA553ED088000409A1534B10 /* AudioRecorder.swift */; };
 		8A12E0347CA26301459DABDD /* MenuPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E88ECFDFC9BE5A2B95ED500 /* MenuPresentation.swift */; };
+		A117C517B23C28101A3AD434 /* contextual-corrections.json in Resources */ = {isa = PBXBuildFile; fileRef = B37F99010A42725CC6F7CAEE /* contextual-corrections.json */; };
 		A43F5E47CFC6FC2CDEC601A4 /* DictationCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E0F01DAE4C30ED2DC6B9DBC /* DictationCoordinator.swift */; };
 		B35865AFF46A73E125E89E8F /* WhisperKeyApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FFCCC5A27F52BFFEE1004E2 /* WhisperKeyApp.swift */; };
 		C2AE8F8BDE3F2909C47F5A3E /* jfk.wav in Resources */ = {isa = PBXBuildFile; fileRef = EA7FF21487DD1F97FC4D871F /* jfk.wav */; };
@@ -37,6 +38,7 @@
 		E840D16CE29F012BFD264C1D /* Accelerate.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 08C6D6EE682FF41296ABF618 /* Accelerate.framework */; };
 		ED3412FBD5A2E25998D1A1AE /* WhisperModelManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D146404C7236681875DFD04 /* WhisperModelManager.swift */; };
 		F95D54A8DF1F718AD734EAE3 /* WhisperKeyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC280A6E884D7AF1EBD71925 /* WhisperKeyTests.swift */; };
+		FD7E2301B6500BD3FE29F902 /* contextual-corrections.json in Resources */ = {isa = PBXBuildFile; fileRef = B37F99010A42725CC6F7CAEE /* contextual-corrections.json */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -72,6 +74,7 @@
 		AA553ED088000409A1534B10 /* AudioRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioRecorder.swift; sourceTree = "<group>"; };
 		AAC1740D72EC6212C4303041 /* WhisperTranscriber.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhisperTranscriber.swift; sourceTree = "<group>"; };
 		B3739A1A43D300FD95FA56BD /* TranscriptHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptHistory.swift; sourceTree = "<group>"; };
+		B37F99010A42725CC6F7CAEE /* contextual-corrections.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "contextual-corrections.json"; sourceTree = "<group>"; };
 		B63B342300F9037E5752DC51 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		CC53403AB4A2D89C204327D2 /* libc++.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = "libc++.tbd"; path = "usr/lib/libc++.tbd"; sourceTree = SDKROOT; };
 		CD98C7E641E041C3A2E5E855 /* ResenhaDesign.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResenhaDesign.swift; sourceTree = "<group>"; };
@@ -99,10 +102,20 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		0B5FCEF25FAA7BC328547563 /* Fixtures */ = {
+			isa = PBXGroup;
+			children = (
+				B37F99010A42725CC6F7CAEE /* contextual-corrections.json */,
+			);
+			name = Fixtures;
+			path = Tests/Fixtures;
+			sourceTree = "<group>";
+		};
 		4A27B5C9BFB14B477A59865D = {
 			isa = PBXGroup;
 			children = (
 				E997ABCD3F17473CF7C7AE6B /* Config */,
+				0B5FCEF25FAA7BC328547563 /* Fixtures */,
 				A6B60FE3D8DA3A1466F90245 /* samples */,
 				EE8A65A769C7C55A687549E3 /* WhisperKey */,
 				8A9681C9A56F1D758D1A5E09 /* WhisperKeyTests */,
@@ -275,6 +288,7 @@
 			files = (
 				21BFEB851E15B4030C254977 /* Assets.xcassets in Resources */,
 				73B3AA17549C4AF0E03C6F25 /* PrivacyInfo.xcprivacy in Resources */,
+				A117C517B23C28101A3AD434 /* contextual-corrections.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -282,6 +296,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				FD7E2301B6500BD3FE29F902 /* contextual-corrections.json in Resources */,
 				C2AE8F8BDE3F2909C47F5A3E /* jfk.wav in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

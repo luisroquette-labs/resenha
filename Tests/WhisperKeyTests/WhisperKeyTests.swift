@@ -3247,3 +3247,1294 @@ final class ContextualResolverTests: XCTestCase {
         XCTAssertEqual(output, input)
     }
 }
+
+struct DecisionsStreamingSnapshot: Equatable, Sendable {
+    let deliveredChunkCount: Int
+    let cancelCount: Int
+    let capturedRequest: URLRequest?
+}
+
+private final class LockedInteger: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = 0
+    func increment() { lock.withLock { value += 1 } }
+    func read() -> Int { lock.withLock { value } }
+}
+
+final class DecisionsStreamingTransportStub: DecisionsStreamingTransport, @unchecked Sendable {
+    private let lock = NSLock()
+    private let statusCode: Int
+    private let chunks: [Data]
+    private let terminalError: Error?
+    private let ignoresTransportLimit: Bool
+    private var index = 0
+    private var deliveredChunkCount = 0
+    private var cancelCount = 0
+    private var cancelled = false
+    private var acceptedBytes = 0
+    private var capturedRequest: URLRequest?
+
+    init(
+        statusCode: Int = 200,
+        chunks: [Data],
+        terminalError: Error? = nil,
+        ignoresTransportLimit: Bool = false
+    ) {
+        self.statusCode = statusCode
+        self.chunks = chunks
+        self.terminalError = terminalError
+        self.ignoresTransportLimit = ignoresTransportLimit
+    }
+
+    func open(
+        _ request: URLRequest,
+        maximumResponseBytes: Int,
+        deadline: ContextualInstant
+    ) async throws -> DecisionsResponseStream {
+        lock.withLock { capturedRequest = request }
+        let response = HTTPURLResponse(
+            url: request.url!, statusCode: statusCode,
+            httpVersion: "HTTP/1.1", headerFields: nil
+        )!
+        return .init(
+            response: response,
+            nextChunk: { [weak self] in
+                guard let self else { return nil }
+                return try self.lock.withLock {
+                    guard !self.cancelled else { return nil }
+                    if self.index == self.chunks.count {
+                        if let terminalError = self.terminalError { throw terminalError }
+                        return nil
+                    }
+                    let chunk = self.chunks[self.index]
+                    if !self.ignoresTransportLimit,
+                       self.acceptedBytes > maximumResponseBytes - chunk.count {
+                        self.cancelled = true
+                        self.cancelCount += 1
+                        throw OpenRouterDecisionsError.responseTooLarge
+                    }
+                    self.index += 1
+                    self.acceptedBytes += chunk.count
+                    self.deliveredChunkCount += 1
+                    return chunk
+                }
+            },
+            cancel: { [weak self] in
+                guard let self else { return }
+                self.lock.withLock {
+                    guard !self.cancelled else { return }
+                    self.cancelled = true
+                    self.cancelCount += 1
+                }
+            }
+        )
+    }
+
+    func snapshot() -> DecisionsStreamingSnapshot {
+        lock.withLock {
+            .init(
+                deliveredChunkCount: deliveredChunkCount,
+                cancelCount: cancelCount,
+                capturedRequest: capturedRequest
+            )
+        }
+    }
+}
+
+@MainActor
+final class ContextualTransportCorpusTests: XCTestCase {
+    private func occurrence(in sentence: String = "Reservei um rosto.") -> ContextualCorrectionOccurrence {
+        .init(
+            questionID: "o1",
+            heard: "rosto",
+            canonical: "Hostel",
+            ordinal: 1,
+            range: sentence.range(of: "rosto")!
+        )
+    }
+
+    private var officialResponse: Data {
+        Data(#"{"model":"typesafe/jev-1.14-20261014","answers":{"o1":{"type":"choice","choice":"replace_1","probabilities":{"keep_original":0.01,"replace_1":0.99},"confidence":0.98}},"usage":{"input_tokens":357,"output_tokens":38,"cost":0.000014994},"id":"synthetic-id","provider":"TypeSafe"}"#.utf8)
+    }
+
+    func testFrozenAlphaDecisionsDTOEncodesRequestAndDecodesOfficialResponseFixture() throws {
+        let sentence = "Reservei um rosto."
+        let dto = OpenRouterDecisionsClient.requestDTO(
+            sentence: sentence,
+            language: "pt",
+            occurrences: [occurrence(in: sentence)]
+        )
+        let object = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: JSONEncoder().encode(dto)) as? [String: Any]
+        )
+        XCTAssertEqual(Set(object.keys), Set(["model", "state", "questions"]))
+        XCTAssertEqual(object["model"] as? String, "typesafe/jev-1.14")
+        let state = try XCTUnwrap(object["state"] as? [String: Any])
+        XCTAssertEqual(Set(state.keys), Set(["language", "text", "occurrences"]))
+        let encodedOccurrence = try XCTUnwrap((state["occurrences"] as? [[String: Any]])?.first)
+        XCTAssertEqual(Set(encodedOccurrence.keys), Set(["heard", "canonical", "ordinal"]))
+        let questions = try XCTUnwrap(object["questions"] as? [String: [String: Any]])
+        XCTAssertEqual(Set(questions.keys), ["o1"])
+        XCTAssertEqual(Set(try XCTUnwrap(questions["o1"]?["criteria"] as? [String: String]).keys),
+                       Set(["keep_original", "replace_1"]))
+
+        let receipt = try OpenRouterDecisionsClient.receipt(
+            from: officialResponse,
+            occurrences: [occurrence(in: sentence)]
+        )
+        XCTAssertEqual(receipt.resolvedModel, "typesafe/jev-1.14-20261014")
+        XCTAssertEqual(receipt.decisions.first?.choice, .replace)
+        XCTAssertEqual(receipt.decisions.first?.chosenProbability, 0.99)
+        XCTAssertEqual(receipt.decisions.first?.runnerUpProbability, 0.01)
+        XCTAssertEqual(receipt.decisions.first?.confidence, 0.98)
+        XCTAssertEqual(receipt.inputTokens, 357)
+        XCTAssertEqual(receipt.outputTokens, 38)
+        XCTAssertEqual(receipt.costUSD, Decimal(string: "0.000014994"))
+    }
+
+    func testURLSessionDelegateStateCancelsBeforeQueueingByte65537() async throws {
+        let cancellations = LockedInteger()
+        let state = DecisionsDelegateState(maximumResponseBytes: 65_536) { cancellations.increment() }
+        state.receive(Data(repeating: 0, count: 32_768))
+        state.receive(Data(repeating: 0, count: 32_768))
+        state.receive(Data([0]))
+        state.receive(Data([1]))
+        let snapshot = state.snapshot()
+        XCTAssertEqual(snapshot.acceptedBytes, 65_536)
+        XCTAssertEqual(snapshot.queuedChunkCount, 2)
+        XCTAssertEqual(snapshot.cancelCount, 1)
+        XCTAssertEqual(cancellations.read(), 1)
+        let first = try await state.nextChunk()
+        let second = try await state.nextChunk()
+        XCTAssertEqual(first?.count, 32_768)
+        XCTAssertEqual(second?.count, 32_768)
+        do {
+            _ = try await state.nextChunk()
+            XCTFail("Expected responseTooLarge")
+        } catch {
+            XCTAssertEqual(error as? OpenRouterDecisionsError, .responseTooLarge)
+        }
+    }
+
+    func testDecisionsClientCancelsStreamingTaskBeforeBufferExceeds64KiB() async {
+        for acceptedSize in [65_535, 65_536] {
+            let padding = Data(repeating: 0x20, count: acceptedSize - officialResponse.count)
+            let acceptedTransport = DecisionsStreamingTransportStub(
+                chunks: [officialResponse, padding]
+            )
+            let acceptedClient = OpenRouterDecisionsClient(
+                transport: acceptedTransport,
+                credential: { "test-key" }
+            )
+            do {
+                let receipt = try await acceptedClient.decide(
+                    sentence: "Reservei um rosto.", language: "pt",
+                    occurrences: [occurrence()], deadline: .init(offset: .milliseconds(900))
+                )
+                XCTAssertEqual(receipt.decisions.first?.choice, .replace, "bytes-\(acceptedSize)")
+            } catch {
+                XCTFail("bytes-\(acceptedSize): \(error)")
+            }
+        }
+
+        let transport = DecisionsStreamingTransportStub(
+            chunks: [
+                Data(repeating: 0x20, count: 32_768),
+                Data(repeating: 0x20, count: 32_768),
+                Data([0x20]),
+                Data(#"{"must":"not be consumed"}"#.utf8)
+            ],
+            ignoresTransportLimit: true
+        )
+        let client = OpenRouterDecisionsClient(transport: transport, credential: { "test-key" })
+        do {
+            _ = try await client.decide(
+                sentence: "Reservei um rosto.",
+                language: "pt",
+                occurrences: [occurrence()],
+                deadline: .init(offset: .milliseconds(900))
+            )
+            XCTFail("Expected responseTooLarge")
+        } catch {
+            XCTAssertEqual(error as? OpenRouterDecisionsError, .responseTooLarge)
+        }
+        let snapshot = transport.snapshot()
+        XCTAssertEqual(snapshot.deliveredChunkCount, 3)
+        XCTAssertEqual(snapshot.cancelCount, 1)
+    }
+
+    func testDecisionsClientReturnsTypedReceiptFromSingleEnvelope() async throws {
+        let transport = DecisionsStreamingTransportStub(chunks: [officialResponse])
+        let client = OpenRouterDecisionsClient(transport: transport, credential: { "test-key" })
+        let receipt = try await client.decide(
+            sentence: "Reservei um rosto.",
+            language: "pt",
+            occurrences: [occurrence()],
+            deadline: .init(offset: .milliseconds(900))
+        )
+        XCTAssertEqual(receipt.decisions.count, 1)
+        XCTAssertEqual(receipt.resolvedModel, "typesafe/jev-1.14-20261014")
+        XCTAssertEqual(receipt.inputTokens, 357)
+        XCTAssertEqual(receipt.outputTokens, 38)
+        XCTAssertEqual(receipt.costUSD, Decimal(string: "0.000014994"))
+    }
+
+    func testDecisionsClientRejectsStatusRedirectMalformedAndPrivatePayloadFields() async throws {
+        for status in [401, 402, 403, 429, 500, 503] {
+            let transport = DecisionsStreamingTransportStub(statusCode: status, chunks: [])
+            let client = OpenRouterDecisionsClient(transport: transport, credential: { "test-key" })
+            do {
+                _ = try await client.decide(
+                    sentence: "Reservei um rosto.", language: "pt",
+                    occurrences: [occurrence()], deadline: .init(offset: .milliseconds(900))
+                )
+                XCTFail("Expected status \(status)")
+            } catch {
+                XCTAssertEqual(error as? OpenRouterDecisionsError, .invalidStatus(status))
+            }
+        }
+        for row in [
+            ("redirect", DecisionsStreamingTransportStub(statusCode: 302, chunks: []), OpenRouterDecisionsError.redirected),
+            ("offline", DecisionsStreamingTransportStub(chunks: [], terminalError: URLError(.notConnectedToInternet)), .transportUnavailable),
+            ("timeout", DecisionsStreamingTransportStub(chunks: [], terminalError: OpenRouterDecisionsError.timedOut), .timedOut),
+            ("truncated", DecisionsStreamingTransportStub(chunks: [Data(#"{"model":"typesafe/jev-1.14""#.utf8)]), .malformedResponse)
+        ] {
+            let client = OpenRouterDecisionsClient(transport: row.1, credential: { "test-key" })
+            do {
+                _ = try await client.decide(
+                    sentence: "Reservei um rosto.", language: "pt",
+                    occurrences: [occurrence()], deadline: .init(offset: .milliseconds(900))
+                )
+                XCTFail("Expected \(row.0)")
+            } catch {
+                XCTAssertEqual(error as? OpenRouterDecisionsError, row.2, row.0)
+            }
+        }
+        let malformed = DecisionsStreamingTransportStub(chunks: [Data("{}".utf8)])
+        let client = OpenRouterDecisionsClient(transport: malformed, credential: { "test-key" })
+        do {
+            _ = try await client.decide(
+                sentence: "Reservei um rosto.", language: "pt",
+                occurrences: [occurrence()], deadline: .init(offset: .milliseconds(900))
+            )
+            XCTFail("Expected malformedResponse")
+        } catch {
+            XCTAssertEqual(error as? OpenRouterDecisionsError, .malformedResponse)
+        }
+        let request = try XCTUnwrap(malformed.snapshot().capturedRequest)
+        XCTAssertEqual(request.url, OpenRouterDecisionsClient.endpoint)
+        XCTAssertEqual(request.httpMethod, "POST")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer test-key")
+        let body = String(data: try XCTUnwrap(request.httpBody), encoding: .utf8)!
+        for forbidden in ["history", "audio", "clipboard", "application", "attempt", "test-key"] {
+            XCTAssertFalse(body.localizedCaseInsensitiveContains(forbidden), forbidden)
+        }
+    }
+}
+
+private enum ContextualCorpusFamily: String, Codable { case calibration, evaluation }
+private enum ContextualCorpusGroup: String, Codable {
+    case correctOriginal = "correct_original"
+    case supportedCorrection = "supported_correction"
+    case ambiguous
+    case mixedUnicode = "mixed_unicode"
+    case securityLifecycle = "security_lifecycle"
+}
+private enum ContextualCorpusOutcomeKind: String, Codable {
+    case decisions, offline, timeout, malformed, stale, ineligible
+}
+private enum ContextualCorpusChoice: String, Codable { case keepOriginal = "keep_original", replace = "replace_1" }
+
+private struct ContextualCorpusFixture: Decodable {
+    struct Learning: Codable {
+        let id: String
+        let pairID: String
+        let language: String
+        let sentence: String
+        let heard: String
+        let canonical: String
+        let ordinal: Int
+    }
+    struct Answer: Codable {
+        let ordinal: Int
+        let choice: ContextualCorpusChoice
+        let confidence: Double
+        let chosenProbability: Double
+        let runnerUpProbability: Double
+    }
+    struct Outcome: Codable {
+        let kind: ContextualCorpusOutcomeKind
+        let answers: [Answer]
+    }
+    struct Case: Codable {
+        let id: String
+        let pairID: String
+        let learningExampleIDs: [String]
+        let family: ContextualCorpusFamily
+        let group: ContextualCorpusGroup
+        let language: String
+        let input: String
+        let heard: String
+        let canonical: String
+        let ordinal: Int
+        let expected: String
+        let providerOutcome: Outcome
+        let rationale: String
+    }
+
+    let schemaVersion: Int
+    let corpusVersion: String
+    let evaluationPositiveIDs: [String]
+    let learningExamples: [Learning]
+    var cases: [Case]
+    let diagnosticFixture: SyntheticDiagnosticFixture
+
+    static func load(bundle: Bundle = .main) throws -> Self {
+        let url = try XCTUnwrap(bundle.url(forResource: "contextual-corrections", withExtension: "json"))
+        return try JSONDecoder().decode(Self.self, from: Data(contentsOf: url))
+    }
+
+    func validate() -> Bool {
+        guard schemaVersion == 1, cases.count == 100,
+              Set(cases.map(\.id)).count == 100,
+              Set(learningExamples.map(\.id)).count == learningExamples.count,
+              diagnosticFixture.id == SyntheticDiagnosticFixture.id else { return false }
+        let learningByID = Dictionary(uniqueKeysWithValues: learningExamples.map { ($0.id, $0) })
+        let normalizedLearning = Set(learningExamples.map { Self.normalize($0.sentence) })
+        var semanticKeys = Set<String>()
+        var rationales = Set<String>()
+        for item in cases {
+            guard item.rationale.count >= 20,
+                  !normalizedLearning.contains(Self.normalize(item.input)),
+                  !item.learningExampleIDs.isEmpty,
+                  item.learningExampleIDs.allSatisfy({ learningByID[$0]?.pairID == item.pairID }),
+                  Self.wholeTermCount(item.heard, in: item.input) >= item.ordinal,
+                  item.ordinal > 0 else { return false }
+            let key = [item.pairID, item.family.rawValue, Self.normalize(item.input), Self.normalize(item.expected)]
+                .joined(separator: "|")
+            guard semanticKeys.insert(key).inserted,
+                  rationales.insert(Self.normalize(item.rationale)).inserted else { return false }
+        }
+        let positives = cases.filter { evaluationPositiveIDs.contains($0.id) }
+        guard positives.count == 20,
+              Set(evaluationPositiveIDs).count == 20,
+              positives.allSatisfy({
+                  $0.family == .evaluation && $0.group == .supportedCorrection && $0.input != $0.expected
+              }),
+              cases.filter({ $0.group == .supportedCorrection }).count == 20 else { return false }
+        return true
+    }
+
+    static func normalize(_ value: String) -> String {
+        var normalized = value.precomposedStringWithCompatibilityMapping
+            .folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: Locale(identifier: "pt_BR"))
+        normalized = normalized.replacingOccurrences(
+            of: #"\b(caso|exemplo|variação|variacao|cenário|cenario)\s*\d*\b"#,
+            with: " ", options: .regularExpression
+        )
+        normalized = normalized.replacingOccurrences(of: #"\b\d+(º|ª|o|a)?\b"#, with: "<n>", options: .regularExpression)
+        normalized = normalized.replacingOccurrences(of: #"[^\p{L}\p{N}<>]+"#, with: " ", options: .regularExpression)
+        return normalized.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+    }
+
+    private static func wholeTermCount(_ term: String, in text: String) -> Int {
+        let escaped = NSRegularExpression.escapedPattern(for: term)
+        let regex = try? NSRegularExpression(
+            pattern: "(?<![\\p{L}\\p{N}])\(escaped)(?![\\p{L}\\p{N}])",
+            options: [.caseInsensitive]
+        )
+        return regex?.numberOfMatches(
+            in: text,
+            range: NSRange(text.startIndex..<text.endIndex, in: text)
+        ) ?? 0
+    }
+}
+
+extension ContextualTransportCorpusTests {
+    func testCorpusSchemaFreezesLearningEvaluationAndDiagnosticIDs() throws {
+        let fixture = try ContextualCorpusFixture.load()
+        XCTAssertTrue(fixture.validate())
+        XCTAssertEqual(fixture.corpusVersion, "2026-10-20.1")
+        XCTAssertEqual(fixture.learningExamples.count, 5)
+        XCTAssertEqual(Set(fixture.cases.map(\.pairID)).count, 5)
+        XCTAssertEqual(fixture.cases.filter { $0.group == .correctOriginal }.count, 30)
+        XCTAssertEqual(fixture.cases.filter { $0.group == .supportedCorrection }.count, 20)
+        XCTAssertEqual(fixture.cases.filter { $0.group == .ambiguous }.count, 20)
+        XCTAssertEqual(fixture.cases.filter { $0.group == .mixedUnicode }.count, 15)
+        XCTAssertEqual(fixture.cases.filter { $0.group == .securityLifecycle }.count, 15)
+        XCTAssertEqual(fixture.diagnosticFixture.id, SyntheticDiagnosticFixture.id)
+        XCTAssertFalse(fixture.cases.map(\.input).contains(fixture.diagnosticFixture.input))
+
+        let bytes = try Data(contentsOf: XCTUnwrap(
+            Bundle.main.url(forResource: "contextual-corrections", withExtension: "json")
+        ))
+        for mutation in [
+            ("\"family\": \"evaluation\"", "\"family\": \"EVALUATION\""),
+            ("\"group\": \"correct_original\"", "\"group\": \"correct\""),
+            ("\"kind\": \"decisions\"", "\"kind\": \"DECISIONS\""),
+            ("\"choice\": \"keep_original\"", "\"choice\": \"keep\"")
+        ] {
+            var text = try XCTUnwrap(String(data: bytes, encoding: .utf8))
+            text = text.replacingOccurrences(of: mutation.0, with: mutation.1, options: [], range: text.range(of: mutation.0))
+            XCTAssertThrowsError(try JSONDecoder().decode(ContextualCorpusFixture.self, from: Data(text.utf8)))
+        }
+
+        var numberedDuplicate = try XCTUnwrap(String(data: bytes, encoding: .utf8))
+        numberedDuplicate = numberedDuplicate.replacingOccurrences(
+            of: "Meu rosto ficou vermelho depois da corrida.",
+            with: "Caso 42: O retrato mostra o rosto de perfil."
+        )
+        let duplicateFixture = try JSONDecoder().decode(
+            ContextualCorpusFixture.self,
+            from: Data(numberedDuplicate.utf8)
+        )
+        XCTAssertFalse(duplicateFixture.validate())
+    }
+
+    func testDiagnosticFixtureLoadsFromCandidateAppBundle() throws {
+        XCTAssertEqual(Bundle.main.bundleIdentifier, "br.com.luisroquette.Resenha")
+        let url = try XCTUnwrap(Bundle.main.url(forResource: "contextual-corrections", withExtension: "json"))
+        XCTAssertTrue(url.path.contains("Resenha.app/Contents/Resources"))
+        let fixture = try SyntheticDiagnosticFixture.load(from: .main)
+        XCTAssertEqual(fixture.id, SyntheticDiagnosticFixture.id)
+        XCTAssertEqual(fixture.language, "pt")
+    }
+}
+
+private final class InMemoryCredentialStore: ContextualCredentialStore, @unchecked Sendable {
+    private let lock = NSLock()
+    private var value: String?
+    private(set) var calls: [String] = []
+    var loadOverride: String?
+
+    func save(_ value: String) throws {
+        lock.withLock { calls.append("credential-save"); self.value = value }
+    }
+    func load() throws -> String? {
+        lock.withLock { calls.append("credential-load"); return loadOverride ?? value }
+    }
+    func delete() throws { lock.withLock { calls.append("credential-delete"); value = nil } }
+    func snapshotCalls() -> [String] { lock.withLock { calls } }
+}
+
+@MainActor
+private final class ContextualOptInStoreStub: ContextualOptInStore {
+    private(set) var contextualCorrectionsEnabled: Bool
+    private(set) var writes: [Bool] = []
+    init(enabled: Bool) { contextualCorrectionsEnabled = enabled }
+    func persistContextualCorrectionsEnabled(_ enabled: Bool) throws {
+        writes.append(enabled)
+        contextualCorrectionsEnabled = enabled
+    }
+}
+
+private actor SyntheticGuardSpy: SyntheticDiagnosticGuardStore {
+    var health: SyntheticDiagnosticGuardHealth = .blocked
+    var calls: [String] = []
+    var failure: SyntheticDiagnosticGuardError?
+
+    func validateForAuthorization() throws {
+        calls.append("guard-inspect")
+        if let failure { throw failure }
+    }
+    func provisionAuthorizedCall() throws {
+        calls.append("guard-provision")
+        if let failure { throw failure }
+        health = .ready(.available)
+    }
+    func consume() throws {
+        calls.append("guard-consume")
+        if let failure { throw failure }
+        guard health == .ready(.available) else { throw SyntheticDiagnosticGuardError.blocked }
+        health = .ready(.consumed)
+    }
+    func currentState() -> SyntheticDiagnosticGuardHealth {
+        calls.append("guard-state")
+        return health
+    }
+    func setHealth(_ health: SyntheticDiagnosticGuardHealth) { self.health = health }
+    func snapshotCalls() -> [String] { calls }
+}
+
+private enum SyntheticProviderMode: Sendable {
+    case receipt(ContextualDecisionReceipt)
+    case openRouter(OpenRouterDecisionsError)
+    case cancellation
+}
+
+private actor SyntheticProviderStub: SyntheticDiagnosticDecisionProvider {
+    let mode: SyntheticProviderMode
+    private(set) var calls = 0
+    private(set) var beforeOpenResults: [Bool] = []
+
+    init(_ mode: SyntheticProviderMode) { self.mode = mode }
+
+    func decideSynthetic(
+        sentence: String,
+        language: String,
+        occurrences: [ContextualCorrectionOccurrence],
+        deadline: ContextualInstant,
+        beforeTransportOpen: @escaping @Sendable () async -> Bool
+    ) async throws -> ContextualDecisionReceipt {
+        let allowed = await beforeTransportOpen()
+        beforeOpenResults.append(allowed)
+        guard allowed else { throw OpenRouterDecisionsError.authorizationInvalidated }
+        calls += 1
+        switch mode {
+        case .receipt(let receipt): return receipt
+        case .openRouter(let error): throw error
+        case .cancellation: throw CancellationError()
+        }
+    }
+}
+
+@MainActor
+private final class DiagnosticAuthorizationStub: SyntheticDiagnosticAuthorizationChecking {
+    enum Mode { case success, failure, invalidate(ContextualPolicyInvalidationReason) }
+    let mode: Mode
+    let policy: ContextualCorrectionPolicy
+    private(set) var tokens: [ContextualPolicyToken] = []
+
+    init(mode: Mode, policy: ContextualCorrectionPolicy) {
+        self.mode = mode
+        self.policy = policy
+    }
+
+    func consumeForDispatch(token: ContextualPolicyToken) async throws {
+        tokens.append(token)
+        switch mode {
+        case .success: return
+        case .failure: throw SyntheticDiagnosticAuthorizationError.guardUnavailable
+        case .invalidate(let reason):
+            policy.invalidate(reason)
+            throw SyntheticDiagnosticAuthorizationError.stalePolicy
+        }
+    }
+
+    func currentHealth() async -> SyntheticDiagnosticAuthorizationHealth {
+        .init(localBetaEnabled: true, diagnosticArmed: true, guardHealth: .ready(.available))
+    }
+}
+
+private final class FailingContextualFileOperations: ContextualFileOperating, @unchecked Sendable {
+    enum Failure { case read, write }
+    let failure: Failure
+    init(_ failure: Failure) { self.failure = failure }
+    func fileExists(at url: URL) -> Bool { FileManager.default.fileExists(atPath: url.path) }
+    func createDirectory(at url: URL) throws {
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+    }
+    func read(_ url: URL) throws -> Data {
+        if failure == .read { throw CocoaError(.fileReadUnknown) }
+        return try Data(contentsOf: url)
+    }
+    func write(_ data: Data, to url: URL) throws {
+        if failure == .write { throw CocoaError(.fileWriteUnknown) }
+        try data.write(to: url, options: .atomic)
+    }
+    func setPermissions(_ permissions: Int, at url: URL) throws {
+        try FileManager.default.setAttributes([.posixPermissions: permissions], ofItemAtPath: url.path)
+    }
+    func replace(_ destination: URL, with source: URL) throws {
+        _ = try FileManager.default.replaceItemAt(destination, withItemAt: source)
+    }
+    func remove(_ url: URL) throws { try FileManager.default.removeItem(at: url) }
+}
+
+@MainActor
+private final class ConsumingInvalidatingAuthorizationStub: SyntheticDiagnosticAuthorizationChecking {
+    let guardStore: SyntheticDiagnosticGuard
+    let policy: ContextualCorrectionPolicy
+    let reason: ContextualPolicyInvalidationReason
+
+    init(
+        guardStore: SyntheticDiagnosticGuard,
+        policy: ContextualCorrectionPolicy,
+        reason: ContextualPolicyInvalidationReason
+    ) {
+        self.guardStore = guardStore
+        self.policy = policy
+        self.reason = reason
+    }
+
+    func consumeForDispatch(token: ContextualPolicyToken) async throws {
+        try await guardStore.consume()
+        policy.invalidate(reason)
+    }
+
+    func currentHealth() async -> SyntheticDiagnosticAuthorizationHealth {
+        .init(localBetaEnabled: true, diagnosticArmed: false, guardHealth: await guardStore.currentState())
+    }
+}
+
+private actor InvalidatingBeforeOpenProvider: SyntheticDiagnosticDecisionProvider {
+    let policy: ContextualCorrectionPolicy
+    private(set) var openCount = 0
+
+    init(policy: ContextualCorrectionPolicy) { self.policy = policy }
+
+    func decideSynthetic(
+        sentence: String,
+        language: String,
+        occurrences: [ContextualCorrectionOccurrence],
+        deadline: ContextualInstant,
+        beforeTransportOpen: @escaping @Sendable () async -> Bool
+    ) async throws -> ContextualDecisionReceipt {
+        await MainActor.run { policy.invalidate(.optedOut) }
+        guard await beforeTransportOpen() else {
+            throw OpenRouterDecisionsError.authorizationInvalidated
+        }
+        openCount += 1
+        throw OpenRouterDecisionsError.transportUnavailable
+    }
+}
+
+extension ContextualTransportCorpusTests {
+    private func guardDirectory() -> URL {
+        FileManager.default.temporaryDirectory
+            .appendingPathComponent("ResenhaTests/\(UUID().uuidString)/ContextualCorrections")
+    }
+
+    private func validReceipt(
+        confidence: Double = 0.99,
+        probability: Double = 0.99,
+        decisions: [ContextualDecision]? = nil
+    ) -> ContextualDecisionReceipt {
+        .init(
+            decisions: decisions ?? [.init(
+                questionID: "o1", choice: .replace, confidence: confidence,
+                chosenProbability: probability, runnerUpProbability: 1 - probability
+            )],
+            resolvedModel: "typesafe/jev-1.14-fixture",
+            inputTokens: 10,
+            outputTokens: 2,
+            costUSD: Decimal(string: "0.000001")
+        )
+    }
+
+    func testDiagnosticAndResolverShareSemanticValidatorWithoutSideChannel() async throws {
+        let validator = ContextualDecisionValidator()
+        let sentence = "Reservei uma cama no rosto perto da estação."
+        let occurrence = ContextualCorrectionOccurrence(
+            questionID: "o1", heard: "rosto", canonical: "Hostel", ordinal: 1,
+            range: sentence.range(of: "rosto")!
+        )
+        let rows = [
+            validReceipt(),
+            validReceipt(confidence: 0.89),
+            validReceipt(probability: 0.5),
+            validReceipt(decisions: []),
+            validReceipt(decisions: [
+                validReceipt().decisions[0],
+                .init(questionID: "o2", choice: .replace, confidence: 1,
+                      chosenProbability: 1, runnerUpProbability: 0)
+            ])
+        ]
+        for receipt in rows {
+            let resolverOutcome = validator.validate(receipt: receipt, occurrences: [occurrence])
+            let diagnosticOutcome = validator.validate(receipt: receipt, occurrences: [occurrence])
+            XCTAssertEqual(resolverOutcome, diagnosticOutcome)
+            XCTAssertEqual(
+                diagnosticOutcome.category == .replaced,
+                receipt == rows[0]
+            )
+        }
+    }
+
+    func testSyntheticDiagnosticRunReturnsResultAndThrowsOnlySanitizedErrors() async throws {
+        let fixture = try ContextualCorpusFixture.load().diagnosticFixture
+        let successPolicy = ContextualCorrectionPolicy()
+        let successProvider = SyntheticProviderStub(.receipt(validReceipt()))
+        let success = try await SyntheticDiagnosticController(
+            policy: successPolicy,
+            authorization: DiagnosticAuthorizationStub(mode: .success, policy: successPolicy),
+            client: successProvider,
+            validator: .init(),
+            fixture: fixture,
+            time: ManualContextualTime()
+        ).run()
+        XCTAssertEqual(success.outcome.category, .replaced)
+        XCTAssertEqual(success.callCount, 1)
+
+        let rows: [(SyntheticDiagnosticError, DiagnosticAuthorizationStub.Mode, SyntheticProviderMode)] = [
+            (.authorizationUnavailable, .failure, .receipt(validReceipt())),
+            (.timedOut, .success, .openRouter(.timedOut)),
+            (.providerRejected, .success, .openRouter(.invalidStatus(401))),
+            (.transportUnavailable, .success, .openRouter(.transportUnavailable)),
+            (.invalidResponse, .success, .openRouter(.malformedResponse)),
+            (.cancelled, .success, .cancellation)
+        ]
+        for row in rows {
+            let policy = ContextualCorrectionPolicy()
+            let controller = SyntheticDiagnosticController(
+                policy: policy,
+                authorization: DiagnosticAuthorizationStub(mode: row.1, policy: policy),
+                client: SyntheticProviderStub(row.2),
+                validator: .init(), fixture: fixture, time: ManualContextualTime()
+            )
+            do {
+                _ = try await controller.run()
+                XCTFail("Expected \(row.0)")
+            } catch {
+                XCTAssertEqual(error as? SyntheticDiagnosticError, row.0)
+                let reflected = String(reflecting: error)
+                XCTAssertFalse(reflected.contains("test-key"))
+                XCTAssertFalse(reflected.contains(fixture.input))
+            }
+        }
+    }
+
+    func testSyntheticDiagnosticGuardConsumesBeforeConcurrentDispatch() async throws {
+        let directory = guardDirectory()
+        let guardStore = SyntheticDiagnosticGuard(directoryURL: directory)
+        try await guardStore.provisionAuthorizedCall()
+        let successes = await withTaskGroup(of: Bool.self, returning: Int.self) { group in
+            for _ in 0..<10 {
+                group.addTask { (try? await guardStore.consume()) != nil }
+            }
+            var count = 0
+            for await success in group where success { count += 1 }
+            return count
+        }
+        XCTAssertEqual(successes, 1)
+        let consumedState = await guardStore.currentState()
+        XCTAssertEqual(consumedState, .ready(.consumed))
+    }
+
+    func testDiagnosticGuardCrashAfterMarkerBlocksWithoutDispatch() async throws {
+        let directory = guardDirectory()
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let marker = directory.appendingPathComponent("diagnostic-authorization-provisioned-v1.json")
+        try Data(#"{"schemaVersion":1,"provisioned":true}"#.utf8).write(to: marker)
+        let guardStore = SyntheticDiagnosticGuard(directoryURL: directory)
+        let health = await guardStore.currentState()
+        XCTAssertEqual(health, .blocked)
+        do { try await guardStore.provisionAuthorizedCall(); XCTFail("Expected blocked") }
+        catch { XCTAssertNotNil(error as? SyntheticDiagnosticGuardError) }
+    }
+
+    func testDiagnosticGuardCrashAfterConsumedReplacementRemainsConsumed() async throws {
+        let directory = guardDirectory()
+        let first = SyntheticDiagnosticGuard(directoryURL: directory)
+        try await first.provisionAuthorizedCall()
+        try await first.consume()
+        let restarted = SyntheticDiagnosticGuard(directoryURL: directory)
+        let health = await restarted.currentState()
+        XCTAssertEqual(health, .ready(.consumed))
+        do { try await restarted.provisionAuthorizedCall(); XCTFail("Expected consumed") }
+        catch { XCTAssertEqual(error as? SyntheticDiagnosticGuardError, .consumed) }
+    }
+
+    func testDiagnosticGuardCorruptUnknownOrOversizedStateBlocksWithoutDispatch() async throws {
+        for row in ["corrupt", "unknown", "oversized"] {
+            let directory = guardDirectory()
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            try Data(#"{"schemaVersion":1,"provisioned":true}"#.utf8).write(
+                to: directory.appendingPathComponent("diagnostic-authorization-provisioned-v1.json")
+            )
+            let state = directory.appendingPathComponent("diagnostic-authorization-v1.json")
+            switch row {
+            case "unknown": try Data(#"{"schemaVersion":2,"state":"available"}"#.utf8).write(to: state)
+            case "oversized": try Data(repeating: 0, count: 65_537).write(to: state)
+            default: try Data("broken".utf8).write(to: state)
+            }
+            let guardStore = SyntheticDiagnosticGuard(directoryURL: directory)
+            let health = await guardStore.currentState()
+            XCTAssertEqual(health, .blocked, row)
+            do { try await guardStore.consume(); XCTFail("Expected blocked: \(row)") }
+            catch { XCTAssertNotNil(error as? SyntheticDiagnosticGuardError) }
+        }
+    }
+
+    func testDiagnosticGuardReadWriteAndReadBackFailuresBlockWithoutDispatch() async throws {
+        let writeGuard = SyntheticDiagnosticGuard(
+            directoryURL: guardDirectory(),
+            files: FailingContextualFileOperations(.write)
+        )
+        do { try await writeGuard.provisionAuthorizedCall(); XCTFail("Expected write failure") }
+        catch {
+            let health = await writeGuard.currentState()
+            XCTAssertEqual(health, .blocked)
+        }
+
+        let directory = guardDirectory()
+        let healthy = SyntheticDiagnosticGuard(directoryURL: directory)
+        try await healthy.provisionAuthorizedCall()
+        let readGuard = SyntheticDiagnosticGuard(
+            directoryURL: directory,
+            files: FailingContextualFileOperations(.read)
+        )
+        let readHealth = await readGuard.currentState()
+        XCTAssertEqual(readHealth, .blocked)
+    }
+
+    func testLocalBetaToggleNeverTouchesCredentialOrGuard() async throws {
+        let preferences = ContextualOptInStoreStub(enabled: false)
+        let credentials = InMemoryCredentialStore()
+        let guardStore = SyntheticGuardSpy()
+        let owner = SyntheticDiagnosticAuthorizationOwner(
+            optInStore: preferences, credentialStore: credentials,
+            guardStore: guardStore, policy: ContextualCorrectionPolicy()
+        )
+        try await owner.setLocalBetaEnabled(true)
+        try await owner.setLocalBetaEnabled(false)
+        XCTAssertEqual(preferences.writes, [true, false])
+        XCTAssertTrue(credentials.snapshotCalls().isEmpty)
+        let guardCalls = await guardStore.snapshotCalls()
+        XCTAssertTrue(guardCalls.isEmpty)
+    }
+
+    func testDiagnosticAuthorizationOrdersConsentCredentialReadBackAndGuardFailClosed() async throws {
+        let preferences = ContextualOptInStoreStub(enabled: true)
+        let credentials = InMemoryCredentialStore()
+        let guardStore = SyntheticGuardSpy()
+        let policy = ContextualCorrectionPolicy()
+        let owner = SyntheticDiagnosticAuthorizationOwner(
+            optInStore: preferences, credentialStore: credentials,
+            guardStore: guardStore, policy: policy
+        )
+        do {
+            try await owner.authorizeSyntheticDiagnostic(explicitConsent: false, credential: "candidate")
+            XCTFail("Expected consentRequired")
+        } catch { XCTAssertEqual(error as? SyntheticDiagnosticAuthorizationError, .consentRequired) }
+        XCTAssertTrue(credentials.snapshotCalls().isEmpty)
+        let callsBeforeConsent = await guardStore.snapshotCalls()
+        XCTAssertTrue(callsBeforeConsent.isEmpty)
+
+        try await owner.authorizeSyntheticDiagnostic(explicitConsent: true, credential: "candidate")
+        XCTAssertEqual(credentials.snapshotCalls().prefix(2), ["credential-save", "credential-load"])
+        let guardHealth = await guardStore.currentState()
+        XCTAssertEqual(guardHealth, .ready(.available))
+        let health = await owner.currentHealth()
+        XCTAssertTrue(health.diagnosticArmed)
+        XCTAssertTrue(health.localBetaEnabled)
+    }
+
+    func testSyntheticDiagnosticTokenIssuedBeforeFirstAwaitAndCheckedBeforeTransportOpen() async throws {
+        let fixture = try ContextualCorpusFixture.load().diagnosticFixture
+        let policy = ContextualCorrectionPolicy()
+        let authorization = DiagnosticAuthorizationStub(mode: .success, policy: policy)
+        let provider = SyntheticProviderStub(.receipt(validReceipt()))
+        _ = try await SyntheticDiagnosticController(
+            policy: policy, authorization: authorization, client: provider,
+            validator: .init(), fixture: fixture, time: ManualContextualTime()
+        ).run()
+        let token = try XCTUnwrap(authorization.tokens.first)
+        XCTAssertEqual(token.scope, .syntheticDiagnostic)
+        XCTAssertTrue(policy.isCurrent(token))
+        let beforeOpenResults = await provider.beforeOpenResults
+        XCTAssertEqual(beforeOpenResults, [true])
+    }
+
+    func testSyntheticDiagnosticInvalidationDuringConsumeLeavesConsumedAndNeverOpensTransport() async throws {
+        let fixture = try ContextualCorpusFixture.load().diagnosticFixture
+        for reason in [ContextualPolicyInvalidationReason.optedOut, .credentialDeleted, .appTerminated] {
+            let policy = ContextualCorrectionPolicy()
+            let guardStore = SyntheticDiagnosticGuard(directoryURL: guardDirectory())
+            try await guardStore.provisionAuthorizedCall()
+            let provider = SyntheticProviderStub(.receipt(validReceipt()))
+            let authorization = ConsumingInvalidatingAuthorizationStub(
+                guardStore: guardStore, policy: policy, reason: reason
+            )
+            do {
+                _ = try await SyntheticDiagnosticController(
+                    policy: policy, authorization: authorization, client: provider,
+                    validator: .init(), fixture: fixture, time: ManualContextualTime()
+                ).run()
+                XCTFail("Expected invalidation")
+            } catch { XCTAssertEqual(error as? SyntheticDiagnosticError, .authorizationUnavailable) }
+            let guardHealth = await guardStore.currentState()
+            let providerCalls = await provider.calls
+            XCTAssertEqual(guardHealth, .ready(.consumed))
+            XCTAssertEqual(providerCalls, 0)
+        }
+
+        let policy = ContextualCorrectionPolicy()
+        let provider = InvalidatingBeforeOpenProvider(policy: policy)
+        do {
+            _ = try await SyntheticDiagnosticController(
+                policy: policy,
+                authorization: DiagnosticAuthorizationStub(mode: .success, policy: policy),
+                client: provider, validator: .init(), fixture: fixture, time: ManualContextualTime()
+            ).run()
+            XCTFail("Expected before-open invalidation")
+        } catch { XCTAssertEqual(error as? SyntheticDiagnosticError, .authorizationUnavailable) }
+        let openCount = await provider.openCount
+        XCTAssertEqual(openCount, 0)
+    }
+
+    func testSyntheticAuthorizationConsumesBeforeDispatchExactlyOnce() async throws {
+        let fixture = try ContextualCorpusFixture.load().diagnosticFixture
+        let preferences = ContextualOptInStoreStub(enabled: true)
+        let credentials = InMemoryCredentialStore()
+        let directory = guardDirectory()
+        let guardStore = SyntheticDiagnosticGuard(directoryURL: directory)
+        let policy = ContextualCorrectionPolicy()
+        let owner = SyntheticDiagnosticAuthorizationOwner(
+            optInStore: preferences, credentialStore: credentials,
+            guardStore: guardStore, policy: policy
+        )
+        try await owner.authorizeSyntheticDiagnostic(explicitConsent: true, credential: "candidate")
+        let provider = SyntheticProviderStub(.receipt(validReceipt()))
+        let result = try await SyntheticDiagnosticController(
+            policy: policy, authorization: owner, client: provider,
+            validator: .init(), fixture: fixture, time: ManualContextualTime()
+        ).run()
+        XCTAssertEqual(result.callCount, 1)
+        let providerCalls = await provider.calls
+        let consumedHealth = await guardStore.currentState()
+        XCTAssertEqual(providerCalls, 1)
+        XCTAssertEqual(consumedHealth, .ready(.consumed))
+
+        let restarted = SyntheticDiagnosticGuard(directoryURL: directory)
+        let restartedHealth = await restarted.currentState()
+        XCTAssertEqual(restartedHealth, .ready(.consumed))
+        do {
+            try await owner.authorizeSyntheticDiagnostic(explicitConsent: true, credential: "candidate")
+            XCTFail("Consumed guard must not rearm")
+        } catch {
+            let ownerHealth = await owner.currentHealth()
+            XCTAssertFalse(ownerHealth.diagnosticArmed)
+        }
+    }
+}
+
+struct ContextualCorpusMetrics: Codable, Equatable {
+    let total: Int
+    let correct: Int
+    let falsePositives: Int
+    let safetyEvaluatedCases: Int
+    let unauthorizedMutations: Int
+    let harmfulSpanChanges: Int
+    let eligiblePositives: Int
+    let correctPositives: Int
+    let abstentions: Int
+    let correctionRecall: Double
+}
+
+struct ContextualCorpusPairReport: Codable, Equatable {
+    let pair: String
+    let contextual: ContextualCorpusMetrics
+    let keepOriginal: ContextualCorpusMetrics
+    let globalReplacement: ContextualCorpusMetrics
+    let minimumDecisionMargin: Double?
+    let medianDecisionMargin: Double?
+}
+
+struct ContextualCorpusFamilyReport: Codable, Equatable {
+    let family: String
+    let contextual: ContextualCorpusMetrics
+    let keepOriginal: ContextualCorpusMetrics
+    let globalReplacement: ContextualCorpusMetrics
+}
+
+struct ContextualCorpusReport: Codable, Equatable {
+    let schemaVersion: Int
+    let corpusVersion: String
+    let generatedBy: String
+    let contextual: ContextualCorpusMetrics
+    let keepOriginal: ContextualCorpusMetrics
+    let globalReplacement: ContextualCorpusMetrics
+    let families: [ContextualCorpusFamilyReport]
+    let pairs: [ContextualCorpusPairReport]
+}
+
+private enum ContextualCorpusProviderFailure: Error { case configured }
+
+private actor ContextualCorpusDecisionProvider: ContextualDecisionProvider {
+    let outcome: ContextualCorpusFixture.Outcome
+
+    init(outcome: ContextualCorpusFixture.Outcome) { self.outcome = outcome }
+
+    func decide(
+        sentence: String,
+        language: String,
+        occurrences: [ContextualCorrectionOccurrence],
+        deadline: ContextualInstant
+    ) async throws -> ContextualDecisionReceipt {
+        switch outcome.kind {
+        case .decisions:
+            let decisions = occurrences.compactMap { occurrence -> ContextualDecision? in
+                guard let answer = outcome.answers.first(where: { $0.ordinal == occurrence.ordinal }) else {
+                    return nil
+                }
+                return .init(
+                    questionID: occurrence.questionID,
+                    choice: answer.choice == .replace ? .replace : .keepOriginal,
+                    confidence: answer.confidence,
+                    chosenProbability: answer.chosenProbability,
+                    runnerUpProbability: answer.runnerUpProbability
+                )
+            }
+            return .init(
+                decisions: decisions,
+                resolvedModel: "fixture/deterministic",
+                inputTokens: nil,
+                outputTokens: nil,
+                costUSD: nil
+            )
+        case .malformed:
+            return .init(
+                decisions: [], resolvedModel: "fixture/malformed",
+                inputTokens: nil, outputTokens: nil, costUSD: nil
+            )
+        default:
+            throw ContextualCorpusProviderFailure.configured
+        }
+    }
+}
+
+@MainActor
+private enum ContextualCorpusRunner {
+    private struct Observation {
+        let item: ContextualCorpusFixture.Case
+        let contextual: String
+        let keep: String
+        let global: String
+        let margins: [Double]
+    }
+
+    private struct Analysis {
+        let unauthorized: Int
+        let harmful: Int
+    }
+
+    static func runBundledFixture(
+        seedObserver: ((String, [String]) -> Void)? = nil
+    ) async throws -> ContextualCorpusReport {
+        let fixture = try ContextualCorpusFixture.load()
+        guard fixture.validate() else { throw ContextualCorpusProviderFailure.configured }
+        let learningByID = Dictionary(uniqueKeysWithValues: fixture.learningExamples.map { ($0.id, $0) })
+        var observations: [Observation] = []
+        for item in fixture.cases.sorted(by: { $0.id < $1.id }) {
+            let mapped = try item.learningExampleIDs.map { try XCTUnwrap(learningByID[$0]) }
+            seedObserver?(item.id, mapped.map(\.id))
+            let file = FileManager.default.temporaryDirectory
+                .appendingPathComponent("ResenhaTests/\(UUID().uuidString)/ContextualCorrections/v1.json")
+            let store = ContextualCorrectionStore(fileURL: file)
+            for learning in mapped {
+                XCTAssertTrue(store.save(.init(
+                    id: UUID(), language: learning.language, heard: learning.heard,
+                    canonical: learning.canonical, sentence: learning.sentence,
+                    occurrenceOrdinal: learning.ordinal
+                )).isSuccess, item.id)
+            }
+            let policy = ContextualCorrectionPolicy()
+            let provider = ContextualCorpusDecisionProvider(outcome: item.providerOutcome)
+            let resolver = ContextualCorrectionResolver(
+                store: store,
+                policy: policy,
+                provider: provider,
+                storeGeneration: { store.generation },
+                time: ManualContextualTime()
+            )
+            let result = await resolver.resolveWithTrace(.init(
+                attemptID: UUID(), text: item.input, language: item.language,
+                policyToken: policy.issueToken(scope: .testDouble),
+                storeGenerationAtStart: store.generation
+            ))
+            observations.append(.init(
+                item: item,
+                contextual: result.text,
+                keep: item.input,
+                global: TranscriptPostprocessor.process(
+                    item.input,
+                    glossary: TranscriptionGlossary(text: "\(item.heard) = \(item.canonical)")
+                ),
+                margins: result.outcome.decisions.map(\.margin)
+            ))
+        }
+        let report = makeReport(fixture: fixture, observations: observations)
+        if let path = ProcessInfo.processInfo.environment["CONTEXTUAL_CORPUS_REPORT_PATH"] {
+            let data = try JSONEncoder.sorted.encode(report)
+            try data.write(to: URL(fileURLWithPath: path), options: .atomic)
+        }
+        return report
+    }
+
+    static func analyze(input: String, expected: String, output: String, heard: String, canonical: String) -> (Int, Int) {
+        let ranges = wholeTermRanges(heard, in: input)
+        guard let expectedMask = uniqueMask(rendering: expected, input: input, ranges: ranges, canonical: canonical),
+              let outputMask = uniqueMask(rendering: output, input: input, ranges: ranges, canonical: canonical) else {
+            return output == expected ? (0, 0) : (1, max(1, ranges.count))
+        }
+        let harmful = outputMask.enumerated().filter { $0.element && !expectedMask[$0.offset] }.count
+        return (harmful > 0 ? 1 : 0, harmful)
+    }
+
+    private static func makeReport(
+        fixture: ContextualCorpusFixture,
+        observations: [Observation]
+    ) -> ContextualCorpusReport {
+        let positives = Set(fixture.evaluationPositiveIDs)
+        let contextual = metrics(observations, output: \.contextual, positives: positives)
+        let keep = metrics(observations, output: \.keep, positives: positives)
+        let global = metrics(observations, output: \.global, positives: positives)
+        let families = Set(observations.map { $0.item.family.rawValue }).sorted().map { family in
+            let rows = observations.filter { $0.item.family.rawValue == family }
+            return ContextualCorpusFamilyReport(
+                family: family,
+                contextual: metrics(rows, output: \.contextual, positives: positives),
+                keepOriginal: metrics(rows, output: \.keep, positives: positives),
+                globalReplacement: metrics(rows, output: \.global, positives: positives)
+            )
+        }
+        let pairs = Set(observations.map { $0.item.pairID }).sorted().map { pair in
+            let rows = observations.filter { $0.item.pairID == pair }
+            let margins = rows.flatMap(\.margins).sorted()
+            return ContextualCorpusPairReport(
+                pair: pair,
+                contextual: metrics(rows, output: \.contextual, positives: positives),
+                keepOriginal: metrics(rows, output: \.keep, positives: positives),
+                globalReplacement: metrics(rows, output: \.global, positives: positives),
+                minimumDecisionMargin: margins.first,
+                medianDecisionMargin: margins.isEmpty ? nil : margins[margins.count / 2]
+            )
+        }
+        return .init(
+            schemaVersion: 1,
+            corpusVersion: fixture.corpusVersion,
+            generatedBy: "WhisperKeyTests.ContextualCorpusRunner/v1",
+            contextual: contextual,
+            keepOriginal: keep,
+            globalReplacement: global,
+            families: families,
+            pairs: pairs
+        )
+    }
+
+    private static func metrics(
+        _ rows: [Observation],
+        output: KeyPath<Observation, String>,
+        positives: Set<String>
+    ) -> ContextualCorpusMetrics {
+        var correct = 0
+        var falsePositives = 0
+        var safety = 0
+        var unauthorized = 0
+        var harmful = 0
+        var eligible = 0
+        var correctPositive = 0
+        var abstentions = 0
+        for row in rows {
+            let value = row[keyPath: output]
+            if value == row.item.expected { correct += 1 }
+            if row.item.family == .evaluation {
+                safety += 1
+                let analysis = analyze(
+                    input: row.item.input,
+                    expected: row.item.expected,
+                    output: value,
+                    heard: row.item.heard,
+                    canonical: row.item.canonical
+                )
+                unauthorized += analysis.0
+                harmful += analysis.1
+                if row.item.expected == row.item.input, value != row.item.input { falsePositives += 1 }
+                if positives.contains(row.item.id) {
+                    eligible += 1
+                    if value == row.item.expected { correctPositive += 1 }
+                    if value == row.item.input { abstentions += 1 }
+                } else if value == row.item.input,
+                          row.item.group == .ambiguous || row.item.providerOutcome.kind != .decisions {
+                    abstentions += 1
+                }
+            }
+        }
+        return .init(
+            total: rows.count,
+            correct: correct,
+            falsePositives: falsePositives,
+            safetyEvaluatedCases: safety,
+            unauthorizedMutations: unauthorized,
+            harmfulSpanChanges: harmful,
+            eligiblePositives: eligible,
+            correctPositives: correctPositive,
+            abstentions: abstentions,
+            correctionRecall: eligible == 0 ? 0 : Double(correctPositive) / Double(eligible)
+        )
+    }
+
+    private static func wholeTermRanges(_ term: String, in input: String) -> [Range<String.Index>] {
+        let escaped = NSRegularExpression.escapedPattern(for: term)
+        let regex = try? NSRegularExpression(
+            pattern: "(?<![\\p{L}\\p{N}])\(escaped)(?![\\p{L}\\p{N}])",
+            options: [.caseInsensitive]
+        )
+        return regex?.matches(
+            in: input,
+            range: NSRange(input.startIndex..<input.endIndex, in: input)
+        ).compactMap { Range($0.range, in: input) } ?? []
+    }
+
+    private static func uniqueMask(
+        rendering target: String,
+        input: String,
+        ranges: [Range<String.Index>],
+        canonical: String
+    ) -> [Bool]? {
+        guard ranges.count < Int.bitWidth else { return nil }
+        var found: [[Bool]] = []
+        for rawMask in 0..<(1 << ranges.count) {
+            let mask = ranges.indices.map { rawMask & (1 << $0) != 0 }
+            var rendered = input
+            for index in ranges.indices.reversed() where mask[index] {
+                rendered.replaceSubrange(ranges[index], with: canonical)
+            }
+            if rendered == target { found.append(mask) }
+        }
+        return found.count == 1 ? found[0] : nil
+    }
+}
+
+private extension JSONEncoder {
+    static var sorted: JSONEncoder {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        return encoder
+    }
+}
+
+extension ContextualTransportCorpusTests {
+    func testContextualCorpusRunnerEvaluatesAllCasesAndBaselinesDeterministically() async throws {
+        let first = try await ContextualCorpusRunner.runBundledFixture()
+        let second = try await ContextualCorpusRunner.runBundledFixture()
+        XCTAssertEqual(first, second)
+        XCTAssertEqual(first.contextual.total, 100)
+        let evaluation = try XCTUnwrap(first.families.first { $0.family == "evaluation" })
+        XCTAssertEqual(evaluation.contextual.falsePositives, 0)
+        XCTAssertEqual(evaluation.contextual.safetyEvaluatedCases, evaluation.contextual.total)
+        XCTAssertEqual(evaluation.contextual.unauthorizedMutations, 0)
+        XCTAssertEqual(evaluation.contextual.harmfulSpanChanges, 0)
+        XCTAssertEqual(evaluation.contextual.eligiblePositives, 20)
+        XCTAssertGreaterThanOrEqual(evaluation.contextual.correctionRecall, 0.80)
+        XCTAssertEqual(first.families.first { $0.family == "calibration" }?.contextual.eligiblePositives, 0)
+        XCTAssertEqual(first.families.map(\.family), first.families.map(\.family).sorted())
+        XCTAssertEqual(first.pairs.map(\.pair), first.pairs.map(\.pair).sorted())
+        for pair in first.pairs {
+            XCTAssertEqual(pair.contextual.unauthorizedMutations, 0, pair.pair)
+            XCTAssertEqual(pair.contextual.harmfulSpanChanges, 0, pair.pair)
+        }
+    }
+
+    func testCorpusRunnerSeedsStoreOnlyFromMappedLearningExamples() async throws {
+        let fixture = try ContextualCorpusFixture.load()
+        let expected = Dictionary(uniqueKeysWithValues: fixture.cases.map { ($0.id, $0.learningExampleIDs) })
+        var observed: [String: [String]] = [:]
+        _ = try await ContextualCorpusRunner.runBundledFixture { observed[$0] = $1 }
+        XCTAssertEqual(observed, expected)
+        XCTAssertFalse(observed.values.flatMap { $0 }.contains(SyntheticDiagnosticFixture.id))
+    }
+
+    func testCorpusGateRejectsMixedCaseThatChangesUnauthorizedSpan() {
+        let input = "Lavei o rosto no banheiro do rosto"
+        let expected = "Lavei o rosto no banheiro do Hostel"
+        let harmful = "Lavei o Hostel no banheiro do Hostel"
+        let analysis = ContextualCorpusRunner.analyze(
+            input: input, expected: expected, output: harmful,
+            heard: "rosto", canonical: "Hostel"
+        )
+        XCTAssertEqual(analysis.0, 1)
+        XCTAssertEqual(analysis.1, 1)
+    }
+}

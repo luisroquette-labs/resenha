@@ -797,3 +797,1200 @@ final class ContextualCorrectionResolver: ContextualCorrectionResolverContract {
         scope == .syntheticDiagnostic || scope == .testDouble
     }
 }
+
+struct DecisionsRequestDTO: Encodable, Equatable, Sendable {
+    struct State: Encodable, Equatable, Sendable {
+        struct Occurrence: Encodable, Equatable, Sendable {
+            let heard: String
+            let canonical: String
+            let ordinal: Int
+        }
+
+        let language: String
+        let text: String
+        let occurrences: [Occurrence]
+    }
+
+    struct Question: Encodable, Equatable, Sendable {
+        let type: String
+        let instructions: String
+        let criteria: [String: String]
+    }
+
+    let model: String
+    let state: State
+    let questions: [String: Question]
+}
+
+struct DecisionsResponseDTO: Decodable, Equatable, Sendable {
+    struct Answer: Decodable, Equatable, Sendable {
+        let type: String
+        let choice: String
+        let probabilities: [String: Double]
+        let confidence: Double
+    }
+
+    struct Usage: Decodable, Equatable, Sendable {
+        let cost: Decimal?
+        let inputTokens: Int?
+        let outputTokens: Int?
+
+        enum CodingKeys: String, CodingKey {
+            case cost
+            case inputTokens = "input_tokens"
+            case outputTokens = "output_tokens"
+        }
+    }
+
+    let model: String
+    let answers: [String: Answer]
+    let usage: Usage?
+}
+
+struct DecisionsResponseStream: @unchecked Sendable {
+    let response: HTTPURLResponse
+    let nextChunk: @Sendable () async throws -> Data?
+    let cancel: @Sendable () -> Void
+}
+
+protocol DecisionsStreamingTransport: Sendable {
+    func open(
+        _ request: URLRequest,
+        maximumResponseBytes: Int,
+        deadline: ContextualInstant
+    ) async throws -> DecisionsResponseStream
+}
+
+protocol URLSessionDecisionsStreamingTransportContract: DecisionsStreamingTransport {
+    init(time: any ContextualMonotonicTime)
+}
+
+protocol SyntheticDiagnosticDecisionProvider: Sendable {
+    func decideSynthetic(
+        sentence: String,
+        language: String,
+        occurrences: [ContextualCorrectionOccurrence],
+        deadline: ContextualInstant,
+        beforeTransportOpen: @escaping @Sendable () async -> Bool
+    ) async throws -> ContextualDecisionReceipt
+}
+
+enum OpenRouterDecisionsError: Error, Equatable, Sendable {
+    case invalidEndpoint
+    case missingCredential
+    case authorizationInvalidated
+    case invalidStatus(Int)
+    case redirected
+    case malformedResponse
+    case responseTooLarge
+    case timedOut
+    case transportUnavailable
+    case cancelled
+}
+
+struct DecisionsDelegateSnapshot: Equatable, Sendable {
+    let acceptedBytes: Int
+    let queuedChunkCount: Int
+    let cancelCount: Int
+}
+
+protocol DecisionsDelegateStateContract: Sendable {
+    init(maximumResponseBytes: Int, cancelTask: @escaping @Sendable () -> Void)
+    func receive(_ data: Data)
+    func nextChunk() async throws -> Data?
+    func finish(_ error: Error?)
+    func cancel()
+}
+
+final class DecisionsDelegateState: DecisionsDelegateStateContract, @unchecked Sendable {
+    private enum Terminal {
+        case success
+        case failure(Error)
+    }
+
+    private let lock = NSLock()
+    private let maximumResponseBytes: Int
+    private let cancelTask: @Sendable () -> Void
+    private var acceptedBytes = 0
+    private var chunks: [Data] = []
+    private var waiters: [CheckedContinuation<Data?, Error>] = []
+    private var terminal: Terminal?
+    private var cancelCount = 0
+
+    init(maximumResponseBytes: Int, cancelTask: @escaping @Sendable () -> Void) {
+        self.maximumResponseBytes = maximumResponseBytes
+        self.cancelTask = cancelTask
+    }
+
+    func receive(_ data: Data) {
+        var waiter: CheckedContinuation<Data?, Error>?
+        var overflowWaiters: [CheckedContinuation<Data?, Error>] = []
+        var shouldCancel = false
+        lock.withLock {
+            guard terminal == nil else { return }
+            guard acceptedBytes <= maximumResponseBytes - data.count else {
+                terminal = .failure(OpenRouterDecisionsError.responseTooLarge)
+                overflowWaiters = waiters
+                waiters.removeAll()
+                cancelCount += 1
+                shouldCancel = true
+                return
+            }
+            acceptedBytes += data.count
+            if !waiters.isEmpty { waiter = waiters.removeFirst() }
+            else { chunks.append(data) }
+        }
+        if shouldCancel {
+            cancelTask()
+            overflowWaiters.forEach { $0.resume(throwing: OpenRouterDecisionsError.responseTooLarge) }
+        } else {
+            waiter?.resume(returning: data)
+        }
+    }
+
+    func nextChunk() async throws -> Data? {
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                var chunk: Data?
+                var completion: Terminal?
+                lock.withLock {
+                    if !chunks.isEmpty { chunk = chunks.removeFirst() }
+                    else if let terminal { completion = terminal }
+                    else { waiters.append(continuation) }
+                }
+                if let chunk { continuation.resume(returning: chunk) }
+                else if let completion {
+                    switch completion {
+                    case .success: continuation.resume(returning: nil)
+                    case .failure(let error): continuation.resume(throwing: error)
+                    }
+                }
+            }
+        } onCancel: { [weak self] in self?.cancel() }
+    }
+
+    func finish(_ error: Error?) {
+        var pending: [CheckedContinuation<Data?, Error>] = []
+        var resolved: Terminal?
+        lock.withLock {
+            guard terminal == nil else { return }
+            resolved = error.map(Terminal.failure) ?? .success
+            terminal = resolved
+            pending = waiters
+            waiters.removeAll()
+        }
+        guard let resolved else { return }
+        pending.forEach {
+            switch resolved {
+            case .success: $0.resume(returning: nil)
+            case .failure(let error): $0.resume(throwing: error)
+            }
+        }
+    }
+
+    func fail(_ error: Error) {
+        var pending: [CheckedContinuation<Data?, Error>] = []
+        var shouldCancel = false
+        lock.withLock {
+            guard terminal == nil else { return }
+            terminal = .failure(error)
+            pending = waiters
+            waiters.removeAll()
+            cancelCount += 1
+            shouldCancel = true
+        }
+        if shouldCancel {
+            cancelTask()
+            pending.forEach { $0.resume(throwing: error) }
+        }
+    }
+
+    func cancel() {
+        var pending: [CheckedContinuation<Data?, Error>] = []
+        var shouldCancel = false
+        lock.withLock {
+            guard terminal == nil else { return }
+            terminal = .failure(CancellationError())
+            pending = waiters
+            waiters.removeAll()
+            cancelCount += 1
+            shouldCancel = true
+        }
+        if shouldCancel {
+            cancelTask()
+            pending.forEach { $0.resume(throwing: CancellationError()) }
+        }
+    }
+
+    func snapshot() -> DecisionsDelegateSnapshot {
+        lock.withLock {
+            .init(
+                acceptedBytes: acceptedBytes,
+                queuedChunkCount: chunks.count,
+                cancelCount: cancelCount
+            )
+        }
+    }
+}
+
+final class URLSessionDecisionsStreamingTransport: NSObject, URLSessionDecisionsStreamingTransportContract,
+    URLSessionDataDelegate, URLSessionTaskDelegate, @unchecked Sendable {
+    private final class TaskCanceller: @unchecked Sendable {
+        weak var task: URLSessionTask?
+        func cancel() { task?.cancel() }
+    }
+
+    private final class RequestContext: @unchecked Sendable {
+        let state: DecisionsDelegateState
+        let session: URLSession
+        var responseContinuation: CheckedContinuation<DecisionsResponseStream, Error>?
+        var deadlineTask: Task<Void, Never>?
+        var completionError: Error?
+
+        init(state: DecisionsDelegateState, session: URLSession) {
+            self.state = state
+            self.session = session
+        }
+    }
+
+    private let time: any ContextualMonotonicTime
+    private let lock = NSLock()
+    private var contexts: [Int: RequestContext] = [:]
+
+    init(time: any ContextualMonotonicTime) { self.time = time }
+
+    func open(
+        _ request: URLRequest,
+        maximumResponseBytes: Int,
+        deadline: ContextualInstant
+    ) async throws -> DecisionsResponseStream {
+        guard deadline > time.now() else { throw OpenRouterDecisionsError.timedOut }
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.urlCache = nil
+        configuration.httpCookieStorage = nil
+        configuration.urlCredentialStorage = nil
+        configuration.httpShouldSetCookies = false
+        let remaining = max(0.001, seconds(deadline.offset - time.now().offset))
+        configuration.timeoutIntervalForRequest = remaining
+        configuration.timeoutIntervalForResource = remaining
+        let session = URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
+        let canceller = TaskCanceller()
+        let state = DecisionsDelegateState(maximumResponseBytes: maximumResponseBytes) {
+            canceller.cancel()
+        }
+        let task = session.dataTask(with: request)
+        canceller.task = task
+        let context = RequestContext(state: state, session: session)
+        lock.withLock { contexts[task.taskIdentifier] = context }
+        context.deadlineTask = Task { [weak self, weak state, time] in
+            do {
+                try await time.sleep(until: deadline)
+                self?.lock.withLock { context.completionError = OpenRouterDecisionsError.timedOut }
+                state?.fail(OpenRouterDecisionsError.timedOut)
+            } catch { }
+        }
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                lock.withLock { context.responseContinuation = continuation }
+                task.resume()
+            }
+        } onCancel: { state.cancel() }
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        dataTask: URLSessionDataTask,
+        didReceive response: URLResponse,
+        completionHandler: @escaping (URLSession.ResponseDisposition) -> Void
+    ) {
+        var continuation: CheckedContinuation<DecisionsResponseStream, Error>?
+        let context = lock.withLock { () -> RequestContext? in
+            guard let context = contexts[dataTask.taskIdentifier] else { return nil }
+            continuation = context.responseContinuation
+            context.responseContinuation = nil
+            return context
+        }
+        guard let context, let http = response as? HTTPURLResponse else {
+            completionHandler(.cancel)
+            continuation?.resume(throwing: OpenRouterDecisionsError.transportUnavailable)
+            return
+        }
+        let state = context.state
+        continuation?.resume(returning: .init(
+            response: http,
+            nextChunk: { try await state.nextChunk() },
+            cancel: { state.cancel() }
+        ))
+        completionHandler(.allow)
+    }
+
+    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+        lock.withLock { contexts[dataTask.taskIdentifier] }?.state.receive(data)
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        didCompleteWithError error: Error?
+    ) {
+        let context = lock.withLock { contexts.removeValue(forKey: task.taskIdentifier) }
+        context?.deadlineTask?.cancel()
+        if let continuation = context?.responseContinuation {
+            context?.responseContinuation = nil
+            continuation.resume(throwing:
+                context?.completionError ?? error ?? OpenRouterDecisionsError.transportUnavailable
+            )
+        }
+        context?.state.finish(context?.completionError ?? error)
+        session.finishTasksAndInvalidate()
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        willPerformHTTPRedirection response: HTTPURLResponse,
+        newRequest request: URLRequest,
+        completionHandler: @escaping (URLRequest?) -> Void
+    ) {
+        let context = lock.withLock { () -> RequestContext? in
+            let context = contexts[task.taskIdentifier]
+            context?.completionError = OpenRouterDecisionsError.redirected
+            return context
+        }
+        context?.state.fail(OpenRouterDecisionsError.redirected)
+        completionHandler(nil)
+    }
+
+    private func seconds(_ duration: Duration) -> TimeInterval {
+        let components = duration.components
+        return Double(components.seconds) + Double(components.attoseconds) / 1e18
+    }
+}
+
+protocol OpenRouterDecisionsClientContract:
+    ContextualDecisionProvider, SyntheticDiagnosticDecisionProvider {
+    init(
+        transport: any DecisionsStreamingTransport,
+        credential: @escaping @Sendable () throws -> String
+    )
+}
+
+actor OpenRouterDecisionsClient: OpenRouterDecisionsClientContract {
+    static let endpoint = URL(string: "https://openrouter.ai/api/alpha/decisions")!
+    static let model = "typesafe/jev-1.14"
+    static let maximumResponseBytes = 64 * 1_024
+
+    private let transport: any DecisionsStreamingTransport
+    private let credential: @Sendable () throws -> String
+
+    init(
+        transport: any DecisionsStreamingTransport,
+        credential: @escaping @Sendable () throws -> String
+    ) {
+        self.transport = transport
+        self.credential = credential
+    }
+
+    func decide(
+        sentence: String,
+        language: String,
+        occurrences: [ContextualCorrectionOccurrence],
+        deadline: ContextualInstant
+    ) async throws -> ContextualDecisionReceipt {
+        try await perform(
+            sentence: sentence,
+            language: language,
+            occurrences: occurrences,
+            deadline: deadline,
+            beforeTransportOpen: { true }
+        )
+    }
+
+    func decideSynthetic(
+        sentence: String,
+        language: String,
+        occurrences: [ContextualCorrectionOccurrence],
+        deadline: ContextualInstant,
+        beforeTransportOpen: @escaping @Sendable () async -> Bool
+    ) async throws -> ContextualDecisionReceipt {
+        try await perform(
+            sentence: sentence,
+            language: language,
+            occurrences: occurrences,
+            deadline: deadline,
+            beforeTransportOpen: beforeTransportOpen
+        )
+    }
+
+    private func perform(
+        sentence: String,
+        language: String,
+        occurrences: [ContextualCorrectionOccurrence],
+        deadline: ContextualInstant,
+        beforeTransportOpen: @escaping @Sendable () async -> Bool
+    ) async throws -> ContextualDecisionReceipt {
+        let key = try credential()
+        guard !key.isEmpty else { throw OpenRouterDecisionsError.missingCredential }
+        var request = URLRequest(url: Self.endpoint)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(Self.requestDTO(
+            sentence: sentence,
+            language: language,
+            occurrences: occurrences
+        ))
+        guard await beforeTransportOpen() else {
+            throw OpenRouterDecisionsError.authorizationInvalidated
+        }
+        let stream: DecisionsResponseStream
+        do {
+            stream = try await transport.open(
+                request,
+                maximumResponseBytes: Self.maximumResponseBytes,
+                deadline: deadline
+            )
+        } catch is CancellationError {
+            throw OpenRouterDecisionsError.cancelled
+        } catch let error as OpenRouterDecisionsError {
+            throw error
+        } catch {
+            throw OpenRouterDecisionsError.transportUnavailable
+        }
+        guard stream.response.statusCode == 200 else {
+            stream.cancel()
+            if (300..<400).contains(stream.response.statusCode) {
+                throw OpenRouterDecisionsError.redirected
+            }
+            throw OpenRouterDecisionsError.invalidStatus(stream.response.statusCode)
+        }
+        var body = Data()
+        do {
+            try await withTaskCancellationHandler {
+                while let chunk = try await stream.nextChunk() {
+                    guard body.count <= Self.maximumResponseBytes - chunk.count else {
+                        stream.cancel()
+                        throw OpenRouterDecisionsError.responseTooLarge
+                    }
+                    body.append(chunk)
+                }
+            } onCancel: { stream.cancel() }
+        } catch is CancellationError {
+            throw OpenRouterDecisionsError.cancelled
+        } catch let error as OpenRouterDecisionsError {
+            throw error
+        } catch {
+            throw OpenRouterDecisionsError.transportUnavailable
+        }
+        return try Self.receipt(from: body, occurrences: occurrences)
+    }
+
+    static func requestDTO(
+        sentence: String,
+        language: String,
+        occurrences: [ContextualCorrectionOccurrence]
+    ) -> DecisionsRequestDTO {
+        let stateOccurrences = occurrences.map {
+            DecisionsRequestDTO.State.Occurrence(
+                heard: $0.heard,
+                canonical: $0.canonical,
+                ordinal: $0.ordinal
+            )
+        }
+        let questions = Dictionary(uniqueKeysWithValues: occurrences.map { occurrence in
+            (occurrence.questionID, DecisionsRequestDTO.Question(
+                type: "choice",
+                instructions: "Escolha a forma correta para a ocorrência \(occurrence.ordinal) no contexto.",
+                criteria: [
+                    ContextualDecisionChoice.keepOriginal.rawValue: "Manter exatamente a forma ouvida no contexto.",
+                    ContextualDecisionChoice.replace.rawValue: "Aplicar somente a correção local confirmada."
+                ]
+            ))
+        })
+        return .init(
+            model: model,
+            state: .init(language: language, text: sentence, occurrences: stateOccurrences),
+            questions: questions
+        )
+    }
+
+    static func receipt(
+        from data: Data,
+        occurrences: [ContextualCorrectionOccurrence]
+    ) throws -> ContextualDecisionReceipt {
+        let response: DecisionsResponseDTO
+        do { response = try JSONDecoder().decode(DecisionsResponseDTO.self, from: data) }
+        catch { throw OpenRouterDecisionsError.malformedResponse }
+        guard response.model == model || response.model.hasPrefix("\(model)-"),
+              Set(response.answers.keys) == Set(occurrences.map(\.questionID)) else {
+            throw OpenRouterDecisionsError.malformedResponse
+        }
+        var decisions: [ContextualDecision] = []
+        for occurrence in occurrences {
+            guard let answer = response.answers[occurrence.questionID],
+                  answer.type == "choice",
+                  let choice = ContextualDecisionChoice(rawValue: answer.choice),
+                  Set(answer.probabilities.keys) == Set([
+                    ContextualDecisionChoice.keepOriginal.rawValue,
+                    ContextualDecisionChoice.replace.rawValue
+                  ]),
+                  let selected = answer.probabilities[choice.rawValue],
+                  let runnerUp = answer.probabilities.first(where: { $0.key != choice.rawValue })?.value else {
+                throw OpenRouterDecisionsError.malformedResponse
+            }
+            decisions.append(.init(
+                questionID: occurrence.questionID,
+                choice: choice,
+                confidence: answer.confidence,
+                chosenProbability: selected,
+                runnerUpProbability: runnerUp
+            ))
+        }
+        return .init(
+            decisions: decisions,
+            resolvedModel: response.model,
+            inputTokens: response.usage?.inputTokens,
+            outputTokens: response.usage?.outputTokens,
+            costUSD: response.usage?.cost
+        )
+    }
+}
+
+protocol ContextualCredentialStore: Sendable {
+    func save(_ value: String) throws
+    func load() throws -> String?
+    func delete() throws
+}
+
+enum KeychainContextualCredentialConstants {
+    static let service = "br.com.luisroquette.Resenha.contextual-corrections"
+    static let account = "openrouter-synthetic-diagnostic"
+}
+
+enum ContextualCredentialError: Error, Equatable, Sendable {
+    case invalidValue
+    case keychainStatus(OSStatus)
+}
+
+struct KeychainContextualCredentialStore: ContextualCredentialStore {
+    func save(_ value: String) throws {
+        guard !value.isEmpty, let data = value.data(using: .utf8) else {
+            throw ContextualCredentialError.invalidValue
+        }
+        let query = baseQuery
+        let update = SecItemUpdate(query as CFDictionary, [kSecValueData: data] as CFDictionary)
+        if update == errSecSuccess { return }
+        guard update == errSecItemNotFound else {
+            throw ContextualCredentialError.keychainStatus(update)
+        }
+        var insert = query
+        insert[kSecValueData] = data
+        let status = SecItemAdd(insert as CFDictionary, nil)
+        guard status == errSecSuccess else {
+            throw ContextualCredentialError.keychainStatus(status)
+        }
+    }
+
+    func load() throws -> String? {
+        var query = baseQuery
+        query[kSecReturnData] = true
+        query[kSecMatchLimit] = kSecMatchLimitOne
+        var result: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        if status == errSecItemNotFound { return nil }
+        guard status == errSecSuccess,
+              let data = result as? Data,
+              let value = String(data: data, encoding: .utf8),
+              !value.isEmpty else {
+            throw status == errSecSuccess
+                ? ContextualCredentialError.invalidValue
+                : ContextualCredentialError.keychainStatus(status)
+        }
+        return value
+    }
+
+    func delete() throws {
+        let status = SecItemDelete(baseQuery as CFDictionary)
+        guard status == errSecSuccess || status == errSecItemNotFound else {
+            throw ContextualCredentialError.keychainStatus(status)
+        }
+    }
+
+    private var baseQuery: [CFString: Any] {
+        [
+            kSecClass: kSecClassGenericPassword,
+            kSecAttrService: KeychainContextualCredentialConstants.service,
+            kSecAttrAccount: KeychainContextualCredentialConstants.account,
+            kSecAttrSynchronizable: false
+        ]
+    }
+}
+
+enum SyntheticDiagnosticGuardState: String, Codable, Sendable {
+    case available
+    case consumed
+}
+
+enum SyntheticDiagnosticGuardHealth: Equatable, Sendable {
+    case ready(SyntheticDiagnosticGuardState)
+    case blocked
+}
+
+enum SyntheticDiagnosticGuardError: Error, Equatable, Sendable {
+    case unavailable
+    case blocked
+    case consumed
+    case corrupt
+    case oversized
+    case unsupportedVersion
+    case uncertainWrite
+}
+
+protocol SyntheticDiagnosticGuardStore: Sendable {
+    func validateForAuthorization() async throws
+    func provisionAuthorizedCall() async throws
+    func consume() async throws
+    func currentState() async -> SyntheticDiagnosticGuardHealth
+}
+
+protocol ContextualFileOperating: Sendable {
+    func fileExists(at url: URL) -> Bool
+    func createDirectory(at url: URL) throws
+    func read(_ url: URL) throws -> Data
+    func write(_ data: Data, to url: URL) throws
+    func setPermissions(_ permissions: Int, at url: URL) throws
+    func replace(_ destination: URL, with source: URL) throws
+    func remove(_ url: URL) throws
+}
+
+struct ContextualFileOperations: ContextualFileOperating {
+    func fileExists(at url: URL) -> Bool {
+        FileManager.default.fileExists(atPath: url.path)
+    }
+
+    func createDirectory(at url: URL) throws {
+        try FileManager.default.createDirectory(
+            at: url,
+            withIntermediateDirectories: true,
+            attributes: [.posixPermissions: 0o700]
+        )
+    }
+
+    func read(_ url: URL) throws -> Data { try Data(contentsOf: url, options: [.mappedIfSafe]) }
+    func write(_ data: Data, to url: URL) throws { try data.write(to: url, options: .atomic) }
+    func setPermissions(_ permissions: Int, at url: URL) throws {
+        try FileManager.default.setAttributes([.posixPermissions: permissions], ofItemAtPath: url.path)
+    }
+    func replace(_ destination: URL, with source: URL) throws {
+        _ = try FileManager.default.replaceItemAt(destination, withItemAt: source)
+    }
+    func remove(_ url: URL) throws { try FileManager.default.removeItem(at: url) }
+}
+
+actor SyntheticDiagnosticGuard: SyntheticDiagnosticGuardStore {
+    private struct MarkerEnvelope: Codable, Equatable {
+        let schemaVersion: Int
+        let provisioned: Bool
+    }
+
+    private struct StateEnvelope: Codable, Equatable {
+        let schemaVersion: Int
+        let state: SyntheticDiagnosticGuardState
+    }
+
+    private enum Inspection {
+        case absent
+        case ready(SyntheticDiagnosticGuardState)
+        case blocked
+    }
+
+    static let schemaVersion = 1
+    static let maximumFileBytes = 64 * 1_024
+
+    private let directoryURL: URL
+    private let files: any ContextualFileOperating
+    private var permanentlyBlocked = false
+
+    init(
+        directoryURL: URL = SyntheticDiagnosticGuard.defaultDirectoryURL(),
+        files: any ContextualFileOperating = ContextualFileOperations()
+    ) {
+        self.directoryURL = directoryURL
+        self.files = files
+    }
+
+    nonisolated static func defaultDirectoryURL() -> URL {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Resenha", isDirectory: true)
+            .appendingPathComponent("ContextualCorrections", isDirectory: true)
+    }
+
+    func validateForAuthorization() throws {
+        switch try inspect() {
+        case .absent, .ready(.available): return
+        case .ready(.consumed): throw SyntheticDiagnosticGuardError.consumed
+        case .blocked: throw SyntheticDiagnosticGuardError.blocked
+        }
+    }
+
+    func provisionAuthorizedCall() throws {
+        switch try inspect() {
+        case .ready(.available): return
+        case .ready(.consumed): throw SyntheticDiagnosticGuardError.consumed
+        case .blocked: throw SyntheticDiagnosticGuardError.blocked
+        case .absent:
+            do {
+                try prepareDirectory()
+                try verifiedWrite(
+                    MarkerEnvelope(schemaVersion: Self.schemaVersion, provisioned: true),
+                    to: markerURL
+                )
+                try verifiedWrite(
+                    StateEnvelope(schemaVersion: Self.schemaVersion, state: .available),
+                    to: stateURL
+                )
+                guard case .ready(.available) = try inspect() else {
+                    throw SyntheticDiagnosticGuardError.uncertainWrite
+                }
+            } catch {
+                permanentlyBlocked = true
+                throw error
+            }
+        }
+    }
+
+    func consume() throws {
+        guard case .ready(.available) = try inspect() else {
+            throw SyntheticDiagnosticGuardError.blocked
+        }
+        let transaction = directoryURL.appendingPathComponent(
+            ".diagnostic-consumed-\(UUID().uuidString).tmp"
+        )
+        do {
+            let envelope = StateEnvelope(schemaVersion: Self.schemaVersion, state: .consumed)
+            let data = try JSONEncoder().encode(envelope)
+            try files.write(data, to: transaction)
+            try files.setPermissions(0o600, at: transaction)
+            guard try decodeState(try boundedRead(transaction)) == envelope else {
+                throw SyntheticDiagnosticGuardError.uncertainWrite
+            }
+            try files.replace(stateURL, with: transaction)
+            try files.setPermissions(0o600, at: stateURL)
+            guard try decodeState(try boundedRead(stateURL)) == envelope else {
+                throw SyntheticDiagnosticGuardError.uncertainWrite
+            }
+        } catch {
+            permanentlyBlocked = true
+            try? files.remove(transaction)
+            throw error
+        }
+    }
+
+    func currentState() -> SyntheticDiagnosticGuardHealth {
+        guard !permanentlyBlocked else { return .blocked }
+        do {
+            switch try inspect() {
+            case .ready(let state): return .ready(state)
+            case .absent, .blocked: return .blocked
+            }
+        } catch {
+            permanentlyBlocked = true
+            return .blocked
+        }
+    }
+
+    private var markerURL: URL {
+        directoryURL.appendingPathComponent("diagnostic-authorization-provisioned-v1.json")
+    }
+
+    private var stateURL: URL {
+        directoryURL.appendingPathComponent("diagnostic-authorization-v1.json")
+    }
+
+    private func inspect() throws -> Inspection {
+        if permanentlyBlocked { return .blocked }
+        let markerExists = files.fileExists(at: markerURL)
+        let stateExists = files.fileExists(at: stateURL)
+        guard markerExists || stateExists else { return .absent }
+        guard markerExists && stateExists else { return .blocked }
+        do {
+            let marker = try JSONDecoder().decode(
+                MarkerEnvelope.self,
+                from: boundedRead(markerURL)
+            )
+            guard marker.schemaVersion == Self.schemaVersion, marker.provisioned else {
+                return .blocked
+            }
+            let state = try decodeState(boundedRead(stateURL))
+            guard state.schemaVersion == Self.schemaVersion else { return .blocked }
+            return .ready(state.state)
+        } catch {
+            permanentlyBlocked = true
+            throw error
+        }
+    }
+
+    private func prepareDirectory() throws {
+        do {
+            try files.createDirectory(at: directoryURL)
+            try files.setPermissions(0o700, at: directoryURL)
+        } catch { throw SyntheticDiagnosticGuardError.unavailable }
+    }
+
+    private func verifiedWrite<Value: Codable & Equatable>(_ value: Value, to url: URL) throws {
+        let data = try JSONEncoder().encode(value)
+        guard data.count <= Self.maximumFileBytes else { throw SyntheticDiagnosticGuardError.oversized }
+        try files.write(data, to: url)
+        try files.setPermissions(0o600, at: url)
+        let decoded = try JSONDecoder().decode(Value.self, from: boundedRead(url))
+        guard decoded == value else { throw SyntheticDiagnosticGuardError.uncertainWrite }
+    }
+
+    private func boundedRead(_ url: URL) throws -> Data {
+        let data: Data
+        do { data = try files.read(url) }
+        catch { throw SyntheticDiagnosticGuardError.unavailable }
+        guard data.count <= Self.maximumFileBytes else { throw SyntheticDiagnosticGuardError.oversized }
+        return data
+    }
+
+    private func decodeState(_ data: Data) throws -> StateEnvelope {
+        do { return try JSONDecoder().decode(StateEnvelope.self, from: data) }
+        catch { throw SyntheticDiagnosticGuardError.corrupt }
+    }
+}
+
+@MainActor
+protocol ContextualOptInStore: AnyObject {
+    var contextualCorrectionsEnabled: Bool { get }
+    func persistContextualCorrectionsEnabled(_ enabled: Bool) throws
+}
+
+struct SyntheticDiagnosticAuthorizationHealth: Equatable, Sendable {
+    let localBetaEnabled: Bool
+    let diagnosticArmed: Bool
+    let guardHealth: SyntheticDiagnosticGuardHealth
+}
+
+@MainActor
+protocol SyntheticDiagnosticAuthorizationChecking: AnyObject {
+    func consumeForDispatch(token: ContextualPolicyToken) async throws
+    func currentHealth() async -> SyntheticDiagnosticAuthorizationHealth
+}
+
+@MainActor
+protocol SyntheticDiagnosticAuthorizationManaging: AnyObject {
+    func setLocalBetaEnabled(_ enabled: Bool) async throws
+    func authorizeSyntheticDiagnostic(explicitConsent: Bool, credential: String) async throws
+    func removeSyntheticDiagnosticCredential() async throws
+}
+
+@MainActor
+protocol SyntheticDiagnosticAuthorizationOwnerContract:
+    SyntheticDiagnosticAuthorizationManaging, SyntheticDiagnosticAuthorizationChecking {
+    init(
+        optInStore: any ContextualOptInStore,
+        credentialStore: any ContextualCredentialStore,
+        guardStore: any SyntheticDiagnosticGuardStore,
+        policy: ContextualCorrectionPolicy
+    )
+}
+
+enum SyntheticDiagnosticAuthorizationError: Error, Equatable, Sendable {
+    case consentRequired
+    case credentialUnverified
+    case guardUnavailable
+    case stalePolicy
+    case diagnosticNotArmed
+    case localBetaDisabled
+}
+
+@MainActor
+final class SyntheticDiagnosticAuthorizationOwner: SyntheticDiagnosticAuthorizationOwnerContract {
+    private let optInStore: any ContextualOptInStore
+    private let credentialStore: any ContextualCredentialStore
+    private let guardStore: any SyntheticDiagnosticGuardStore
+    private let policy: ContextualCorrectionPolicy
+    private(set) var diagnosticArmed = false
+
+    init(
+        optInStore: any ContextualOptInStore,
+        credentialStore: any ContextualCredentialStore,
+        guardStore: any SyntheticDiagnosticGuardStore,
+        policy: ContextualCorrectionPolicy
+    ) {
+        self.optInStore = optInStore
+        self.credentialStore = credentialStore
+        self.guardStore = guardStore
+        self.policy = policy
+    }
+
+    func setLocalBetaEnabled(_ enabled: Bool) async throws {
+        if !enabled {
+            diagnosticArmed = false
+            policy.invalidate(.optedOut)
+        }
+        try optInStore.persistContextualCorrectionsEnabled(enabled)
+        guard optInStore.contextualCorrectionsEnabled == enabled else {
+            throw SyntheticDiagnosticAuthorizationError.localBetaDisabled
+        }
+    }
+
+    func authorizeSyntheticDiagnostic(explicitConsent: Bool, credential: String) async throws {
+        guard explicitConsent else { throw SyntheticDiagnosticAuthorizationError.consentRequired }
+        do {
+            try await guardStore.validateForAuthorization()
+            try credentialStore.save(credential)
+            guard try credentialStore.load() == credential else {
+                throw SyntheticDiagnosticAuthorizationError.credentialUnverified
+            }
+            try await guardStore.provisionAuthorizedCall()
+            guard await guardStore.currentState() == .ready(.available) else {
+                throw SyntheticDiagnosticAuthorizationError.guardUnavailable
+            }
+            diagnosticArmed = true
+        } catch {
+            diagnosticArmed = false
+            policy.invalidate(.credentialDeleted)
+            try? credentialStore.delete()
+            throw error
+        }
+    }
+
+    func removeSyntheticDiagnosticCredential() async throws {
+        diagnosticArmed = false
+        policy.invalidate(.credentialDeleted)
+        try credentialStore.delete()
+        guard try credentialStore.load() == nil else {
+            throw SyntheticDiagnosticAuthorizationError.credentialUnverified
+        }
+    }
+
+    func consumeForDispatch(token: ContextualPolicyToken) async throws {
+        guard token.scope == .syntheticDiagnostic,
+              policy.isCurrent(token),
+              diagnosticArmed else {
+            throw SyntheticDiagnosticAuthorizationError.diagnosticNotArmed
+        }
+        diagnosticArmed = false
+        guard optInStore.contextualCorrectionsEnabled,
+              let credential = try credentialStore.load(),
+              !credential.isEmpty,
+              policy.isCurrent(token) else {
+            throw SyntheticDiagnosticAuthorizationError.credentialUnverified
+        }
+        try await guardStore.consume()
+        guard policy.isCurrent(token) else {
+            throw SyntheticDiagnosticAuthorizationError.stalePolicy
+        }
+    }
+
+    func currentHealth() async -> SyntheticDiagnosticAuthorizationHealth {
+        .init(
+            localBetaEnabled: optInStore.contextualCorrectionsEnabled,
+            diagnosticArmed: diagnosticArmed,
+            guardHealth: await guardStore.currentState()
+        )
+    }
+}
+
+struct SyntheticDiagnosticFixture: Decodable, Equatable, Sendable {
+    static let id = "pt-rosto-hostel-diagnostic-001"
+
+    let id: String
+    let pairID: String
+    let learningExampleIDs: [String]
+    let language: String
+    let input: String
+    let heard: String
+    let canonical: String
+    let ordinal: Int
+    let expected: String
+
+    static func load(from bundle: Bundle = .main) throws -> Self {
+        struct Envelope: Decodable {
+            let schemaVersion: Int
+            let diagnosticFixture: SyntheticDiagnosticFixture
+        }
+        guard bundle.bundleIdentifier == "br.com.luisroquette.Resenha",
+              let url = bundle.url(forResource: "contextual-corrections", withExtension: "json") else {
+            throw SyntheticDiagnosticError.invalidResponse
+        }
+        let envelope: Envelope
+        do { envelope = try JSONDecoder().decode(Envelope.self, from: Data(contentsOf: url)) }
+        catch { throw SyntheticDiagnosticError.invalidResponse }
+        guard envelope.schemaVersion == 1, envelope.diagnosticFixture.id == id else {
+            throw SyntheticDiagnosticError.invalidResponse
+        }
+        return envelope.diagnosticFixture
+    }
+}
+
+enum SyntheticDiagnosticError: Error, Equatable, Sendable {
+    case authorizationUnavailable
+    case timedOut
+    case providerRejected
+    case transportUnavailable
+    case invalidResponse
+    case cancelled
+}
+
+struct SyntheticDiagnosticResult: Equatable, Sendable {
+    let outcome: ValidatedContextualOutcome
+    let receipt: ContextualDecisionReceipt
+    let durationMilliseconds: Int
+    let callCount: Int
+}
+
+@MainActor
+private final class ContextualCancellableTaskBox {
+    var task: Task<ContextualDecisionReceipt, Error>?
+    private(set) var cancelled = false
+
+    func install(_ task: Task<ContextualDecisionReceipt, Error>) {
+        self.task = task
+        if cancelled { task.cancel() }
+    }
+
+    func cancel() {
+        cancelled = true
+        task?.cancel()
+    }
+}
+
+@MainActor
+protocol SyntheticDiagnosticControllerContract: ObservableObject {
+    init(
+        policy: ContextualCorrectionPolicy,
+        authorization: any SyntheticDiagnosticAuthorizationChecking,
+        client: any SyntheticDiagnosticDecisionProvider,
+        validator: ContextualDecisionValidator,
+        fixture: SyntheticDiagnosticFixture,
+        time: any ContextualMonotonicTime
+    )
+    func run() async throws -> SyntheticDiagnosticResult
+}
+
+@MainActor
+final class SyntheticDiagnosticController: SyntheticDiagnosticControllerContract {
+    private let policy: ContextualCorrectionPolicy
+    private let authorization: any SyntheticDiagnosticAuthorizationChecking
+    private let client: any SyntheticDiagnosticDecisionProvider
+    private let validator: ContextualDecisionValidator
+    private let fixture: SyntheticDiagnosticFixture
+    private let time: any ContextualMonotonicTime
+
+    init(
+        policy: ContextualCorrectionPolicy,
+        authorization: any SyntheticDiagnosticAuthorizationChecking,
+        client: any SyntheticDiagnosticDecisionProvider,
+        validator: ContextualDecisionValidator,
+        fixture: SyntheticDiagnosticFixture,
+        time: any ContextualMonotonicTime
+    ) {
+        self.policy = policy
+        self.authorization = authorization
+        self.client = client
+        self.validator = validator
+        self.fixture = fixture
+        self.time = time
+    }
+
+    func run() async throws -> SyntheticDiagnosticResult {
+        let started = time.now()
+        let deadline = ContextualInstant(offset: started.offset + .milliseconds(900))
+        let token = policy.issueToken(scope: .syntheticDiagnostic)
+        let taskBox = ContextualCancellableTaskBox()
+        guard policy.register(token, cancel: { taskBox.cancel() }) else {
+            throw SyntheticDiagnosticError.authorizationUnavailable
+        }
+        defer { policy.finish(token) }
+        do {
+            try await authorization.consumeForDispatch(token: token)
+            guard policy.isCurrent(token), time.now() < deadline else {
+                throw SyntheticDiagnosticError.authorizationUnavailable
+            }
+            let occurrences = try makeOccurrences()
+            let policy = policy
+            let client = client
+            let task = Task {
+                try await client.decideSynthetic(
+                    sentence: fixture.input,
+                    language: fixture.language,
+                    occurrences: occurrences,
+                    deadline: deadline,
+                    beforeTransportOpen: {
+                        await MainActor.run { policy.isCurrent(token) }
+                    }
+                )
+            }
+            taskBox.install(task)
+            let receipt = try await task.value
+            guard policy.isCurrent(token), time.now() < deadline else {
+                throw SyntheticDiagnosticError.timedOut
+            }
+            let outcome = validator.validate(receipt: receipt, occurrences: occurrences)
+            guard outcome.category != .abstained else {
+                throw SyntheticDiagnosticError.invalidResponse
+            }
+            return .init(
+                outcome: outcome,
+                receipt: receipt,
+                durationMilliseconds: Self.milliseconds(started.offset, time.now().offset),
+                callCount: 1
+            )
+        } catch let error as SyntheticDiagnosticError {
+            throw error
+        } catch is CancellationError {
+            throw SyntheticDiagnosticError.cancelled
+        } catch let error as OpenRouterDecisionsError {
+            switch error {
+            case .timedOut: throw SyntheticDiagnosticError.timedOut
+            case .invalidStatus(let status) where status == 401 || status == 402
+                || status == 403 || status == 429 || status >= 500:
+                throw SyntheticDiagnosticError.providerRejected
+            case .transportUnavailable: throw SyntheticDiagnosticError.transportUnavailable
+            case .cancelled: throw SyntheticDiagnosticError.cancelled
+            case .malformedResponse, .responseTooLarge:
+                throw SyntheticDiagnosticError.invalidResponse
+            default: throw SyntheticDiagnosticError.authorizationUnavailable
+            }
+        } catch is SyntheticDiagnosticAuthorizationError {
+            throw SyntheticDiagnosticError.authorizationUnavailable
+        } catch is SyntheticDiagnosticGuardError {
+            throw SyntheticDiagnosticError.authorizationUnavailable
+        } catch is ContextualCredentialError {
+            throw SyntheticDiagnosticError.authorizationUnavailable
+        } catch {
+            throw SyntheticDiagnosticError.transportUnavailable
+        }
+    }
+
+    private func makeOccurrences() throws -> [ContextualCorrectionOccurrence] {
+        let escaped = NSRegularExpression.escapedPattern(for: fixture.heard)
+        guard let regex = try? NSRegularExpression(
+            pattern: "(?<![\\p{L}\\p{N}])\(escaped)(?![\\p{L}\\p{N}])",
+            options: [.caseInsensitive]
+        ) else { throw SyntheticDiagnosticError.invalidResponse }
+        let matches = regex.matches(
+            in: fixture.input,
+            range: NSRange(fixture.input.startIndex..<fixture.input.endIndex, in: fixture.input)
+        )
+        guard fixture.ordinal > 0, fixture.ordinal <= matches.count,
+              let range = Range(matches[fixture.ordinal - 1].range, in: fixture.input) else {
+            throw SyntheticDiagnosticError.invalidResponse
+        }
+        return [.init(
+            questionID: "o1",
+            heard: fixture.heard,
+            canonical: fixture.canonical,
+            ordinal: fixture.ordinal,
+            range: range
+        )]
+    }
+
+    private static func milliseconds(_ start: Duration, _ end: Duration) -> Int {
+        let components = (end - start).components
+        return Int(components.seconds * 1_000 + components.attoseconds / 1_000_000_000_000_000)
+    }
+}
