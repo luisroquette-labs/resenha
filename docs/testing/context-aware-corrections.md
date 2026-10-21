@@ -165,5 +165,5 @@ false positives, 7 unauthorized mutations and 10 harmful changes, while
 
 Phase 1: PASS (4.8/5); essential CK/HR failures: 0
 
-- Phase 1 artifact SHA-256: a440ead9ccd86152aee9c290ad3278784828c9f3ae0e683ec8b0e69df5eb85be
+- Phase 1 artifact SHA-256: a61481138007e4c68c91e38aa43af758acc7c1ce89773e56f86cf3f1b9682c6b
 - Findings disposition: keyed Decisions provenance corrected; exact 100-row audit table and family matrix embedded; no product change required.
