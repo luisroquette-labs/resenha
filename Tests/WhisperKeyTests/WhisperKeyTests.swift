@@ -2581,3 +2581,153 @@ final class WhisperKeyTests: XCTestCase {
         XCTAssertEqual(paths.model, model)
     }
 }
+
+@MainActor
+final class ContextualStoreTests: XCTestCase {
+    private func makeStore() -> (ContextualCorrectionStore, URL) {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ResenhaTests", isDirectory: true)
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let file = root.appendingPathComponent("ContextualCorrections/v1.json")
+        return (ContextualCorrectionStore(fileURL: file), file)
+    }
+
+    private func example(
+        index: Int = 0,
+        sentence: String? = nil,
+        heard: String = "rosto",
+        canonical: String = "Hostel",
+        ordinal: Int = 1,
+        language: String = "pt"
+    ) -> ContextualCorrectionExample {
+        .init(
+            id: UUID(uuidString: String(format: "00000000-0000-0000-0000-%012d", index + 1))!,
+            language: language,
+            heard: heard,
+            canonical: canonical,
+            sentence: sentence ?? "Contexto \(index): reservei um \(heard) na opcao \(index).",
+            occurrenceOrdinal: ordinal
+        )
+    }
+
+    func testContextualStoreSavesConfirmedOccurrenceWithoutChangingGlossary() throws {
+        let suite = "ContextualStoreTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let original = "rosto = Rosto\ncoisa energia = COESA Energia"
+        defaults.set(original, forKey: "resenha.transcriptionGlossary")
+        let preferences = ProductPreferences(defaults: defaults)
+        let (store, file) = makeStore()
+
+        XCTAssertEqual(store.save(example(sentence: "Reservei um rosto perto da estacao.")), .saved(example().id))
+        XCTAssertEqual(store.examples.map(\.canonical), ["Hostel"])
+        XCTAssertEqual(preferences.transcriptionGlossary, original)
+        XCTAssertEqual(defaults.string(forKey: "resenha.transcriptionGlossary"), original)
+        XCTAssertEqual(
+            try FileManager.default.attributesOfItem(atPath: file.path)[.posixPermissions] as? NSNumber,
+            0o600
+        )
+    }
+
+    func testContextualStoreAcceptsHundredAndRejectsHundredFirstWithoutEviction() {
+        let (store, _) = makeStore()
+        for index in 0..<100 { XCTAssertTrue(store.save(example(index: index)).isSuccess) }
+        XCTAssertEqual(store.save(example(index: 100)), .limitReached)
+        XCTAssertEqual(store.examples.count, 100)
+        XCTAssertEqual(store.examples.first?.id, example().id)
+    }
+
+    func testContextualStoreUsesSwiftCharacterLimitWithoutTruncation() {
+        let (store, _) = makeStore()
+        let accepted = String(repeating: "e", count: 594) + " rosto"
+        let rejected = String(repeating: "e", count: 595) + " rosto"
+        XCTAssertEqual(accepted.count, 600)
+        XCTAssertEqual(rejected.count, 601)
+        XCTAssertTrue(store.save(example(index: 1, sentence: accepted)).isSuccess)
+        XCTAssertEqual(store.save(example(index: 2, sentence: rejected)), .invalid(.sentenceTooLong))
+    }
+
+    func testContextualStoreDuplicateIsIdempotentAndConflictingTargetRequiresDeletion() {
+        let (store, _) = makeStore()
+        let original = example(sentence: "Reservei um rosto.")
+        XCTAssertTrue(store.save(original).isSuccess)
+        XCTAssertEqual(store.save(original), .alreadyExists(original.id))
+        XCTAssertEqual(
+            store.save(example(index: 1, sentence: original.sentence, canonical: "hotel")),
+            .conflict(original.id)
+        )
+        XCTAssertEqual(store.examples, [original])
+    }
+
+    func testContextualStoreRejectsInvalidIdentityOccurrenceAndLanguage() {
+        let (store, _) = makeStore()
+        XCTAssertEqual(store.save(example(heard: " ")), .invalid(.empty))
+        XCTAssertEqual(store.save(example(canonical: "ROSTO")), .invalid(.identical))
+        XCTAssertEqual(store.save(example(heard: "rosto\n")), .invalid(.invalidCharacters))
+        XCTAssertEqual(store.save(example(sentence: "Reservei um rosto.\nOutro trecho.")), .invalid(.invalidCharacters))
+        XCTAssertEqual(store.save(example(sentence: "Reservei um hotel.")), .invalid(.occurrenceMissing))
+        XCTAssertEqual(store.save(example(sentence: "rosto e rosto", ordinal: 3)), .invalid(.occurrenceAmbiguous))
+        XCTAssertEqual(store.save(example(language: "xx")), .invalid(.invalidCharacters))
+    }
+
+    func testContextualStoreAtomicWritePermissionsAndReload() throws {
+        let (store, file) = makeStore()
+        let first = example(sentence: "Reservei um rosto.")
+        XCTAssertTrue(store.save(first).isSuccess)
+        XCTAssertEqual(ContextualCorrectionStore(fileURL: file).examples, [first])
+        XCTAssertTrue(store.delete(id: first.id))
+        XCTAssertTrue(store.examples.isEmpty)
+        XCTAssertTrue(store.reload())
+        XCTAssertTrue(store.snapshot.health == .healthy)
+    }
+
+    func testContextualStoreCorruptOversizedAndFailedRollbackPreserveTrustworthyBytes() throws {
+        let (store, file) = makeStore()
+        let original = example(sentence: "Reservei um rosto.")
+        XCTAssertTrue(store.save(original).isSuccess)
+        let trusted = try Data(contentsOf: file)
+
+        try Data("not-json".utf8).write(to: file, options: .atomic)
+        XCTAssertFalse(store.reload())
+        XCTAssertEqual(store.examples, [original])
+        XCTAssertEqual(store.error, .corrupt)
+        XCTAssertEqual(store.save(example(index: 2)), .storageFailure(recoveryRequired: true))
+
+        try trusted.write(to: file, options: .atomic)
+        XCTAssertTrue(store.reload())
+        try Data(repeating: 0, count: ContextualCorrectionStore.maximumFileBytes + 1).write(to: file)
+        XCTAssertFalse(store.reload())
+        XCTAssertEqual(store.examples, [original])
+        XCTAssertEqual(store.error, .oversized)
+    }
+
+    func testUnknownStoreVersionPreservesBytesAndBlocksMutation() throws {
+        let (_, file) = makeStore()
+        let bytes = Data(#"{"schemaVersion":2,"examples":[]}"#.utf8)
+        try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try bytes.write(to: file, options: .atomic)
+        let store = ContextualCorrectionStore(fileURL: file)
+        XCTAssertEqual(store.error, .unsupportedVersion(2))
+        XCTAssertEqual(store.save(example()), .storageFailure(recoveryRequired: true))
+        XCTAssertEqual(try Data(contentsOf: file), bytes)
+    }
+
+    func testContextualStoreHealthSnapshotStaysUnhealthyUntilVerifiedReload() throws {
+        let (store, file) = makeStore()
+        let original = example(sentence: "Reservei um rosto.")
+        XCTAssertTrue(store.save(original).isSuccess)
+        let healthyGeneration = store.generation
+        try Data("broken".utf8).write(to: file, options: .atomic)
+        XCTAssertFalse(store.reload())
+        XCTAssertEqual(store.snapshot.health, .unhealthy(.corrupt))
+        XCTAssertEqual(store.generation, healthyGeneration)
+        XCTAssertFalse(store.reload())
+        XCTAssertEqual(store.snapshot.health, .unhealthy(.corrupt))
+
+        let repair = #"{"schemaVersion":1,"examples":[]}"#
+        try Data(repair.utf8).write(to: file, options: .atomic)
+        XCTAssertTrue(store.reload())
+        XCTAssertEqual(store.snapshot.health, .healthy)
+        XCTAssertGreaterThan(store.generation, healthyGeneration)
+    }
+}

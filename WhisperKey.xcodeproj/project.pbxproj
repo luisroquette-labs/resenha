@@ -22,6 +22,7 @@
 		5C704B1BDF72D42759556414 /* ProductPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = FD3A8F8F80E9569C5B9B6616 /* ProductPreferences.swift */; };
 		6623A7ED527515535110CC64 /* RecordingWaveformView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4A8FD7C33E4604E0E2BE7C1 /* RecordingWaveformView.swift */; };
 		689D5145FF1FCF328F843A75 /* NativeMenuController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 523F074FCFE5942E2581895F /* NativeMenuController.swift */; };
+		6DC19E1366479BEA93600203 /* ContextualCorrections.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95005FE135F7FC2ECCFC4182 /* ContextualCorrections.swift */; };
 		726C0EFD16B67C19F84BC57B /* TextInjector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 733DACDEB4AB93D5CF9C3903 /* TextInjector.swift */; };
 		73B3AA17549C4AF0E03C6F25 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = B63B342300F9037E5752DC51 /* PrivacyInfo.xcprivacy */; };
 		86DFF8F34B535D75107AB91C /* AudioRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA553ED088000409A1534B10 /* AudioRecorder.swift */; };
@@ -66,6 +67,7 @@
 		733DACDEB4AB93D5CF9C3903 /* TextInjector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextInjector.swift; sourceTree = "<group>"; };
 		75D558D773F2BC3AB3159027 /* SoundLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoundLibrary.swift; sourceTree = "<group>"; };
 		82C866CD9730D225ABB0F72B /* WhisperKeyTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = WhisperKeyTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		95005FE135F7FC2ECCFC4182 /* ContextualCorrections.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContextualCorrections.swift; sourceTree = "<group>"; };
 		A7127B7D90D717FFC9B8794D /* WhisperKey.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = WhisperKey.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA553ED088000409A1534B10 /* AudioRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioRecorder.swift; sourceTree = "<group>"; };
 		AAC1740D72EC6212C4303041 /* WhisperTranscriber.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhisperTranscriber.swift; sourceTree = "<group>"; };
@@ -160,6 +162,7 @@
 			children = (
 				00EE951794E83B89436ADF66 /* Assets.xcassets */,
 				AA553ED088000409A1534B10 /* AudioRecorder.swift */,
+				95005FE135F7FC2ECCFC4182 /* ContextualCorrections.swift */,
 				6E0F01DAE4C30ED2DC6B9DBC /* DictationCoordinator.swift */,
 				360ACBBE554E2869FCDC8B7E /* DictationInteraction.swift */,
 				F90F5A838310B1F6007F64FE /* FloatingPanel.swift */,
@@ -299,6 +302,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				86DFF8F34B535D75107AB91C /* AudioRecorder.swift in Sources */,
+				6DC19E1366479BEA93600203 /* ContextualCorrections.swift in Sources */,
 				A43F5E47CFC6FC2CDEC601A4 /* DictationCoordinator.swift in Sources */,
 				23B9446876E4BE5B1AFE5873 /* DictationInteraction.swift in Sources */,
 				D853F8CE772EBAB3FED1F4F7 /* FloatingPanel.swift in Sources */,
