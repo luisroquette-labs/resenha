@@ -5187,6 +5187,102 @@ private enum ContextualCorpusOutcomeKind: String, Codable {
 }
 private enum ContextualCorpusChoice: String, Codable { case keepOriginal = "keep_original", replace = "replace_1" }
 
+private struct ProactiveContextFixture: Decodable {
+    struct Token: Decodable {
+        let text: String
+        let probability: Float
+    }
+
+    struct Alternative: Decodable {
+        let text: String
+        let logit: Float
+    }
+
+    struct Row: Decodable {
+        let id: String
+        let semanticKey: String
+        let partition: String
+        let family: String
+        let language: String
+        let recognizedText: String
+        let token: Token
+        let alternatives: [Alternative]
+        let vocabulary: [String]
+        let expectedChoice: String
+        let expectedText: String
+        let protectedSemantics: String
+    }
+
+    let schemaVersion: Int
+    let corpusVersion: String
+    let provenance: String
+    let language: String
+    let frozenSHA256: String
+    let thresholds: ProactiveCandidateThresholds
+    var calibration: [Row]
+    var evaluation: [Row]
+    var controls: [Row]
+
+    static let fileSHA256 = "a5a2c1f25be5c6270f7f5c5c07f4cd2fef473560e732794e247383b432254dff"
+
+    static func load(bundle: Bundle) throws -> (fixture: Self, data: Data) {
+        let url = try XCTUnwrap(bundle.url(forResource: "proactive-context-guidance", withExtension: "json"))
+        let data = try Data(contentsOf: url)
+        return (try JSONDecoder().decode(Self.self, from: data), data)
+    }
+
+    func calibrationThresholds() -> ProactiveCandidateThresholds? {
+        calibration.isEmpty ? nil : thresholds
+    }
+
+    func validate() -> Bool {
+        let rows = calibration + evaluation + controls
+        guard schemaVersion == 1,
+              corpusVersion == "2026-10-22.1",
+              provenance == "synthetic_invented_no_personal_dictation",
+              language == "pt-BR",
+              frozenSHA256.count == 64,
+              calibration.count >= 15,
+              evaluation.count >= 60,
+              controls.count >= 30,
+              Set(evaluation.map(\.family)).count >= 15,
+              Set(rows.map(\.id)).count == rows.count,
+              Set(rows.map(\.semanticKey)).count == rows.count,
+              thresholds.tokenProbability.isFinite,
+              (0...1).contains(thresholds.tokenProbability),
+              thresholds.maximumLogitGap.isFinite,
+              thresholds.maximumLogitGap >= 0,
+              thresholds.minimumVocabularySimilarity.isFinite,
+              (0...1).contains(thresholds.minimumVocabularySimilarity) else { return false }
+
+        for (partition, partitionRows) in [
+            ("calibration", calibration),
+            ("evaluation", evaluation),
+            ("controls", controls)
+        ] {
+            for row in partitionRows {
+                guard row.partition == partition,
+                      row.language == "pt",
+                      !row.id.isEmpty,
+                      !row.semanticKey.isEmpty,
+                      !row.family.isEmpty,
+                      !row.recognizedText.isEmpty,
+                      !row.token.text.isEmpty,
+                      row.token.probability.isFinite,
+                      (0...1).contains(row.token.probability),
+                      row.recognizedText.localizedCaseInsensitiveContains(row.token.text),
+                      (1...3).contains(row.alternatives.count),
+                      row.alternatives.allSatisfy({ !$0.text.isEmpty && $0.logit.isFinite }),
+                      !row.vocabulary.isEmpty,
+                      ["keep_original", "replace_1", "replace_2", "replace_3"].contains(row.expectedChoice),
+                      !row.expectedText.isEmpty,
+                      !row.protectedSemantics.isEmpty else { return false }
+            }
+        }
+        return true
+    }
+}
+
 private struct ContinuousContextEventsFixture: Decodable {
     struct Event: Decodable {
         let revision: Int
@@ -5633,6 +5729,63 @@ private struct ContextualCorpusFixture: Decodable {
 }
 
 extension ContextualTransportCorpusTests {
+    func testProactiveContextFixtureIsFrozenPartitionedAndValid() throws {
+        let bundle = Bundle(for: ContextualTransportCorpusTests.self)
+        let loaded = try ProactiveContextFixture.load(bundle: bundle)
+        let rows = loaded.fixture.calibration + loaded.fixture.evaluation + loaded.fixture.controls
+
+        XCTAssertTrue(loaded.fixture.validate())
+        XCTAssertEqual(loaded.fixture.calibration.count, 15)
+        XCTAssertEqual(loaded.fixture.evaluation.count, 60)
+        XCTAssertEqual(loaded.fixture.controls.count, 30)
+        XCTAssertEqual(Set(loaded.fixture.evaluation.map(\.family)).count, 15)
+        XCTAssertEqual(Set(rows.map(\.id)).count, rows.count)
+        XCTAssertEqual(Set(rows.map(\.semanticKey)).count, rows.count)
+        XCTAssertEqual(
+            SHA256.hash(data: loaded.data).map { String(format: "%02x", $0) }.joined(),
+            ProactiveContextFixture.fileSHA256,
+            "The proactive corpus changed. Re-plan and freeze a new baseline before implementation."
+        )
+    }
+
+    func testProactiveThresholdsAcceptBoundaryAndRejectOutside() throws {
+        let thresholds = try XCTUnwrap(
+            ProactiveContextFixture.load(bundle: Bundle(for: ContextualTransportCorpusTests.self))
+                .fixture.calibrationThresholds()
+        )
+
+        XCTAssertTrue(thresholds.accepts(
+            tokenProbability: thresholds.tokenProbability,
+            logitGap: thresholds.maximumLogitGap,
+            vocabularySimilarity: thresholds.minimumVocabularySimilarity
+        ))
+        XCTAssertFalse(thresholds.accepts(
+            tokenProbability: thresholds.tokenProbability.nextUp,
+            logitGap: thresholds.maximumLogitGap,
+            vocabularySimilarity: thresholds.minimumVocabularySimilarity
+        ))
+        XCTAssertFalse(thresholds.accepts(
+            tokenProbability: thresholds.tokenProbability,
+            logitGap: thresholds.maximumLogitGap.nextUp,
+            vocabularySimilarity: thresholds.minimumVocabularySimilarity
+        ))
+        XCTAssertFalse(thresholds.accepts(
+            tokenProbability: thresholds.tokenProbability,
+            logitGap: thresholds.maximumLogitGap,
+            vocabularySimilarity: thresholds.minimumVocabularySimilarity.nextDown
+        ))
+    }
+
+    func testProactiveThresholdSelectionCannotReadEvaluationRows() throws {
+        var fixture = try ProactiveContextFixture.load(
+            bundle: Bundle(for: ContextualTransportCorpusTests.self)
+        ).fixture
+        let selected = fixture.calibrationThresholds()
+        fixture.evaluation.removeAll()
+        fixture.controls.removeAll()
+        XCTAssertEqual(fixture.calibrationThresholds(), selected)
+    }
+
     func testContinuousContextCorpusIsBundledFrozenAndSchemaValid() throws {
         let testBundle = Bundle(for: ContextualTransportCorpusTests.self)
         let loaded = try ContinuousContextEventsFixture.load(bundle: testBundle)

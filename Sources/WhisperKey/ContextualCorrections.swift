@@ -2,6 +2,18 @@ import Combine
 import Foundation
 import Security
 
+struct ProactiveCandidateThresholds: Codable, Equatable, Sendable {
+    let tokenProbability: Float
+    let maximumLogitGap: Float
+    let minimumVocabularySimilarity: Double
+
+    func accepts(tokenProbability: Float, logitGap: Float, vocabularySimilarity: Double) -> Bool {
+        tokenProbability <= self.tokenProbability
+            && logitGap <= maximumLogitGap
+            && vocabularySimilarity >= minimumVocabularySimilarity
+    }
+}
+
 struct ContextualCorrectionExample: Codable, Equatable, Identifiable, Sendable {
     let id: UUID
     let language: String

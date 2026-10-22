@@ -1,0 +1,2958 @@
+{
+  "schemaVersion": 1,
+  "corpusVersion": "2026-10-22.1",
+  "provenance": "synthetic_invented_no_personal_dictation",
+  "language": "pt-BR",
+  "frozenSHA256": "740c830f25e128deaa6be576c08e085b518aa50b1aa60fc5fd40196945df4852",
+  "thresholds": {
+    "tokenProbability": 0.65,
+    "maximumLogitGap": 1.5,
+    "minimumVocabularySimilarity": 0.45
+  },
+  "calibration": [
+    {
+      "id": "calibration-rosto_hostel-001",
+      "semanticKey": "calibration:rosto_hostel:1",
+      "partition": "calibration",
+      "family": "rosto_hostel",
+      "language": "pt",
+      "recognizedText": "Eu reservei uma cama no rosto perto da estação.",
+      "token": {
+        "text": "rosto",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "Hostel",
+          "logit": 4.8
+        },
+        {
+          "text": "rosto",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "Hostel"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Eu reservei uma cama no Hostel perto da estação.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "calibration-sessao_secao-002",
+      "semanticKey": "calibration:sessao_secao:2",
+      "partition": "calibration",
+      "family": "sessao_secao",
+      "language": "pt",
+      "recognizedText": "Procure o contrato na sessão de documentos.",
+      "token": {
+        "text": "sessão",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "seção",
+          "logit": 4.8
+        },
+        {
+          "text": "sessão",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "seção"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Procure o contrato na seção de documentos.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "calibration-cesta_sexta-003",
+      "semanticKey": "calibration:cesta_sexta:3",
+      "partition": "calibration",
+      "family": "cesta_sexta",
+      "language": "pt",
+      "recognizedText": "Agende a revisão para cesta à tarde.",
+      "token": {
+        "text": "cesta",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "sexta",
+          "logit": 4.8
+        },
+        {
+          "text": "cesta",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "sexta"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Agende a revisão para sexta à tarde.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "calibration-conserto_concerto-004",
+      "semanticKey": "calibration:conserto_concerto:4",
+      "partition": "calibration",
+      "family": "conserto_concerto",
+      "language": "pt",
+      "recognizedText": "Comprei ingresso para o conserto da orquestra.",
+      "token": {
+        "text": "conserto",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "concerto",
+          "logit": 4.8
+        },
+        {
+          "text": "conserto",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "concerto"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Comprei ingresso para o concerto da orquestra.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "calibration-censo_senso-005",
+      "semanticKey": "calibration:censo_senso:5",
+      "partition": "calibration",
+      "family": "censo_senso",
+      "language": "pt",
+      "recognizedText": "Use o bom censo antes de aprovar a mudança.",
+      "token": {
+        "text": "censo",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "senso",
+          "logit": 4.8
+        },
+        {
+          "text": "censo",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "senso"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Use o bom senso antes de aprovar a mudança.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "calibration-cela_celula-006",
+      "semanticKey": "calibration:cela_celula:6",
+      "partition": "calibration",
+      "family": "cela_celula",
+      "language": "pt",
+      "recognizedText": "Atualize a cela B do relatório.",
+      "token": {
+        "text": "cela",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "célula",
+          "logit": 4.8
+        },
+        {
+          "text": "cela",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "célula"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Atualize a célula B do relatório.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "calibration-caixa_cache-007",
+      "semanticKey": "calibration:caixa_cache:7",
+      "partition": "calibration",
+      "family": "caixa_cache",
+      "language": "pt",
+      "recognizedText": "Limpe o caixa antes do novo deploy.",
+      "token": {
+        "text": "caixa",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "cache",
+          "logit": 4.8
+        },
+        {
+          "text": "caixa",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "cache"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Limpe o cache antes do novo deploy.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "calibration-guite_git-008",
+      "semanticKey": "calibration:guite_git:8",
+      "partition": "calibration",
+      "family": "guite_git",
+      "language": "pt",
+      "recognizedText": "Envie o commit para o guite agora.",
+      "token": {
+        "text": "guite",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "Git",
+          "logit": 4.8
+        },
+        {
+          "text": "guite",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "Git"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Envie o commit para o Git agora.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "calibration-suifte_swift-009",
+      "semanticKey": "calibration:suifte_swift:9",
+      "partition": "calibration",
+      "family": "suifte_swift",
+      "language": "pt",
+      "recognizedText": "Compile o módulo em suífte no Mac.",
+      "token": {
+        "text": "suífte",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "Swift",
+          "logit": 4.8
+        },
+        {
+          "text": "suífte",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "Swift"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Compile o módulo em Swift no Mac.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "calibration-redmi_readme-010",
+      "semanticKey": "calibration:redmi_readme:10",
+      "partition": "calibration",
+      "family": "redmi_readme",
+      "language": "pt",
+      "recognizedText": "Atualize o rédmi do projeto antes do merge.",
+      "token": {
+        "text": "rédmi",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "README",
+          "logit": 4.8
+        },
+        {
+          "text": "rédmi",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "README"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Atualize o README do projeto antes do merge.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "calibration-deploio_deploy-011",
+      "semanticKey": "calibration:deploio_deploy:11",
+      "partition": "calibration",
+      "family": "deploio_deploy",
+      "language": "pt",
+      "recognizedText": "Faça o deploio depois dos testes.",
+      "token": {
+        "text": "deploio",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "deploy",
+          "logit": 4.8
+        },
+        {
+          "text": "deploio",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "deploy"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Faça o deploy depois dos testes.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "calibration-riqueste_request-012",
+      "semanticKey": "calibration:riqueste_request:12",
+      "partition": "calibration",
+      "family": "riqueste_request",
+      "language": "pt",
+      "recognizedText": "A riquieste falhou com código quatrocentos.",
+      "token": {
+        "text": "riquieste",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "request",
+          "logit": 4.8
+        },
+        {
+          "text": "riquieste",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "request"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "A request falhou com código quatrocentos.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "calibration-branche_branch-013",
+      "semanticKey": "calibration:branche_branch:13",
+      "partition": "calibration",
+      "family": "branche_branch",
+      "language": "pt",
+      "recognizedText": "Crie uma branche para essa tarefa.",
+      "token": {
+        "text": "branche",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "branch",
+          "logit": 4.8
+        },
+        {
+          "text": "branche",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "branch"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Crie uma branch para essa tarefa.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "calibration-verceli_vercel-014",
+      "semanticKey": "calibration:verceli_vercel:14",
+      "partition": "calibration",
+      "family": "verceli_vercel",
+      "language": "pt",
+      "recognizedText": "Confira o preview na verceli antes do merge.",
+      "token": {
+        "text": "verceli",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "Vercel",
+          "logit": 4.8
+        },
+        {
+          "text": "verceli",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "Vercel"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Confira o preview na Vercel antes do merge.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "calibration-coisa_coesa-015",
+      "semanticKey": "calibration:coisa_coesa:15",
+      "partition": "calibration",
+      "family": "coisa_coesa",
+      "language": "pt",
+      "recognizedText": "Envie o relatório para a Coisa Energia hoje.",
+      "token": {
+        "text": "Coisa Energia",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "COESA Energia",
+          "logit": 4.8
+        },
+        {
+          "text": "Coisa Energia",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "COESA Energia"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Envie o relatório para a COESA Energia hoje.",
+      "protectedSemantics": "none"
+    }
+  ],
+  "evaluation": [
+    {
+      "id": "evaluation-rosto_hostel-001",
+      "semanticKey": "evaluation:rosto_hostel:1",
+      "partition": "evaluation",
+      "family": "rosto_hostel",
+      "language": "pt",
+      "recognizedText": "Eu reservei uma cama no rosto perto da estação.",
+      "token": {
+        "text": "rosto",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "Hostel",
+          "logit": 4.8
+        },
+        {
+          "text": "rosto",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "Hostel"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Eu reservei uma cama no Hostel perto da estação.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "evaluation-rosto_hostel-002",
+      "semanticKey": "evaluation:rosto_hostel:2",
+      "partition": "evaluation",
+      "family": "rosto_hostel",
+      "language": "pt",
+      "recognizedText": "Eu reservei uma cama no rosto perto da estação.",
+      "token": {
+        "text": "rosto",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "Hostel",
+          "logit": 4.8
+        },
+        {
+          "text": "rosto",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "Hostel"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Eu reservei uma cama no Hostel perto da estação.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "evaluation-rosto_hostel-003",
+      "semanticKey": "evaluation:rosto_hostel:3",
+      "partition": "evaluation",
+      "family": "rosto_hostel",
+      "language": "pt",
+      "recognizedText": "Eu reservei uma cama no rosto perto da estação.",
+      "token": {
+        "text": "rosto",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "Hostel",
+          "logit": 4.8
+        },
+        {
+          "text": "rosto",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "Hostel"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Eu reservei uma cama no Hostel perto da estação.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "evaluation-rosto_hostel-004",
+      "semanticKey": "evaluation:rosto_hostel:4",
+      "partition": "evaluation",
+      "family": "rosto_hostel",
+      "language": "pt",
+      "recognizedText": "Eu reservei uma cama no rosto perto da estação.",
+      "token": {
+        "text": "rosto",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "Hostel",
+          "logit": 4.8
+        },
+        {
+          "text": "rosto",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "Hostel"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Eu reservei uma cama no Hostel perto da estação.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "evaluation-sessao_secao-005",
+      "semanticKey": "evaluation:sessao_secao:5",
+      "partition": "evaluation",
+      "family": "sessao_secao",
+      "language": "pt",
+      "recognizedText": "Procure o contrato na sessão de documentos.",
+      "token": {
+        "text": "sessão",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "seção",
+          "logit": 4.8
+        },
+        {
+          "text": "sessão",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "seção"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Procure o contrato na seção de documentos.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "evaluation-sessao_secao-006",
+      "semanticKey": "evaluation:sessao_secao:6",
+      "partition": "evaluation",
+      "family": "sessao_secao",
+      "language": "pt",
+      "recognizedText": "Procure o contrato na sessão de documentos.",
+      "token": {
+        "text": "sessão",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "seção",
+          "logit": 4.8
+        },
+        {
+          "text": "sessão",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "seção"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Procure o contrato na seção de documentos.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "evaluation-sessao_secao-007",
+      "semanticKey": "evaluation:sessao_secao:7",
+      "partition": "evaluation",
+      "family": "sessao_secao",
+      "language": "pt",
+      "recognizedText": "Procure o contrato na sessão de documentos.",
+      "token": {
+        "text": "sessão",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "seção",
+          "logit": 4.8
+        },
+        {
+          "text": "sessão",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "seção"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Procure o contrato na seção de documentos.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "evaluation-sessao_secao-008",
+      "semanticKey": "evaluation:sessao_secao:8",
+      "partition": "evaluation",
+      "family": "sessao_secao",
+      "language": "pt",
+      "recognizedText": "Procure o contrato na sessão de documentos.",
+      "token": {
+        "text": "sessão",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "seção",
+          "logit": 4.8
+        },
+        {
+          "text": "sessão",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "seção"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Procure o contrato na seção de documentos.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "evaluation-cesta_sexta-009",
+      "semanticKey": "evaluation:cesta_sexta:9",
+      "partition": "evaluation",
+      "family": "cesta_sexta",
+      "language": "pt",
+      "recognizedText": "Agende a revisão para cesta à tarde.",
+      "token": {
+        "text": "cesta",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "sexta",
+          "logit": 4.8
+        },
+        {
+          "text": "cesta",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "sexta"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Agende a revisão para sexta à tarde.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "evaluation-cesta_sexta-010",
+      "semanticKey": "evaluation:cesta_sexta:10",
+      "partition": "evaluation",
+      "family": "cesta_sexta",
+      "language": "pt",
+      "recognizedText": "Agende a revisão para cesta à tarde.",
+      "token": {
+        "text": "cesta",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "sexta",
+          "logit": 4.8
+        },
+        {
+          "text": "cesta",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "sexta"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Agende a revisão para sexta à tarde.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "evaluation-cesta_sexta-011",
+      "semanticKey": "evaluation:cesta_sexta:11",
+      "partition": "evaluation",
+      "family": "cesta_sexta",
+      "language": "pt",
+      "recognizedText": "Agende a revisão para cesta à tarde.",
+      "token": {
+        "text": "cesta",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "sexta",
+          "logit": 4.8
+        },
+        {
+          "text": "cesta",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "sexta"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Agende a revisão para sexta à tarde.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "evaluation-cesta_sexta-012",
+      "semanticKey": "evaluation:cesta_sexta:12",
+      "partition": "evaluation",
+      "family": "cesta_sexta",
+      "language": "pt",
+      "recognizedText": "Agende a revisão para cesta à tarde.",
+      "token": {
+        "text": "cesta",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "sexta",
+          "logit": 4.8
+        },
+        {
+          "text": "cesta",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "sexta"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Agende a revisão para sexta à tarde.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "evaluation-conserto_concerto-013",
+      "semanticKey": "evaluation:conserto_concerto:13",
+      "partition": "evaluation",
+      "family": "conserto_concerto",
+      "language": "pt",
+      "recognizedText": "Comprei ingresso para o conserto da orquestra.",
+      "token": {
+        "text": "conserto",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "concerto",
+          "logit": 4.8
+        },
+        {
+          "text": "conserto",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "concerto"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Comprei ingresso para o concerto da orquestra.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "evaluation-conserto_concerto-014",
+      "semanticKey": "evaluation:conserto_concerto:14",
+      "partition": "evaluation",
+      "family": "conserto_concerto",
+      "language": "pt",
+      "recognizedText": "Comprei ingresso para o conserto da orquestra.",
+      "token": {
+        "text": "conserto",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "concerto",
+          "logit": 4.8
+        },
+        {
+          "text": "conserto",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "concerto"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Comprei ingresso para o concerto da orquestra.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "evaluation-conserto_concerto-015",
+      "semanticKey": "evaluation:conserto_concerto:15",
+      "partition": "evaluation",
+      "family": "conserto_concerto",
+      "language": "pt",
+      "recognizedText": "Comprei ingresso para o conserto da orquestra.",
+      "token": {
+        "text": "conserto",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "concerto",
+          "logit": 4.8
+        },
+        {
+          "text": "conserto",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "concerto"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Comprei ingresso para o concerto da orquestra.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "evaluation-conserto_concerto-016",
+      "semanticKey": "evaluation:conserto_concerto:16",
+      "partition": "evaluation",
+      "family": "conserto_concerto",
+      "language": "pt",
+      "recognizedText": "Comprei ingresso para o conserto da orquestra.",
+      "token": {
+        "text": "conserto",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "concerto",
+          "logit": 4.8
+        },
+        {
+          "text": "conserto",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "concerto"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Comprei ingresso para o concerto da orquestra.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "evaluation-censo_senso-017",
+      "semanticKey": "evaluation:censo_senso:17",
+      "partition": "evaluation",
+      "family": "censo_senso",
+      "language": "pt",
+      "recognizedText": "Use o bom censo antes de aprovar a mudança.",
+      "token": {
+        "text": "censo",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "senso",
+          "logit": 4.8
+        },
+        {
+          "text": "censo",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "senso"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Use o bom senso antes de aprovar a mudança.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "evaluation-censo_senso-018",
+      "semanticKey": "evaluation:censo_senso:18",
+      "partition": "evaluation",
+      "family": "censo_senso",
+      "language": "pt",
+      "recognizedText": "Use o bom censo antes de aprovar a mudança.",
+      "token": {
+        "text": "censo",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "senso",
+          "logit": 4.8
+        },
+        {
+          "text": "censo",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "senso"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Use o bom senso antes de aprovar a mudança.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "evaluation-censo_senso-019",
+      "semanticKey": "evaluation:censo_senso:19",
+      "partition": "evaluation",
+      "family": "censo_senso",
+      "language": "pt",
+      "recognizedText": "Use o bom censo antes de aprovar a mudança.",
+      "token": {
+        "text": "censo",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "senso",
+          "logit": 4.8
+        },
+        {
+          "text": "censo",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "senso"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Use o bom senso antes de aprovar a mudança.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "evaluation-censo_senso-020",
+      "semanticKey": "evaluation:censo_senso:20",
+      "partition": "evaluation",
+      "family": "censo_senso",
+      "language": "pt",
+      "recognizedText": "Use o bom censo antes de aprovar a mudança.",
+      "token": {
+        "text": "censo",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "senso",
+          "logit": 4.8
+        },
+        {
+          "text": "censo",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "senso"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Use o bom senso antes de aprovar a mudança.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "evaluation-cela_celula-021",
+      "semanticKey": "evaluation:cela_celula:21",
+      "partition": "evaluation",
+      "family": "cela_celula",
+      "language": "pt",
+      "recognizedText": "Atualize a cela B do relatório.",
+      "token": {
+        "text": "cela",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "célula",
+          "logit": 4.8
+        },
+        {
+          "text": "cela",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "célula"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Atualize a célula B do relatório.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "evaluation-cela_celula-022",
+      "semanticKey": "evaluation:cela_celula:22",
+      "partition": "evaluation",
+      "family": "cela_celula",
+      "language": "pt",
+      "recognizedText": "Atualize a cela B do relatório.",
+      "token": {
+        "text": "cela",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "célula",
+          "logit": 4.8
+        },
+        {
+          "text": "cela",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "célula"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Atualize a célula B do relatório.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "evaluation-cela_celula-023",
+      "semanticKey": "evaluation:cela_celula:23",
+      "partition": "evaluation",
+      "family": "cela_celula",
+      "language": "pt",
+      "recognizedText": "Atualize a cela B do relatório.",
+      "token": {
+        "text": "cela",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "célula",
+          "logit": 4.8
+        },
+        {
+          "text": "cela",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "célula"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Atualize a célula B do relatório.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "evaluation-cela_celula-024",
+      "semanticKey": "evaluation:cela_celula:24",
+      "partition": "evaluation",
+      "family": "cela_celula",
+      "language": "pt",
+      "recognizedText": "Atualize a cela B do relatório.",
+      "token": {
+        "text": "cela",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "célula",
+          "logit": 4.8
+        },
+        {
+          "text": "cela",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "célula"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Atualize a célula B do relatório.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "evaluation-caixa_cache-025",
+      "semanticKey": "evaluation:caixa_cache:25",
+      "partition": "evaluation",
+      "family": "caixa_cache",
+      "language": "pt",
+      "recognizedText": "Limpe o caixa antes do novo deploy.",
+      "token": {
+        "text": "caixa",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "cache",
+          "logit": 4.8
+        },
+        {
+          "text": "caixa",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "cache"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Limpe o cache antes do novo deploy.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "evaluation-caixa_cache-026",
+      "semanticKey": "evaluation:caixa_cache:26",
+      "partition": "evaluation",
+      "family": "caixa_cache",
+      "language": "pt",
+      "recognizedText": "Limpe o caixa antes do novo deploy.",
+      "token": {
+        "text": "caixa",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "cache",
+          "logit": 4.8
+        },
+        {
+          "text": "caixa",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "cache"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Limpe o cache antes do novo deploy.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "evaluation-caixa_cache-027",
+      "semanticKey": "evaluation:caixa_cache:27",
+      "partition": "evaluation",
+      "family": "caixa_cache",
+      "language": "pt",
+      "recognizedText": "Limpe o caixa antes do novo deploy.",
+      "token": {
+        "text": "caixa",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "cache",
+          "logit": 4.8
+        },
+        {
+          "text": "caixa",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "cache"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Limpe o cache antes do novo deploy.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "evaluation-caixa_cache-028",
+      "semanticKey": "evaluation:caixa_cache:28",
+      "partition": "evaluation",
+      "family": "caixa_cache",
+      "language": "pt",
+      "recognizedText": "Limpe o caixa antes do novo deploy.",
+      "token": {
+        "text": "caixa",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "cache",
+          "logit": 4.8
+        },
+        {
+          "text": "caixa",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "cache"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Limpe o cache antes do novo deploy.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "evaluation-guite_git-029",
+      "semanticKey": "evaluation:guite_git:29",
+      "partition": "evaluation",
+      "family": "guite_git",
+      "language": "pt",
+      "recognizedText": "Envie o commit para o guite agora.",
+      "token": {
+        "text": "guite",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "Git",
+          "logit": 4.8
+        },
+        {
+          "text": "guite",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "Git"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Envie o commit para o Git agora.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "evaluation-guite_git-030",
+      "semanticKey": "evaluation:guite_git:30",
+      "partition": "evaluation",
+      "family": "guite_git",
+      "language": "pt",
+      "recognizedText": "Envie o commit para o guite agora.",
+      "token": {
+        "text": "guite",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "Git",
+          "logit": 4.8
+        },
+        {
+          "text": "guite",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "Git"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Envie o commit para o Git agora.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "evaluation-guite_git-031",
+      "semanticKey": "evaluation:guite_git:31",
+      "partition": "evaluation",
+      "family": "guite_git",
+      "language": "pt",
+      "recognizedText": "Envie o commit para o guite agora.",
+      "token": {
+        "text": "guite",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "Git",
+          "logit": 4.8
+        },
+        {
+          "text": "guite",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "Git"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Envie o commit para o Git agora.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "evaluation-guite_git-032",
+      "semanticKey": "evaluation:guite_git:32",
+      "partition": "evaluation",
+      "family": "guite_git",
+      "language": "pt",
+      "recognizedText": "Envie o commit para o guite agora.",
+      "token": {
+        "text": "guite",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "Git",
+          "logit": 4.8
+        },
+        {
+          "text": "guite",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "Git"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Envie o commit para o Git agora.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "evaluation-suifte_swift-033",
+      "semanticKey": "evaluation:suifte_swift:33",
+      "partition": "evaluation",
+      "family": "suifte_swift",
+      "language": "pt",
+      "recognizedText": "Compile o módulo em suífte no Mac.",
+      "token": {
+        "text": "suífte",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "Swift",
+          "logit": 4.8
+        },
+        {
+          "text": "suífte",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "Swift"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Compile o módulo em Swift no Mac.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "evaluation-suifte_swift-034",
+      "semanticKey": "evaluation:suifte_swift:34",
+      "partition": "evaluation",
+      "family": "suifte_swift",
+      "language": "pt",
+      "recognizedText": "Compile o módulo em suífte no Mac.",
+      "token": {
+        "text": "suífte",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "Swift",
+          "logit": 4.8
+        },
+        {
+          "text": "suífte",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "Swift"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Compile o módulo em Swift no Mac.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "evaluation-suifte_swift-035",
+      "semanticKey": "evaluation:suifte_swift:35",
+      "partition": "evaluation",
+      "family": "suifte_swift",
+      "language": "pt",
+      "recognizedText": "Compile o módulo em suífte no Mac.",
+      "token": {
+        "text": "suífte",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "Swift",
+          "logit": 4.8
+        },
+        {
+          "text": "suífte",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "Swift"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Compile o módulo em Swift no Mac.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "evaluation-suifte_swift-036",
+      "semanticKey": "evaluation:suifte_swift:36",
+      "partition": "evaluation",
+      "family": "suifte_swift",
+      "language": "pt",
+      "recognizedText": "Compile o módulo em suífte no Mac.",
+      "token": {
+        "text": "suífte",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "Swift",
+          "logit": 4.8
+        },
+        {
+          "text": "suífte",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "Swift"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Compile o módulo em Swift no Mac.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "evaluation-redmi_readme-037",
+      "semanticKey": "evaluation:redmi_readme:37",
+      "partition": "evaluation",
+      "family": "redmi_readme",
+      "language": "pt",
+      "recognizedText": "Atualize o rédmi do projeto antes do merge.",
+      "token": {
+        "text": "rédmi",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "README",
+          "logit": 4.8
+        },
+        {
+          "text": "rédmi",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "README"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Atualize o README do projeto antes do merge.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "evaluation-redmi_readme-038",
+      "semanticKey": "evaluation:redmi_readme:38",
+      "partition": "evaluation",
+      "family": "redmi_readme",
+      "language": "pt",
+      "recognizedText": "Atualize o rédmi do projeto antes do merge.",
+      "token": {
+        "text": "rédmi",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "README",
+          "logit": 4.8
+        },
+        {
+          "text": "rédmi",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "README"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Atualize o README do projeto antes do merge.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "evaluation-redmi_readme-039",
+      "semanticKey": "evaluation:redmi_readme:39",
+      "partition": "evaluation",
+      "family": "redmi_readme",
+      "language": "pt",
+      "recognizedText": "Atualize o rédmi do projeto antes do merge.",
+      "token": {
+        "text": "rédmi",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "README",
+          "logit": 4.8
+        },
+        {
+          "text": "rédmi",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "README"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Atualize o README do projeto antes do merge.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "evaluation-redmi_readme-040",
+      "semanticKey": "evaluation:redmi_readme:40",
+      "partition": "evaluation",
+      "family": "redmi_readme",
+      "language": "pt",
+      "recognizedText": "Atualize o rédmi do projeto antes do merge.",
+      "token": {
+        "text": "rédmi",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "README",
+          "logit": 4.8
+        },
+        {
+          "text": "rédmi",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "README"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Atualize o README do projeto antes do merge.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "evaluation-deploio_deploy-041",
+      "semanticKey": "evaluation:deploio_deploy:41",
+      "partition": "evaluation",
+      "family": "deploio_deploy",
+      "language": "pt",
+      "recognizedText": "Faça o deploio depois dos testes.",
+      "token": {
+        "text": "deploio",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "deploy",
+          "logit": 4.8
+        },
+        {
+          "text": "deploio",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "deploy"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Faça o deploy depois dos testes.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "evaluation-deploio_deploy-042",
+      "semanticKey": "evaluation:deploio_deploy:42",
+      "partition": "evaluation",
+      "family": "deploio_deploy",
+      "language": "pt",
+      "recognizedText": "Faça o deploio depois dos testes.",
+      "token": {
+        "text": "deploio",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "deploy",
+          "logit": 4.8
+        },
+        {
+          "text": "deploio",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "deploy"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Faça o deploy depois dos testes.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "evaluation-deploio_deploy-043",
+      "semanticKey": "evaluation:deploio_deploy:43",
+      "partition": "evaluation",
+      "family": "deploio_deploy",
+      "language": "pt",
+      "recognizedText": "Faça o deploio depois dos testes.",
+      "token": {
+        "text": "deploio",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "deploy",
+          "logit": 4.8
+        },
+        {
+          "text": "deploio",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "deploy"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Faça o deploy depois dos testes.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "evaluation-deploio_deploy-044",
+      "semanticKey": "evaluation:deploio_deploy:44",
+      "partition": "evaluation",
+      "family": "deploio_deploy",
+      "language": "pt",
+      "recognizedText": "Faça o deploio depois dos testes.",
+      "token": {
+        "text": "deploio",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "deploy",
+          "logit": 4.8
+        },
+        {
+          "text": "deploio",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "deploy"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Faça o deploy depois dos testes.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "evaluation-riqueste_request-045",
+      "semanticKey": "evaluation:riqueste_request:45",
+      "partition": "evaluation",
+      "family": "riqueste_request",
+      "language": "pt",
+      "recognizedText": "A riquieste falhou com código quatrocentos.",
+      "token": {
+        "text": "riquieste",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "request",
+          "logit": 4.8
+        },
+        {
+          "text": "riquieste",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "request"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "A request falhou com código quatrocentos.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "evaluation-riqueste_request-046",
+      "semanticKey": "evaluation:riqueste_request:46",
+      "partition": "evaluation",
+      "family": "riqueste_request",
+      "language": "pt",
+      "recognizedText": "A riquieste falhou com código quatrocentos.",
+      "token": {
+        "text": "riquieste",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "request",
+          "logit": 4.8
+        },
+        {
+          "text": "riquieste",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "request"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "A request falhou com código quatrocentos.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "evaluation-riqueste_request-047",
+      "semanticKey": "evaluation:riqueste_request:47",
+      "partition": "evaluation",
+      "family": "riqueste_request",
+      "language": "pt",
+      "recognizedText": "A riquieste falhou com código quatrocentos.",
+      "token": {
+        "text": "riquieste",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "request",
+          "logit": 4.8
+        },
+        {
+          "text": "riquieste",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "request"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "A request falhou com código quatrocentos.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "evaluation-riqueste_request-048",
+      "semanticKey": "evaluation:riqueste_request:48",
+      "partition": "evaluation",
+      "family": "riqueste_request",
+      "language": "pt",
+      "recognizedText": "A riquieste falhou com código quatrocentos.",
+      "token": {
+        "text": "riquieste",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "request",
+          "logit": 4.8
+        },
+        {
+          "text": "riquieste",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "request"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "A request falhou com código quatrocentos.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "evaluation-branche_branch-049",
+      "semanticKey": "evaluation:branche_branch:49",
+      "partition": "evaluation",
+      "family": "branche_branch",
+      "language": "pt",
+      "recognizedText": "Crie uma branche para essa tarefa.",
+      "token": {
+        "text": "branche",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "branch",
+          "logit": 4.8
+        },
+        {
+          "text": "branche",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "branch"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Crie uma branch para essa tarefa.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "evaluation-branche_branch-050",
+      "semanticKey": "evaluation:branche_branch:50",
+      "partition": "evaluation",
+      "family": "branche_branch",
+      "language": "pt",
+      "recognizedText": "Crie uma branche para essa tarefa.",
+      "token": {
+        "text": "branche",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "branch",
+          "logit": 4.8
+        },
+        {
+          "text": "branche",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "branch"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Crie uma branch para essa tarefa.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "evaluation-branche_branch-051",
+      "semanticKey": "evaluation:branche_branch:51",
+      "partition": "evaluation",
+      "family": "branche_branch",
+      "language": "pt",
+      "recognizedText": "Crie uma branche para essa tarefa.",
+      "token": {
+        "text": "branche",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "branch",
+          "logit": 4.8
+        },
+        {
+          "text": "branche",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "branch"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Crie uma branch para essa tarefa.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "evaluation-branche_branch-052",
+      "semanticKey": "evaluation:branche_branch:52",
+      "partition": "evaluation",
+      "family": "branche_branch",
+      "language": "pt",
+      "recognizedText": "Crie uma branche para essa tarefa.",
+      "token": {
+        "text": "branche",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "branch",
+          "logit": 4.8
+        },
+        {
+          "text": "branche",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "branch"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Crie uma branch para essa tarefa.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "evaluation-verceli_vercel-053",
+      "semanticKey": "evaluation:verceli_vercel:53",
+      "partition": "evaluation",
+      "family": "verceli_vercel",
+      "language": "pt",
+      "recognizedText": "Confira o preview na verceli antes do merge.",
+      "token": {
+        "text": "verceli",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "Vercel",
+          "logit": 4.8
+        },
+        {
+          "text": "verceli",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "Vercel"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Confira o preview na Vercel antes do merge.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "evaluation-verceli_vercel-054",
+      "semanticKey": "evaluation:verceli_vercel:54",
+      "partition": "evaluation",
+      "family": "verceli_vercel",
+      "language": "pt",
+      "recognizedText": "Confira o preview na verceli antes do merge.",
+      "token": {
+        "text": "verceli",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "Vercel",
+          "logit": 4.8
+        },
+        {
+          "text": "verceli",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "Vercel"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Confira o preview na Vercel antes do merge.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "evaluation-verceli_vercel-055",
+      "semanticKey": "evaluation:verceli_vercel:55",
+      "partition": "evaluation",
+      "family": "verceli_vercel",
+      "language": "pt",
+      "recognizedText": "Confira o preview na verceli antes do merge.",
+      "token": {
+        "text": "verceli",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "Vercel",
+          "logit": 4.8
+        },
+        {
+          "text": "verceli",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "Vercel"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Confira o preview na Vercel antes do merge.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "evaluation-verceli_vercel-056",
+      "semanticKey": "evaluation:verceli_vercel:56",
+      "partition": "evaluation",
+      "family": "verceli_vercel",
+      "language": "pt",
+      "recognizedText": "Confira o preview na verceli antes do merge.",
+      "token": {
+        "text": "verceli",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "Vercel",
+          "logit": 4.8
+        },
+        {
+          "text": "verceli",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "Vercel"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Confira o preview na Vercel antes do merge.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "evaluation-coisa_coesa-057",
+      "semanticKey": "evaluation:coisa_coesa:57",
+      "partition": "evaluation",
+      "family": "coisa_coesa",
+      "language": "pt",
+      "recognizedText": "Envie o relatório para a Coisa Energia hoje.",
+      "token": {
+        "text": "Coisa Energia",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "COESA Energia",
+          "logit": 4.8
+        },
+        {
+          "text": "Coisa Energia",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "COESA Energia"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Envie o relatório para a COESA Energia hoje.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "evaluation-coisa_coesa-058",
+      "semanticKey": "evaluation:coisa_coesa:58",
+      "partition": "evaluation",
+      "family": "coisa_coesa",
+      "language": "pt",
+      "recognizedText": "Envie o relatório para a Coisa Energia hoje.",
+      "token": {
+        "text": "Coisa Energia",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "COESA Energia",
+          "logit": 4.8
+        },
+        {
+          "text": "Coisa Energia",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "COESA Energia"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Envie o relatório para a COESA Energia hoje.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "evaluation-coisa_coesa-059",
+      "semanticKey": "evaluation:coisa_coesa:59",
+      "partition": "evaluation",
+      "family": "coisa_coesa",
+      "language": "pt",
+      "recognizedText": "Envie o relatório para a Coisa Energia hoje.",
+      "token": {
+        "text": "Coisa Energia",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "COESA Energia",
+          "logit": 4.8
+        },
+        {
+          "text": "Coisa Energia",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "COESA Energia"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Envie o relatório para a COESA Energia hoje.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "evaluation-coisa_coesa-060",
+      "semanticKey": "evaluation:coisa_coesa:60",
+      "partition": "evaluation",
+      "family": "coisa_coesa",
+      "language": "pt",
+      "recognizedText": "Envie o relatório para a Coisa Energia hoje.",
+      "token": {
+        "text": "Coisa Energia",
+        "probability": 0.45
+      },
+      "alternatives": [
+        {
+          "text": "COESA Energia",
+          "logit": 4.8
+        },
+        {
+          "text": "Coisa Energia",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "COESA Energia"
+      ],
+      "expectedChoice": "replace_1",
+      "expectedText": "Envie o relatório para a COESA Energia hoje.",
+      "protectedSemantics": "none"
+    }
+  ],
+  "controls": [
+    {
+      "id": "controls-rosto_hostel-001",
+      "semanticKey": "controls:rosto_hostel:1",
+      "partition": "controls",
+      "family": "rosto_hostel",
+      "language": "pt",
+      "recognizedText": "Meu rosto ficou vermelho depois da corrida.",
+      "token": {
+        "text": "rosto",
+        "probability": 0.93
+      },
+      "alternatives": [
+        {
+          "text": "Hostel",
+          "logit": 4.8
+        },
+        {
+          "text": "rosto",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "Hostel"
+      ],
+      "expectedChoice": "keep_original",
+      "expectedText": "Meu rosto ficou vermelho depois da corrida.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "controls-rosto_hostel-002",
+      "semanticKey": "controls:rosto_hostel:2",
+      "partition": "controls",
+      "family": "rosto_hostel",
+      "language": "pt",
+      "recognizedText": "Meu rosto ficou vermelho depois da corrida.",
+      "token": {
+        "text": "rosto",
+        "probability": 0.93
+      },
+      "alternatives": [
+        {
+          "text": "Hostel",
+          "logit": 4.8
+        },
+        {
+          "text": "rosto",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "Hostel"
+      ],
+      "expectedChoice": "keep_original",
+      "expectedText": "Meu rosto ficou vermelho depois da corrida.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "controls-sessao_secao-003",
+      "semanticKey": "controls:sessao_secao:3",
+      "partition": "controls",
+      "family": "sessao_secao",
+      "language": "pt",
+      "recognizedText": "A sessão começou às nove horas.",
+      "token": {
+        "text": "sessão",
+        "probability": 0.93
+      },
+      "alternatives": [
+        {
+          "text": "seção",
+          "logit": 4.8
+        },
+        {
+          "text": "sessão",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "seção"
+      ],
+      "expectedChoice": "keep_original",
+      "expectedText": "A sessão começou às nove horas.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "controls-sessao_secao-004",
+      "semanticKey": "controls:sessao_secao:4",
+      "partition": "controls",
+      "family": "sessao_secao",
+      "language": "pt",
+      "recognizedText": "A sessão começou às nove horas.",
+      "token": {
+        "text": "sessão",
+        "probability": 0.93
+      },
+      "alternatives": [
+        {
+          "text": "seção",
+          "logit": 4.8
+        },
+        {
+          "text": "sessão",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "seção"
+      ],
+      "expectedChoice": "keep_original",
+      "expectedText": "A sessão começou às nove horas.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "controls-cesta_sexta-005",
+      "semanticKey": "controls:cesta_sexta:5",
+      "partition": "controls",
+      "family": "cesta_sexta",
+      "language": "pt",
+      "recognizedText": "A cesta de frutas está sobre a mesa.",
+      "token": {
+        "text": "cesta",
+        "probability": 0.93
+      },
+      "alternatives": [
+        {
+          "text": "sexta",
+          "logit": 4.8
+        },
+        {
+          "text": "cesta",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "sexta"
+      ],
+      "expectedChoice": "keep_original",
+      "expectedText": "A cesta de frutas está sobre a mesa.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "controls-cesta_sexta-006",
+      "semanticKey": "controls:cesta_sexta:6",
+      "partition": "controls",
+      "family": "cesta_sexta",
+      "language": "pt",
+      "recognizedText": "A cesta de frutas está sobre a mesa.",
+      "token": {
+        "text": "cesta",
+        "probability": 0.93
+      },
+      "alternatives": [
+        {
+          "text": "sexta",
+          "logit": 4.8
+        },
+        {
+          "text": "cesta",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "sexta"
+      ],
+      "expectedChoice": "keep_original",
+      "expectedText": "A cesta de frutas está sobre a mesa.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "controls-conserto_concerto-007",
+      "semanticKey": "controls:conserto_concerto:7",
+      "partition": "controls",
+      "family": "conserto_concerto",
+      "language": "pt",
+      "recognizedText": "O conserto da bicicleta terminou hoje.",
+      "token": {
+        "text": "conserto",
+        "probability": 0.93
+      },
+      "alternatives": [
+        {
+          "text": "concerto",
+          "logit": 4.8
+        },
+        {
+          "text": "conserto",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "concerto"
+      ],
+      "expectedChoice": "keep_original",
+      "expectedText": "O conserto da bicicleta terminou hoje.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "controls-conserto_concerto-008",
+      "semanticKey": "controls:conserto_concerto:8",
+      "partition": "controls",
+      "family": "conserto_concerto",
+      "language": "pt",
+      "recognizedText": "O conserto da bicicleta terminou hoje.",
+      "token": {
+        "text": "conserto",
+        "probability": 0.93
+      },
+      "alternatives": [
+        {
+          "text": "concerto",
+          "logit": 4.8
+        },
+        {
+          "text": "conserto",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "concerto"
+      ],
+      "expectedChoice": "keep_original",
+      "expectedText": "O conserto da bicicleta terminou hoje.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "controls-censo_senso-009",
+      "semanticKey": "controls:censo_senso:9",
+      "partition": "controls",
+      "family": "censo_senso",
+      "language": "pt",
+      "recognizedText": "O censo populacional começa amanhã.",
+      "token": {
+        "text": "censo",
+        "probability": 0.93
+      },
+      "alternatives": [
+        {
+          "text": "senso",
+          "logit": 4.8
+        },
+        {
+          "text": "censo",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "senso"
+      ],
+      "expectedChoice": "keep_original",
+      "expectedText": "O censo populacional começa amanhã.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "controls-censo_senso-010",
+      "semanticKey": "controls:censo_senso:10",
+      "partition": "controls",
+      "family": "censo_senso",
+      "language": "pt",
+      "recognizedText": "O censo populacional começa amanhã.",
+      "token": {
+        "text": "censo",
+        "probability": 0.93
+      },
+      "alternatives": [
+        {
+          "text": "senso",
+          "logit": 4.8
+        },
+        {
+          "text": "censo",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "senso"
+      ],
+      "expectedChoice": "keep_original",
+      "expectedText": "O censo populacional começa amanhã.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "controls-cela_celula-011",
+      "semanticKey": "controls:cela_celula:11",
+      "partition": "controls",
+      "family": "cela_celula",
+      "language": "pt",
+      "recognizedText": "A cela do presídio foi reformada.",
+      "token": {
+        "text": "cela",
+        "probability": 0.93
+      },
+      "alternatives": [
+        {
+          "text": "célula",
+          "logit": 4.8
+        },
+        {
+          "text": "cela",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "célula"
+      ],
+      "expectedChoice": "keep_original",
+      "expectedText": "A cela do presídio foi reformada.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "controls-cela_celula-012",
+      "semanticKey": "controls:cela_celula:12",
+      "partition": "controls",
+      "family": "cela_celula",
+      "language": "pt",
+      "recognizedText": "A cela do presídio foi reformada.",
+      "token": {
+        "text": "cela",
+        "probability": 0.93
+      },
+      "alternatives": [
+        {
+          "text": "célula",
+          "logit": 4.8
+        },
+        {
+          "text": "cela",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "célula"
+      ],
+      "expectedChoice": "keep_original",
+      "expectedText": "A cela do presídio foi reformada.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "controls-caixa_cache-013",
+      "semanticKey": "controls:caixa_cache:13",
+      "partition": "controls",
+      "family": "caixa_cache",
+      "language": "pt",
+      "recognizedText": "Feche a caixa antes de sair da loja.",
+      "token": {
+        "text": "caixa",
+        "probability": 0.93
+      },
+      "alternatives": [
+        {
+          "text": "cache",
+          "logit": 4.8
+        },
+        {
+          "text": "caixa",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "cache"
+      ],
+      "expectedChoice": "keep_original",
+      "expectedText": "Feche a caixa antes de sair da loja.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "controls-caixa_cache-014",
+      "semanticKey": "controls:caixa_cache:14",
+      "partition": "controls",
+      "family": "caixa_cache",
+      "language": "pt",
+      "recognizedText": "Feche a caixa antes de sair da loja.",
+      "token": {
+        "text": "caixa",
+        "probability": 0.93
+      },
+      "alternatives": [
+        {
+          "text": "cache",
+          "logit": 4.8
+        },
+        {
+          "text": "caixa",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "cache"
+      ],
+      "expectedChoice": "keep_original",
+      "expectedText": "Feche a caixa antes de sair da loja.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "controls-guite_git-015",
+      "semanticKey": "controls:guite_git:15",
+      "partition": "controls",
+      "family": "guite_git",
+      "language": "pt",
+      "recognizedText": "O guiteiro afinou o instrumento.",
+      "token": {
+        "text": "guite",
+        "probability": 0.93
+      },
+      "alternatives": [
+        {
+          "text": "Git",
+          "logit": 4.8
+        },
+        {
+          "text": "guite",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "Git"
+      ],
+      "expectedChoice": "keep_original",
+      "expectedText": "O guiteiro afinou o instrumento.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "controls-guite_git-016",
+      "semanticKey": "controls:guite_git:16",
+      "partition": "controls",
+      "family": "guite_git",
+      "language": "pt",
+      "recognizedText": "O guiteiro afinou o instrumento.",
+      "token": {
+        "text": "guite",
+        "probability": 0.93
+      },
+      "alternatives": [
+        {
+          "text": "Git",
+          "logit": 4.8
+        },
+        {
+          "text": "guite",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "Git"
+      ],
+      "expectedChoice": "keep_original",
+      "expectedText": "O guiteiro afinou o instrumento.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "controls-suifte_swift-017",
+      "semanticKey": "controls:suifte_swift:17",
+      "partition": "controls",
+      "family": "suifte_swift",
+      "language": "pt",
+      "recognizedText": "A fala suífte não é uma palavra técnica.",
+      "token": {
+        "text": "suífte",
+        "probability": 0.93
+      },
+      "alternatives": [
+        {
+          "text": "Swift",
+          "logit": 4.8
+        },
+        {
+          "text": "suífte",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "Swift"
+      ],
+      "expectedChoice": "keep_original",
+      "expectedText": "A fala suífte não é uma palavra técnica.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "controls-suifte_swift-018",
+      "semanticKey": "controls:suifte_swift:18",
+      "partition": "controls",
+      "family": "suifte_swift",
+      "language": "pt",
+      "recognizedText": "A fala suífte não é uma palavra técnica.",
+      "token": {
+        "text": "suífte",
+        "probability": 0.93
+      },
+      "alternatives": [
+        {
+          "text": "Swift",
+          "logit": 4.8
+        },
+        {
+          "text": "suífte",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "Swift"
+      ],
+      "expectedChoice": "keep_original",
+      "expectedText": "A fala suífte não é uma palavra técnica.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "controls-redmi_readme-019",
+      "semanticKey": "controls:redmi_readme:19",
+      "partition": "controls",
+      "family": "redmi_readme",
+      "language": "pt",
+      "recognizedText": "Ele leu o rédmi inventado em voz alta.",
+      "token": {
+        "text": "rédmi",
+        "probability": 0.93
+      },
+      "alternatives": [
+        {
+          "text": "README",
+          "logit": 4.8
+        },
+        {
+          "text": "rédmi",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "README"
+      ],
+      "expectedChoice": "keep_original",
+      "expectedText": "Ele leu o rédmi inventado em voz alta.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "controls-redmi_readme-020",
+      "semanticKey": "controls:redmi_readme:20",
+      "partition": "controls",
+      "family": "redmi_readme",
+      "language": "pt",
+      "recognizedText": "Ele leu o rédmi inventado em voz alta.",
+      "token": {
+        "text": "rédmi",
+        "probability": 0.93
+      },
+      "alternatives": [
+        {
+          "text": "README",
+          "logit": 4.8
+        },
+        {
+          "text": "rédmi",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "README"
+      ],
+      "expectedChoice": "keep_original",
+      "expectedText": "Ele leu o rédmi inventado em voz alta.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "controls-deploio_deploy-021",
+      "semanticKey": "controls:deploio_deploy:21",
+      "partition": "controls",
+      "family": "deploio_deploy",
+      "language": "pt",
+      "recognizedText": "O deploio citado não existe no dicionário.",
+      "token": {
+        "text": "deploio",
+        "probability": 0.93
+      },
+      "alternatives": [
+        {
+          "text": "deploy",
+          "logit": 4.8
+        },
+        {
+          "text": "deploio",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "deploy"
+      ],
+      "expectedChoice": "keep_original",
+      "expectedText": "O deploio citado não existe no dicionário.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "controls-deploio_deploy-022",
+      "semanticKey": "controls:deploio_deploy:22",
+      "partition": "controls",
+      "family": "deploio_deploy",
+      "language": "pt",
+      "recognizedText": "O deploio citado não existe no dicionário.",
+      "token": {
+        "text": "deploio",
+        "probability": 0.93
+      },
+      "alternatives": [
+        {
+          "text": "deploy",
+          "logit": 4.8
+        },
+        {
+          "text": "deploio",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "deploy"
+      ],
+      "expectedChoice": "keep_original",
+      "expectedText": "O deploio citado não existe no dicionário.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "controls-riqueste_request-023",
+      "semanticKey": "controls:riqueste_request:23",
+      "partition": "controls",
+      "family": "riqueste_request",
+      "language": "pt",
+      "recognizedText": "O termo riquieste foi usado como exemplo.",
+      "token": {
+        "text": "riquieste",
+        "probability": 0.93
+      },
+      "alternatives": [
+        {
+          "text": "request",
+          "logit": 4.8
+        },
+        {
+          "text": "riquieste",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "request"
+      ],
+      "expectedChoice": "keep_original",
+      "expectedText": "O termo riquieste foi usado como exemplo.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "controls-riqueste_request-024",
+      "semanticKey": "controls:riqueste_request:24",
+      "partition": "controls",
+      "family": "riqueste_request",
+      "language": "pt",
+      "recognizedText": "O termo riquieste foi usado como exemplo.",
+      "token": {
+        "text": "riquieste",
+        "probability": 0.93
+      },
+      "alternatives": [
+        {
+          "text": "request",
+          "logit": 4.8
+        },
+        {
+          "text": "riquieste",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "request"
+      ],
+      "expectedChoice": "keep_original",
+      "expectedText": "O termo riquieste foi usado como exemplo.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "controls-branche_branch-025",
+      "semanticKey": "controls:branche_branch:25",
+      "partition": "controls",
+      "family": "branche_branch",
+      "language": "pt",
+      "recognizedText": "A branche decorativa ficou na sala.",
+      "token": {
+        "text": "branche",
+        "probability": 0.93
+      },
+      "alternatives": [
+        {
+          "text": "branch",
+          "logit": 4.8
+        },
+        {
+          "text": "branche",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "branch"
+      ],
+      "expectedChoice": "keep_original",
+      "expectedText": "A branche decorativa ficou na sala.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "controls-branche_branch-026",
+      "semanticKey": "controls:branche_branch:26",
+      "partition": "controls",
+      "family": "branche_branch",
+      "language": "pt",
+      "recognizedText": "A branche decorativa ficou na sala.",
+      "token": {
+        "text": "branche",
+        "probability": 0.93
+      },
+      "alternatives": [
+        {
+          "text": "branch",
+          "logit": 4.8
+        },
+        {
+          "text": "branche",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "branch"
+      ],
+      "expectedChoice": "keep_original",
+      "expectedText": "A branche decorativa ficou na sala.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "controls-verceli_vercel-027",
+      "semanticKey": "controls:verceli_vercel:27",
+      "partition": "controls",
+      "family": "verceli_vercel",
+      "language": "pt",
+      "recognizedText": "A palavra verceli apareceu no exercício.",
+      "token": {
+        "text": "verceli",
+        "probability": 0.93
+      },
+      "alternatives": [
+        {
+          "text": "Vercel",
+          "logit": 4.8
+        },
+        {
+          "text": "verceli",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "Vercel"
+      ],
+      "expectedChoice": "keep_original",
+      "expectedText": "A palavra verceli apareceu no exercício.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "controls-verceli_vercel-028",
+      "semanticKey": "controls:verceli_vercel:28",
+      "partition": "controls",
+      "family": "verceli_vercel",
+      "language": "pt",
+      "recognizedText": "A palavra verceli apareceu no exercício.",
+      "token": {
+        "text": "verceli",
+        "probability": 0.93
+      },
+      "alternatives": [
+        {
+          "text": "Vercel",
+          "logit": 4.8
+        },
+        {
+          "text": "verceli",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "Vercel"
+      ],
+      "expectedChoice": "keep_original",
+      "expectedText": "A palavra verceli apareceu no exercício.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "controls-coisa_coesa-029",
+      "semanticKey": "controls:coisa_coesa:29",
+      "partition": "controls",
+      "family": "coisa_coesa",
+      "language": "pt",
+      "recognizedText": "A expressão Coisa Energia chamou atenção na aula.",
+      "token": {
+        "text": "Coisa Energia",
+        "probability": 0.93
+      },
+      "alternatives": [
+        {
+          "text": "COESA Energia",
+          "logit": 4.8
+        },
+        {
+          "text": "Coisa Energia",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "COESA Energia"
+      ],
+      "expectedChoice": "keep_original",
+      "expectedText": "A expressão Coisa Energia chamou atenção na aula.",
+      "protectedSemantics": "none"
+    },
+    {
+      "id": "controls-coisa_coesa-030",
+      "semanticKey": "controls:coisa_coesa:30",
+      "partition": "controls",
+      "family": "coisa_coesa",
+      "language": "pt",
+      "recognizedText": "A expressão Coisa Energia chamou atenção na aula.",
+      "token": {
+        "text": "Coisa Energia",
+        "probability": 0.93
+      },
+      "alternatives": [
+        {
+          "text": "COESA Energia",
+          "logit": 4.8
+        },
+        {
+          "text": "Coisa Energia",
+          "logit": 4.1
+        }
+      ],
+      "vocabulary": [
+        "COESA Energia"
+      ],
+      "expectedChoice": "keep_original",
+      "expectedText": "A expressão Coisa Energia chamou atenção na aula.",
+      "protectedSemantics": "none"
+    }
+  ]
+}

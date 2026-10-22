@@ -25,6 +25,7 @@
 		6DC19E1366479BEA93600203 /* ContextualCorrections.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95005FE135F7FC2ECCFC4182 /* ContextualCorrections.swift */; };
 		726C0EFD16B67C19F84BC57B /* TextInjector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 733DACDEB4AB93D5CF9C3903 /* TextInjector.swift */; };
 		73B3AA17549C4AF0E03C6F25 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = B63B342300F9037E5752DC51 /* PrivacyInfo.xcprivacy */; };
+		76EBD090D429FF5B918B33C2 /* proactive-context-guidance.json in Resources */ = {isa = PBXBuildFile; fileRef = 9F7B2A5790A893847A23D31D /* proactive-context-guidance.json */; };
 		7F9F3C3D5F62A5C2C00065D1 /* ContinuousContextSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02DFABC055D13DE01C25E2F0 /* ContinuousContextSession.swift */; };
 		86DFF8F34B535D75107AB91C /* AudioRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA553ED088000409A1534B10 /* AudioRecorder.swift */; };
 		8A12E0347CA26301459DABDD /* MenuPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E88ECFDFC9BE5A2B95ED500 /* MenuPresentation.swift */; };
@@ -76,6 +77,7 @@
 		75D558D773F2BC3AB3159027 /* SoundLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoundLibrary.swift; sourceTree = "<group>"; };
 		82C866CD9730D225ABB0F72B /* WhisperKeyTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = WhisperKeyTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		95005FE135F7FC2ECCFC4182 /* ContextualCorrections.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContextualCorrections.swift; sourceTree = "<group>"; };
+		9F7B2A5790A893847A23D31D /* proactive-context-guidance.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "proactive-context-guidance.json"; sourceTree = "<group>"; };
 		A7127B7D90D717FFC9B8794D /* WhisperKey.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = WhisperKey.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA553ED088000409A1534B10 /* AudioRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioRecorder.swift; sourceTree = "<group>"; };
 		AAC1740D72EC6212C4303041 /* WhisperTranscriber.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhisperTranscriber.swift; sourceTree = "<group>"; };
@@ -114,6 +116,7 @@
 			children = (
 				B37F99010A42725CC6F7CAEE /* contextual-corrections.json */,
 				1C11C1398C6FAE6E4CB06E53 /* continuous-context-events.json */,
+				9F7B2A5790A893847A23D31D /* proactive-context-guidance.json */,
 			);
 			name = Fixtures;
 			path = Tests/Fixtures;
@@ -310,6 +313,7 @@
 				FD7E2301B6500BD3FE29F902 /* contextual-corrections.json in Resources */,
 				9CB3B868A339A2ABAB2B44CE /* continuous-context-events.json in Resources */,
 				C2AE8F8BDE3F2909C47F5A3E /* jfk.wav in Resources */,
+				76EBD090D429FF5B918B33C2 /* proactive-context-guidance.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

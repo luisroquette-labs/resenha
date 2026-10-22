@@ -54,6 +54,8 @@ targets:
         buildPhase: resources
       - path: Tests/Fixtures/continuous-context-events.json
         buildPhase: resources
+      - path: Tests/Fixtures/proactive-context-guidance.json
+        buildPhase: resources
     dependencies:
       - target: WhisperKey
     settings:
