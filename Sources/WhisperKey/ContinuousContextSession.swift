@@ -137,6 +137,7 @@ final class ContinuousContextSession: @unchecked Sendable {
         var retainedAudio: [Float] = []
         var retainedAudioRange: Range<Int64>?
         var activeWork: ContinuousContextWork?
+        var activeWorkCancellation: (@Sendable () -> Void)?
         var pendingWork: ContinuousContextWork?
         var lastWorkDispatchedAt: TimeInterval?
         var contextualPreviewText: String?
@@ -187,7 +188,8 @@ final class ContinuousContextSession: @unchecked Sendable {
         kind: ContinuousContextRevisionKind,
         finalAttemptID: UUID?
     ) -> ContinuousContextRevision? {
-        lock.withLock {
+        var cancellation: (@Sendable () -> Void)?
+        let revision: ContinuousContextRevision? = lock.withLock {
             guard storage.state == .capturing,
                   !event.isStale,
                   !event.text.isEmpty,
@@ -250,7 +252,7 @@ final class ContinuousContextSession: @unchecked Sendable {
                     language: storage.language,
                     generationIDs: generations
                 )
-                invalidateWorkAndBuffers(keepingFinalCandidate: true)
+                cancellation = invalidateWorkAndBuffers(keepingFinalCandidate: true)
             } else {
                 let eligibleAt = max(
                     revision.emittedAt,
@@ -275,6 +277,8 @@ final class ContinuousContextSession: @unchecked Sendable {
             }
             return revision
         }
+        cancellation?()
+        return revision
     }
 
     func retainAudio(_ snapshot: AudioSampleSnapshot) {
@@ -308,11 +312,33 @@ final class ContinuousContextSession: @unchecked Sendable {
     }
 
     @discardableResult
+    func registerCancellation(
+        for work: ContinuousContextWork,
+        cancellation: @escaping @Sendable () -> Void
+    ) -> Bool {
+        lock.withLock {
+            guard storage.state == .capturing,
+                  storage.activeWork?.id == work.id,
+                  storage.activeWorkCancellation == nil else { return false }
+            storage.activeWorkCancellation = cancellation
+            return true
+        }
+    }
+
+    func unregisterCancellation(for work: ContinuousContextWork) {
+        lock.withLock {
+            guard storage.activeWork?.id == work.id else { return }
+            storage.activeWorkCancellation = nil
+        }
+    }
+
+    @discardableResult
     func completeWork(_ work: ContinuousContextWork) -> Bool {
         lock.withLock {
             guard storage.state == .capturing,
                   storage.activeWork?.id == work.id else { return false }
             storage.activeWork = nil
+            storage.activeWorkCancellation = nil
             return work.attemptID == storage.attemptID
                 && work.generationIDs.session == storage.sessionGeneration
                 && work.revision == storage.latestRevision?.revision
@@ -330,6 +356,7 @@ final class ContinuousContextSession: @unchecked Sendable {
                     storeGeneration: result.identity.storeGeneration
                   ) == result.identity else { return false }
             storage.activeWork = nil
+            storage.activeWorkCancellation = nil
             guard work.attemptID == storage.attemptID,
                   work.generationIDs.session == storage.sessionGeneration,
                   work.revision == storage.latestRevision?.revision,
@@ -342,13 +369,16 @@ final class ContinuousContextSession: @unchecked Sendable {
     }
 
     func commitFinalCandidate() -> ContinuousContextFinalCandidate? {
-        lock.withLock {
+        var cancellation: (@Sendable () -> Void)?
+        let candidate: ContinuousContextFinalCandidate? = lock.withLock {
             guard storage.state.canTransition(to: .committed),
                   let candidate = storage.finalCandidate else { return nil }
             storage.state = .committed
-            clearSensitiveState()
+            cancellation = clearSensitiveState()
             return candidate
         }
+        cancellation?()
+        return candidate
     }
 
     func cancel() {
@@ -371,30 +401,38 @@ final class ContinuousContextSession: @unchecked Sendable {
     }
 
     private func terminate(as terminal: ContinuousContextSessionState) {
+        var cancellation: (@Sendable () -> Void)?
         lock.withLock {
             guard storage.state.canTransition(to: terminal) else { return }
             storage.state = terminal
-            clearSensitiveState()
+            cancellation = clearSensitiveState()
         }
+        cancellation?()
     }
 
-    private func invalidateWorkAndBuffers(keepingFinalCandidate: Bool) {
+    private func invalidateWorkAndBuffers(
+        keepingFinalCandidate: Bool
+    ) -> (@Sendable () -> Void)? {
+        let cancellation = storage.activeWorkCancellation
         storage.sessionGeneration &+= 1
         storage.activeWork = nil
+        storage.activeWorkCancellation = nil
         storage.pendingWork = nil
         storage.retainedAudio.removeAll(keepingCapacity: false)
         storage.retainedAudioRange = nil
         storage.retainedContext = ""
         storage.contextualPreviewText = nil
         if !keepingFinalCandidate { storage.finalCandidate = nil }
+        return cancellation
     }
 
-    private func clearSensitiveState() {
-        invalidateWorkAndBuffers(keepingFinalCandidate: false)
+    private func clearSensitiveState() -> (@Sendable () -> Void)? {
+        let cancellation = invalidateWorkAndBuffers(keepingFinalCandidate: false)
         storage.lastSourceText = ""
         storage.latestRevision = nil
         storage.attemptID = nil
         storage.language = ""
+        return cancellation
     }
 
     private static func commonPrefixCharacterCount(_ lhs: String, _ rhs: String) -> Int {
@@ -533,14 +571,20 @@ final class RevisionBoundJevLoop {
                 await race.finish(nil)
             } catch { }
         }
+        let cancelWork: @Sendable () -> Void = {
+            providerTask.cancel()
+            timeoutTask.cancel()
+            Task { await race.finish(nil) }
+        }
+        let ownsWork = session.registerCancellation(for: work, cancellation: cancelWork)
+        defer { session.unregisterCancellation(for: work) }
+        if !ownsWork { cancelWork() }
         let raced = await withTaskCancellationHandler {
             await withCheckedContinuation { continuation in
                 Task { await race.install(continuation) }
             }
         } onCancel: {
-            providerTask.cancel()
-            timeoutTask.cancel()
-            Task { await race.finish(nil) }
+            cancelWork()
         }
         timeoutTask.cancel()
 

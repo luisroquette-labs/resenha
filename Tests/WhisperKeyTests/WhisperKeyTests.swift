@@ -2725,6 +2725,99 @@ final class WhisperKeyTests: XCTestCase {
         }
     }
 
+    private final class RevisionLifetimeProbe: @unchecked Sendable {}
+
+    private final class RevisionWeakLifetimeReference {
+        weak var value: RevisionLifetimeProbe?
+        init(_ value: RevisionLifetimeProbe) { self.value = value }
+    }
+
+    private final class RevisionCancellationProvider: ContextualDecisionProvider, @unchecked Sendable {
+        private let lock = NSLock()
+        private var continuation: CheckedContinuation<ContextualDecisionReceipt, Error>?
+        private var startWaiters: [CheckedContinuation<Void, Never>] = []
+        private var cancelled = false
+        private var retainedRequestText: String?
+        private var retainedRequestProbe: RevisionLifetimeProbe?
+        private var cancellationCountStorage = 0
+
+        init(requestProbe: RevisionLifetimeProbe) {
+            retainedRequestProbe = requestProbe
+        }
+
+        func decide(
+            sentence: String,
+            language: String,
+            occurrences: [ContextualCorrectionOccurrence],
+            deadline: ContextualInstant
+        ) async throws -> ContextualDecisionReceipt {
+            try await withTaskCancellationHandler {
+                try await withCheckedThrowingContinuation { continuation in
+                    var startWaiters: [CheckedContinuation<Void, Never>] = []
+                    let cancelImmediately = lock.withLock {
+                        retainedRequestText = sentence
+                        startWaiters = self.startWaiters
+                        self.startWaiters.removeAll()
+                        guard !cancelled else { return true }
+                        self.continuation = continuation
+                        return false
+                    }
+                    startWaiters.forEach { $0.resume() }
+                    if cancelImmediately {
+                        continuation.resume(throwing: CancellationError())
+                    }
+                }
+            } onCancel: {
+                self.cancelRequest()
+            }
+        }
+
+        func waitUntilStarted() async {
+            let shouldWait = lock.withLock { retainedRequestText == nil }
+            guard shouldWait else { return }
+            await withCheckedContinuation { waiter in
+                let alreadyStarted = lock.withLock {
+                    guard retainedRequestText == nil else { return true }
+                    startWaiters.append(waiter)
+                    return false
+                }
+                if alreadyStarted { waiter.resume() }
+            }
+        }
+
+        @discardableResult
+        func completeLate(with receipt: ContextualDecisionReceipt) -> Bool {
+            let continuation = lock.withLock {
+                let continuation = self.continuation
+                self.continuation = nil
+                return continuation
+            }
+            continuation?.resume(returning: receipt)
+            return continuation != nil
+        }
+
+        var cancellationCount: Int { lock.withLock { cancellationCountStorage } }
+        var capturedRequestText: String? { lock.withLock { retainedRequestText } }
+
+        private func cancelRequest() {
+            let continuation = lock.withLock {
+                cancelled = true
+                cancellationCountStorage += 1
+                retainedRequestText = nil
+                retainedRequestProbe = nil
+                let continuation = self.continuation
+                self.continuation = nil
+                return continuation
+            }
+            continuation?.resume(throwing: CancellationError())
+        }
+    }
+
+    private final class RevisionWeakProviderReference {
+        weak var value: RevisionCancellationProvider?
+        init(_ value: RevisionCancellationProvider) { self.value = value }
+    }
+
     private final class RevisionUptime: @unchecked Sendable {
         private let lock = NSLock()
         private var value = 0.0
@@ -2844,6 +2937,85 @@ final class WhisperKeyTests: XCTestCase {
                 "boundary-\(boundary)"
             )
         }
+    }
+
+    @MainActor
+    private func runRevisionBoundCancellationScenario() async throws -> (
+        RevisionWeakLifetimeReference,
+        RevisionWeakProviderReference
+    ) {
+        let uptime = RevisionUptime()
+        let session = ContinuousContextSession(now: { uptime.now() })
+        XCTAssertTrue(session.start(attemptID: UUID(), language: "pt"))
+        _ = session.ingest(SessionEvent(
+            snapshotID: 1, sampleRange: 0..<100, capturedAt: 0,
+            candidateAt: 0, text: "Reservei um rosto."
+        ))
+        let snapshot = ContextualCorrectionStoreSnapshot(
+            examples: [revisionExample], generation: 7, health: .healthy
+        )
+        var requestProbe: RevisionLifetimeProbe? = RevisionLifetimeProbe()
+        weak var weakRequestProbe = requestProbe
+        var taskProbe: RevisionLifetimeProbe? = RevisionLifetimeProbe()
+        let weakTaskProbe = RevisionWeakLifetimeReference(try XCTUnwrap(taskProbe))
+        var provider: RevisionCancellationProvider? = RevisionCancellationProvider(
+            requestProbe: try XCTUnwrap(requestProbe)
+        )
+        let weakProvider = RevisionWeakProviderReference(try XCTUnwrap(provider))
+        var loop: RevisionBoundJevLoop? = RevisionBoundJevLoop(
+            session: session,
+            provider: try XCTUnwrap(provider),
+            time: ManualContextualTime(),
+            storeSnapshot: { snapshot },
+            policyGeneration: { 11 }
+        )
+        var task: Task<RevisionBoundContextualResult?, Never>? = Task { [
+            loop = try XCTUnwrap(loop),
+            taskProbe = try XCTUnwrap(taskProbe)
+        ] in
+            defer { withExtendedLifetime(taskProbe) {} }
+            return await loop.evaluateNext(scope: .testDouble)
+        }
+        requestProbe = nil
+        taskProbe = nil
+        await provider?.waitUntilStarted()
+        XCTAssertEqual(provider?.capturedRequestText, "Reservei um rosto.")
+
+        uptime.set(milliseconds: 100)
+        _ = session.ingest(SessionEvent(
+            snapshotID: 2, sampleRange: 0..<200, capturedAt: 0.05,
+            candidateAt: 0.1, text: "Reservei outro rosto."
+        ))
+        XCTAssertEqual(session.scheduledWorkCount, 2)
+
+        session.cancel()
+        let result = await task?.value
+        XCTAssertEqual(result?.text, "Reservei um rosto.")
+        XCTAssertEqual(provider?.cancellationCount, 1)
+        XCTAssertNil(provider?.capturedRequestText)
+        XCTAssertNil(weakRequestProbe)
+        XCTAssertEqual(session.state, .cancelled)
+        XCTAssertEqual(session.scheduledWorkCount, 0)
+        XCTAssertNil(session.latestRevision)
+        XCTAssertNil(session.contextualPreviewText)
+        XCTAssertFalse(provider?.completeLate(with: revisionReceipt()) ?? true)
+        XCTAssertNil(session.commitFinalCandidate())
+        XCTAssertEqual(session.state, .cancelled)
+        XCTAssertNil(session.contextualPreviewText)
+
+        task = nil
+        loop = nil
+        provider = nil
+        await Task.yield()
+        return (weakTaskProbe, weakProvider)
+    }
+
+    @MainActor
+    func testRevisionBoundLoopSessionCancelCancelsProviderAndReleasesRequestOwnership() async throws {
+        let (taskProbe, provider) = try await runRevisionBoundCancellationScenario()
+        await Task.yield()
+        XCTAssertNil(taskProbe.value)
+        XCTAssertNil(provider.value)
     }
 
     @MainActor
