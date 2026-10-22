@@ -5958,6 +5958,107 @@ extension ContextualTransportCorpusTests {
         XCTAssertEqual(fixture.calibrationThresholds(), selected)
     }
 
+    func testProactiveCandidateUsesLearnedThenAcousticThenVocabularyEvidence() throws {
+        let thresholds = try XCTUnwrap(
+            ProactiveContextFixture.load(bundle: Bundle(for: ContextualTransportCorpusTests.self))
+                .fixture.calibrationThresholds()
+        )
+        let text = "Reservei uma cama no rosto."
+        let acousticEvidence = [WhisperTokenEvidence(
+            tokenID: 1,
+            text: " rosto",
+            probability: 0.40,
+            alternatives: [
+                .init(tokenID: 2, text: " Hostel", logit: 8),
+                .init(tokenID: 3, text: " posto", logit: 7)
+            ]
+        )]
+        let learned = ContextualCorrectionExample(
+            id: UUID(), language: "pt", heard: "rosto", canonical: "Hostel",
+            sentence: text, occurrenceOrdinal: 1
+        )
+
+        let learnedCandidate = try XCTUnwrap(ProactiveContextualCandidateGenerator.candidate(
+            text: text, language: "pt", tokenEvidence: [], glossaryTerms: [],
+            examples: [learned], thresholds: thresholds
+        ))
+        XCTAssertEqual(learnedCandidate.alternatives.map(\.source), [.learned])
+
+        let acousticCandidate = try XCTUnwrap(ProactiveContextualCandidateGenerator.candidate(
+            text: text, language: "pt", tokenEvidence: acousticEvidence, glossaryTerms: ["Hostel"],
+            examples: [], thresholds: thresholds
+        ))
+        XCTAssertEqual(acousticCandidate.alternatives.map(\.value), ["Hostel", "posto"])
+        XCTAssertTrue(acousticCandidate.alternatives.allSatisfy { $0.source == .acoustic })
+
+        let vocabularyEvidence = [WhisperTokenEvidence(
+            tokenID: 1, text: " rosto", probability: 0.40, alternatives: []
+        )]
+        let vocabularyCandidate = try XCTUnwrap(ProactiveContextualCandidateGenerator.candidate(
+            text: text, language: "pt-BR", tokenEvidence: vocabularyEvidence,
+            glossaryTerms: ["Hostel"], examples: [], thresholds: thresholds
+        ))
+        XCTAssertEqual(vocabularyCandidate.canonical, "Hostel")
+        XCTAssertEqual(vocabularyCandidate.alternatives.map(\.source), [.vocabulary])
+    }
+
+    func testProactiveCandidateRequiresLowConfidencePortugueseAndExactBinding() throws {
+        let thresholds = try XCTUnwrap(
+            ProactiveContextFixture.load(bundle: Bundle(for: ContextualTransportCorpusTests.self))
+                .fixture.calibrationThresholds()
+        )
+        func candidate(text: String, language: String, probability: Float) -> ContextualCorrectionOccurrence? {
+            ProactiveContextualCandidateGenerator.candidate(
+                text: text,
+                language: language,
+                tokenEvidence: [.init(tokenID: 1, text: " rosto", probability: probability, alternatives: [])],
+                glossaryTerms: ["Hostel"], examples: [], thresholds: thresholds
+            )
+        }
+
+        XCTAssertNil(candidate(text: "Reservei no rosto.", language: "en", probability: 0.40))
+        XCTAssertNil(candidate(text: "Reservei no rosto.", language: "pt", probability: 0.90))
+        XCTAssertNil(candidate(text: "Reservei no rosto e lavei o rosto.", language: "pt", probability: 0.40))
+        XCTAssertNil(candidate(text: "Reservei no posto.", language: "pt", probability: 0.40))
+    }
+
+    func testProactiveCandidateRejectsProtectedAndNonLexicalTerms() throws {
+        let thresholds = try XCTUnwrap(
+            ProactiveContextFixture.load(bundle: Bundle(for: ContextualTransportCorpusTests.self))
+                .fixture.calibrationThresholds()
+        )
+        for term in ["123", "R$", "a@b.com", "https://a.com", "user_name", "não", "rosto!", "rosto�"] {
+            let candidate = ProactiveContextualCandidateGenerator.candidate(
+                text: "Teste \(term)", language: "pt",
+                tokenEvidence: [.init(tokenID: 1, text: term, probability: 0.20, alternatives: [])],
+                glossaryTerms: ["Hostel"], examples: [], thresholds: thresholds
+            )
+            XCTAssertNil(candidate, term)
+        }
+        let caseOnly = ProactiveContextualCandidateGenerator.candidate(
+            text: "Teste rosto", language: "pt",
+            tokenEvidence: [.init(tokenID: 1, text: "rosto", probability: 0.20, alternatives: [])],
+            glossaryTerms: ["ROSTO"], examples: [], thresholds: thresholds
+        )
+        XCTAssertNil(caseOnly)
+        XCTAssertNil(ProactiveContextualCandidateGenerator.candidate(
+            text: "Teste rosto", language: "pt", tokenEvidence: [],
+            glossaryTerms: ["Hostel"], examples: [], thresholds: thresholds
+        ))
+        XCTAssertNil(ProactiveContextualCandidateGenerator.candidate(
+            text: "Teste rosto", language: "pt",
+            tokenEvidence: [.init(tokenID: 1, text: "rosto", probability: 0.20, alternatives: [])],
+            glossaryTerms: [], examples: [], thresholds: thresholds
+        ))
+
+        let deterministicTie = try XCTUnwrap(ProactiveContextualCandidateGenerator.candidate(
+            text: "Teste mato", language: "pt",
+            tokenEvidence: [.init(tokenID: 1, text: "mato", probability: 0.20, alternatives: [])],
+            glossaryTerms: ["rato", "pato"], examples: [], thresholds: thresholds
+        ))
+        XCTAssertEqual(deterministicTie.canonical, "pato")
+    }
+
     func testContinuousContextCorpusIsBundledFrozenAndSchemaValid() throws {
         let testBundle = Bundle(for: ContextualTransportCorpusTests.self)
         let loaded = try ContinuousContextEventsFixture.load(bundle: testBundle)
@@ -8258,6 +8359,30 @@ private extension JSONEncoder {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
         return encoder
+    }
+}
+
+extension ContextualResolverTests {
+    func testProactiveAlternativesMustUseContiguousOptionIDs() throws {
+        let text = "Reservei o quarto 12."
+        let range = try XCTUnwrap(text.range(of: "quarto 12"))
+        let receipt = ContextualDecisionReceipt(
+            decisions: [.init(
+                questionID: "o1", choice: .keepOriginal, confidence: 0.99,
+                chosenProbability: 0.99, runnerUpProbability: 0.01
+            )],
+            resolvedModel: "test", inputTokens: nil, outputTokens: nil, costUSD: nil
+        )
+        let invalidID = ContextualCorrectionOccurrence(
+            questionID: "o1", heard: "quarto 12", canonical: "quarto 12",
+            alternatives: [
+                .init(id: "replace_2", value: "quarto 12", source: .acoustic)
+            ],
+            ordinal: 1, range: range
+        )
+        XCTAssertNil(ContextualCorrectionResolver.applying(
+            receipt: receipt, occurrences: [invalidID], to: text
+        ))
     }
 }
 

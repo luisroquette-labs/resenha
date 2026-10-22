@@ -353,8 +353,221 @@ struct ContextualCorrectionOccurrence: Equatable, Sendable {
     let questionID: String
     let heard: String
     let canonical: String
+    let alternatives: [ContextualReplacementOption]
     let ordinal: Int
     let range: Range<String.Index>
+
+    init(
+        questionID: String,
+        heard: String,
+        canonical: String,
+        alternatives: [ContextualReplacementOption]? = nil,
+        ordinal: Int,
+        range: Range<String.Index>
+    ) {
+        self.questionID = questionID
+        self.heard = heard
+        self.canonical = canonical
+        self.alternatives = alternatives ?? [
+            ContextualReplacementOption(id: "replace_1", value: canonical, source: .learned)
+        ]
+        self.ordinal = ordinal
+        self.range = range
+    }
+}
+
+enum ContextualCandidateSource: String, Codable, Sendable {
+    case learned
+    case acoustic
+    case vocabulary
+}
+
+struct ContextualReplacementOption: Equatable, Sendable {
+    let id: String
+    let value: String
+    let source: ContextualCandidateSource
+}
+
+struct ProactiveContextualCandidateGenerator {
+    static func candidate(
+        text: String,
+        language: String,
+        tokenEvidence: [WhisperTokenEvidence],
+        glossaryTerms: [String],
+        examples: [ContextualCorrectionExample],
+        thresholds: ProactiveCandidateThresholds
+    ) -> ContextualCorrectionOccurrence? {
+        if let learned = ContextualCorrectionResolver.matchCandidates(
+            examples: examples,
+            text: text,
+            language: language
+        ).first {
+            return learned
+        }
+        guard language.lowercased().hasPrefix("pt") else { return nil }
+
+        for (evidenceIndex, evidence) in tokenEvidence.enumerated() {
+            let heard = evidence.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard evidence.probability.isFinite,
+                  evidence.probability <= thresholds.tokenProbability,
+                  isSafeTerm(heard) else { continue }
+            let foldedHeard = folded(heard)
+            let ranges = wholeTermRanges(heard, in: text)
+            let evidenceOrdinal = tokenEvidence.prefix(evidenceIndex + 1).filter {
+                folded($0.text.trimmingCharacters(in: .whitespacesAndNewlines)) == foldedHeard
+            }.count
+            let evidenceCount = tokenEvidence.filter {
+                folded($0.text.trimmingCharacters(in: .whitespacesAndNewlines)) == foldedHeard
+            }.count
+            guard !ranges.isEmpty,
+                  ranges.count == evidenceCount,
+                  evidenceOrdinal > 0,
+                  evidenceOrdinal <= ranges.count else { continue }
+
+            let acoustic = acousticOptions(
+                evidence: evidence,
+                heard: heard,
+                maximumLogitGap: thresholds.maximumLogitGap
+            )
+            if !acoustic.isEmpty {
+                return occurrence(heard: heard, options: acoustic, ordinal: evidenceOrdinal, ranges: ranges)
+            }
+
+            let vocabulary = vocabularyOptions(
+                heard: heard,
+                terms: Array(glossaryTerms.prefix(200)) + Array(examples.prefix(100).map(\.canonical)),
+                minimumSimilarity: thresholds.minimumVocabularySimilarity
+            )
+            if !vocabulary.isEmpty {
+                return occurrence(heard: heard, options: vocabulary, ordinal: evidenceOrdinal, ranges: ranges)
+            }
+        }
+        return nil
+    }
+
+    private static func occurrence(
+        heard: String,
+        options: [ContextualReplacementOption],
+        ordinal: Int,
+        ranges: [Range<String.Index>]
+    ) -> ContextualCorrectionOccurrence? {
+        guard ordinal > 0, ordinal <= ranges.count, let first = options.first else { return nil }
+        let range = ranges[ordinal - 1]
+        return ContextualCorrectionOccurrence(
+            questionID: "o1",
+            heard: heard,
+            canonical: first.value,
+            alternatives: options,
+            ordinal: ordinal,
+            range: range
+        )
+    }
+
+    private static func acousticOptions(
+        evidence: WhisperTokenEvidence,
+        heard: String,
+        maximumLogitGap: Float
+    ) -> [ContextualReplacementOption] {
+        guard let best = evidence.alternatives.first?.logit, best.isFinite else { return [] }
+        var seen = Set<String>()
+        let candidates: [ContextualReplacementOption] = evidence.alternatives.compactMap { alternative in
+            let value = alternative.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            let identity = folded(value)
+            guard alternative.logit.isFinite,
+                  best - alternative.logit <= maximumLogitGap,
+                  identity != folded(heard),
+                  seen.insert(identity).inserted,
+                  isSafeReplacement(heard: heard, replacement: value) else { return nil }
+            return ContextualReplacementOption(id: "", value: value, source: .acoustic)
+        }
+        return candidates.prefix(3).enumerated().map { index, option in
+            ContextualReplacementOption(id: "replace_\(index + 1)", value: option.value, source: option.source)
+        }
+    }
+
+    private static func vocabularyOptions(
+        heard: String,
+        terms: [String],
+        minimumSimilarity: Double
+    ) -> [ContextualReplacementOption] {
+        var seen = Set<String>()
+        let ranked = terms.compactMap { raw -> (String, String, Double)? in
+            let value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            let identity = folded(value)
+            guard identity != folded(heard),
+                  seen.insert(identity).inserted,
+                  isSafeReplacement(heard: heard, replacement: value) else { return nil }
+            return (value, identity, similarity(folded(heard), identity))
+        }.filter { $0.2 >= minimumSimilarity }
+            .sorted { lhs, rhs in lhs.2 == rhs.2 ? lhs.1 < rhs.1 : lhs.2 > rhs.2 }
+        guard let best = ranked.first else { return [] }
+        return [.init(id: "replace_1", value: best.0, source: .vocabulary)]
+    }
+
+    private static func isSafeReplacement(heard: String, replacement: String) -> Bool {
+        guard isSafeTerm(replacement), folded(heard) != folded(replacement) else { return false }
+        return heard.filter(\.isNumber) == replacement.filter(\.isNumber)
+    }
+
+    private static func isSafeTerm(_ value: String) -> Bool {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        let protected = CharacterSet(charactersIn: "@:/\\_`$€£¥")
+        let allowedPunctuation = CharacterSet(charactersIn: "-'’ ")
+        guard !trimmed.isEmpty,
+              trimmed.rangeOfCharacter(from: .decimalDigits) == nil,
+              trimmed.rangeOfCharacter(from: protected) == nil,
+              trimmed.unicodeScalars.contains(where: CharacterSet.letters.contains),
+              trimmed.unicodeScalars.allSatisfy({
+                  CharacterSet.letters.contains($0) || allowedPunctuation.contains($0)
+              }) else { return false }
+        return !Set(["não", "nao", "nunca", "jamais", "sem"]).contains(folded(trimmed))
+    }
+
+    private static func folded(_ value: String) -> String {
+        value.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: Locale(identifier: "pt_BR"))
+            .lowercased()
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func wholeTermRanges(_ term: String, in text: String) -> [Range<String.Index>] {
+        let escaped = NSRegularExpression.escapedPattern(for: term)
+        guard let regex = try? NSRegularExpression(
+            pattern: "(?<![\\p{L}\\p{N}])\(escaped)(?![\\p{L}\\p{N}])",
+            options: [.caseInsensitive]
+        ) else { return [] }
+        return regex.matches(
+            in: text,
+            range: NSRange(text.startIndex..<text.endIndex, in: text)
+        ).compactMap { Range($0.range, in: text) }
+    }
+
+    private static func similarity(_ lhs: String, _ rhs: String) -> Double {
+        let left = Array(lhs)
+        let right = Array(rhs)
+        guard !left.isEmpty || !right.isEmpty else { return 1 }
+        var table = Array(
+            repeating: Array(repeating: 0, count: right.count + 1),
+            count: left.count + 1
+        )
+        for index in 0...left.count { table[index][0] = index }
+        for index in 0...right.count { table[0][index] = index }
+        if !left.isEmpty, !right.isEmpty {
+            for i in 1...left.count {
+                for j in 1...right.count {
+                    let cost = left[i - 1] == right[j - 1] ? 0 : 1
+                    table[i][j] = min(
+                        table[i - 1][j] + 1,
+                        table[i][j - 1] + 1,
+                        table[i - 1][j - 1] + cost
+                    )
+                    if i > 1, j > 1, left[i - 1] == right[j - 2], left[i - 2] == right[j - 1] {
+                        table[i][j] = min(table[i][j], table[i - 2][j - 2] + cost)
+                    }
+                }
+            }
+        }
+        return 1 - Double(table[left.count][right.count]) / Double(max(left.count, right.count))
+    }
 }
 
 enum ContextualDecisionChoice: String, Codable, Sendable {
@@ -984,9 +1197,14 @@ final class ContextualCorrectionResolver: ContextualCorrectionResolverContract {
     ) -> Bool {
         var previousUpperBound: String.Index?
         for (index, occurrence) in occurrences.enumerated() {
+            let expectedOptionIDs = occurrence.alternatives.indices.map { "replace_\($0 + 1)" }
             guard occurrence.questionID == "o\(index + 1)",
                   !occurrence.heard.isEmpty,
                   !occurrence.canonical.isEmpty,
+                  (1...3).contains(occurrence.alternatives.count),
+                  occurrence.alternatives.map(\.id) == expectedOptionIDs,
+                  occurrence.alternatives.first?.value == occurrence.canonical,
+                  occurrence.alternatives.allSatisfy({ !$0.value.isEmpty }),
                   occurrence.ordinal > 0,
                   occurrence.range.lowerBound.samePosition(in: text.utf16) != nil,
                   occurrence.range.upperBound.samePosition(in: text.utf16) != nil,
@@ -1022,16 +1240,18 @@ final class ContextualCorrectionResolver: ContextualCorrectionResolverContract {
     ) -> Bool {
         let negations = Set(["não", "nao", "nunca", "jamais", "sem"])
         return occurrences.allSatisfy { occurrence in
-            let heardDigits = occurrence.heard.filter(\.isNumber)
-            let canonicalDigits = occurrence.canonical.filter(\.isNumber)
-            guard heardDigits == canonicalDigits else { return false }
-            let heardWords = Set(occurrence.heard.lowercased().split(whereSeparator: { !$0.isLetter }).map(String.init))
-            let canonicalWords = Set(occurrence.canonical.lowercased().split(whereSeparator: { !$0.isLetter }).map(String.init))
-            guard heardWords.intersection(negations) == canonicalWords.intersection(negations) else { return false }
-            let protected = CharacterSet(charactersIn: "@:/\\")
-            let heardProtected = occurrence.heard.unicodeScalars.filter { protected.contains($0) }
-            let canonicalProtected = occurrence.canonical.unicodeScalars.filter { protected.contains($0) }
-            return heardProtected.elementsEqual(canonicalProtected)
+            occurrence.alternatives.allSatisfy { alternative in
+                let heardDigits = occurrence.heard.filter(\.isNumber)
+                let replacementDigits = alternative.value.filter(\.isNumber)
+                guard heardDigits == replacementDigits else { return false }
+                let heardWords = Set(occurrence.heard.lowercased().split(whereSeparator: { !$0.isLetter }).map(String.init))
+                let replacementWords = Set(alternative.value.lowercased().split(whereSeparator: { !$0.isLetter }).map(String.init))
+                guard heardWords.intersection(negations) == replacementWords.intersection(negations) else { return false }
+                let protected = CharacterSet(charactersIn: "@:/\\")
+                let heardProtected = occurrence.heard.unicodeScalars.filter { protected.contains($0) }
+                let replacementProtected = alternative.value.unicodeScalars.filter { protected.contains($0) }
+                return heardProtected.elementsEqual(replacementProtected)
+            }
         }
     }
 
