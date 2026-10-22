@@ -424,11 +424,18 @@ enum ContextualTransportScope: Equatable, Sendable {
     case syntheticDiagnostic
 }
 
+enum PersonalRemoteReleaseDecision: String, CaseIterable, Equatable, Sendable {
+    case personalRemoteAvailable
+
+    static let current = PersonalRemoteReleaseDecision.personalRemoteAvailable
+}
+
 enum ContextualPolicyInvalidationReason: Sendable {
     case optedOut
     case credentialDeleted
     case storeMutated
     case appTerminated
+    case authorityChanged
 }
 
 struct ContextualPolicyToken: Equatable, Sendable {
@@ -493,6 +500,34 @@ struct ContextualResolutionRequest: Sendable {
     let language: String
     let policyToken: ContextualPolicyToken
     let storeGenerationAtStart: UInt64
+    let revisionIdentity: ContextualRevisionWindowIdentity?
+
+    init(
+        attemptID: UUID,
+        text: String,
+        language: String,
+        policyToken: ContextualPolicyToken,
+        storeGenerationAtStart: UInt64,
+        revisionIdentity: ContextualRevisionWindowIdentity? = nil
+    ) {
+        self.attemptID = attemptID
+        self.text = text
+        self.language = language
+        self.policyToken = policyToken
+        self.storeGenerationAtStart = storeGenerationAtStart
+        self.revisionIdentity = revisionIdentity
+    }
+}
+
+struct ContextualRevisionWindowIdentity: Equatable, Sendable {
+    let attemptID: UUID
+    let revision: UInt64
+    let snapshotID: UInt64
+    let sampleRange: Range<Int64>
+    let mutableSourceCharacterRange: Range<Int>
+    let generationIDs: ContinuousContextGenerationIDs
+    let policyGeneration: UInt64
+    let storeGeneration: UInt64
 }
 
 struct ContextualDecisionTrace: Equatable, Sendable {
@@ -512,6 +547,33 @@ struct ValidatedContextualOutcome: Equatable, Sendable {
 struct ContextualResolutionResult: Equatable, Sendable {
     let text: String
     let outcome: ValidatedContextualOutcome
+    let revisionIdentity: ContextualRevisionWindowIdentity?
+
+    init(
+        text: String,
+        outcome: ValidatedContextualOutcome,
+        revisionIdentity: ContextualRevisionWindowIdentity? = nil
+    ) {
+        self.text = text
+        self.outcome = outcome
+        self.revisionIdentity = revisionIdentity
+    }
+}
+
+struct RevisionBoundContextualResult: Equatable, Sendable {
+    let identity: ContextualRevisionWindowIdentity
+    let originalText: String
+    let text: String
+    let outcome: ValidatedContextualOutcome
+}
+
+struct RevisionBoundContextualRequest: Sendable {
+    let identity: ContextualRevisionWindowIdentity
+    let originalText: String
+    let sentence: String
+    let language: String
+    let occurrences: [ContextualCorrectionOccurrence]
+    let deadline: ContextualInstant
 }
 
 protocol ContextualDecisionValidating: Sendable {
@@ -572,7 +634,7 @@ protocol ContextualCorrectionResolverContract: ContextualResolving {
         ) -> [ContextualCorrectionOccurrence],
         time: any ContextualMonotonicTime
     )
-    static func matchCandidates(
+    nonisolated static func matchCandidates(
         examples: [ContextualCorrectionExample],
         text: String,
         language: String
@@ -620,6 +682,7 @@ final class ContextualCorrectionResolver: ContextualCorrectionResolverContract {
     private let candidateMatcher: CandidateMatcher
     private let time: any ContextualMonotonicTime
     private let validator: ContextualDecisionValidator
+    private let onProviderError: @MainActor @Sendable (Error) -> Void
 
     init(
         store: ContextualCorrectionStore,
@@ -641,6 +704,29 @@ final class ContextualCorrectionResolver: ContextualCorrectionResolverContract {
         self.storeGeneration = storeGeneration
         self.candidateMatcher = candidateMatcher
         self.time = time
+        onProviderError = { _ in }
+        validator = .init()
+    }
+
+    init(
+        store: ContextualCorrectionStore,
+        policy: ContextualCorrectionPolicy,
+        provider: any ContextualDecisionProvider,
+        storeGeneration: @escaping @MainActor @Sendable () -> UInt64,
+        time: any ContextualMonotonicTime,
+        onProviderError: @escaping @MainActor @Sendable (Error) -> Void
+    ) {
+        self.store = store
+        self.policy = policy
+        self.provider = provider
+        self.storeGeneration = storeGeneration
+        self.candidateMatcher = { examples, text, language in
+            ContextualCorrectionResolver.matchCandidates(
+                examples: examples, text: text, language: language
+            )
+        }
+        self.time = time
+        self.onProviderError = onProviderError
         validator = .init()
     }
 
@@ -652,7 +738,8 @@ final class ContextualCorrectionResolver: ContextualCorrectionResolverContract {
         let storeSnapshot = store.snapshot
         let original = ContextualResolutionResult(
             text: request.text,
-            outcome: .init(category: .abstained, decisions: [])
+            outcome: .init(category: .abstained, decisions: []),
+            revisionIdentity: request.revisionIdentity
         )
         let deadline = ContextualInstant(offset: time.now().offset + .milliseconds(900))
         guard storeSnapshot.health == .healthy,
@@ -701,7 +788,10 @@ final class ContextualCorrectionResolver: ContextualCorrectionResolverContract {
             providerTask.cancel()
             return original
         }
-        guard case .success(let receipt) = raced else { return original }
+        guard case .success(let receipt) = raced else {
+            if case .failure(let error) = raced { onProviderError(error) }
+            return original
+        }
         let currentSnapshot = store.snapshot
         guard currentSnapshot.health == .healthy,
               currentSnapshot.generation == storeSnapshot.generation,
@@ -712,7 +802,7 @@ final class ContextualCorrectionResolver: ContextualCorrectionResolverContract {
         let outcome = validator.validate(receipt: receipt, occurrences: occurrences)
         guard outcome.category != .abstained else { return original }
         guard outcome.category == .replaced else {
-            return .init(text: request.text, outcome: outcome)
+            return .init(text: request.text, outcome: outcome, revisionIdentity: request.revisionIdentity)
         }
         var resolved = request.text
         let replacements = zip(occurrences, receipt.decisions)
@@ -721,10 +811,10 @@ final class ContextualCorrectionResolver: ContextualCorrectionResolverContract {
         for (occurrence, _) in replacements {
             resolved.replaceSubrange(occurrence.range, with: occurrence.canonical)
         }
-        return .init(text: resolved, outcome: outcome)
+        return .init(text: resolved, outcome: outcome, revisionIdentity: request.revisionIdentity)
     }
 
-    static func matchCandidates(
+    nonisolated static func matchCandidates(
         examples: [ContextualCorrectionExample],
         text: String,
         language: String
@@ -764,7 +854,39 @@ final class ContextualCorrectionResolver: ContextualCorrectionResolverContract {
         }
     }
 
-    private static func decisionSentence(
+    nonisolated static func validatedDecisionInput(
+        examples: [ContextualCorrectionExample],
+        text: String,
+        language: String
+    ) -> (occurrences: [ContextualCorrectionOccurrence], sentence: String)? {
+        let occurrences = matchCandidates(examples: examples, text: text, language: language)
+        guard (1...3).contains(occurrences.count),
+              areValid(occurrences, in: text),
+              let sentence = decisionSentence(in: text, occurrences: occurrences),
+              sentence.count <= 600,
+              preservesProtectedSemantics(occurrences) else { return nil }
+        return (occurrences, sentence)
+    }
+
+    nonisolated static func applying(
+        receipt: ContextualDecisionReceipt,
+        occurrences: [ContextualCorrectionOccurrence],
+        to original: String
+    ) -> String? {
+        guard receipt.decisions.count == occurrences.count,
+              receipt.decisions.map(\.questionID) == occurrences.map(\.questionID),
+              areValid(occurrences, in: original) else { return nil }
+        var resolved = original
+        let replacements = zip(occurrences, receipt.decisions)
+            .filter { $0.1.choice == .replace }
+            .sorted { $0.0.range.lowerBound > $1.0.range.lowerBound }
+        for (occurrence, _) in replacements {
+            resolved.replaceSubrange(occurrence.range, with: occurrence.canonical)
+        }
+        return resolved
+    }
+
+    nonisolated private static func decisionSentence(
         in text: String,
         occurrences: [ContextualCorrectionOccurrence]
     ) -> String? {
@@ -787,7 +909,7 @@ final class ContextualCorrectionResolver: ContextualCorrectionResolverContract {
         return String(text[containingRanges[0]])
     }
 
-    private static func areValid(
+    nonisolated private static func areValid(
         _ occurrences: [ContextualCorrectionOccurrence],
         in text: String
     ) -> Bool {
@@ -814,7 +936,7 @@ final class ContextualCorrectionResolver: ContextualCorrectionResolverContract {
         return true
     }
 
-    private static func wholeTermRanges(_ term: String, in text: String) -> [Range<String.Index>] {
+    nonisolated private static func wholeTermRanges(_ term: String, in text: String) -> [Range<String.Index>] {
         let escaped = NSRegularExpression.escapedPattern(for: term)
         guard let regex = try? NSRegularExpression(
             pattern: "(?<![\\p{L}\\p{N}])\(escaped)(?![\\p{L}\\p{N}])",
@@ -826,8 +948,26 @@ final class ContextualCorrectionResolver: ContextualCorrectionResolverContract {
         ).compactMap { Range($0.range, in: text) }
     }
 
+    nonisolated private static func preservesProtectedSemantics(
+        _ occurrences: [ContextualCorrectionOccurrence]
+    ) -> Bool {
+        let negations = Set(["não", "nao", "nunca", "jamais", "sem"])
+        return occurrences.allSatisfy { occurrence in
+            let heardDigits = occurrence.heard.filter(\.isNumber)
+            let canonicalDigits = occurrence.canonical.filter(\.isNumber)
+            guard heardDigits == canonicalDigits else { return false }
+            let heardWords = Set(occurrence.heard.lowercased().split(whereSeparator: { !$0.isLetter }).map(String.init))
+            let canonicalWords = Set(occurrence.canonical.lowercased().split(whereSeparator: { !$0.isLetter }).map(String.init))
+            guard heardWords.intersection(negations) == canonicalWords.intersection(negations) else { return false }
+            let protected = CharacterSet(charactersIn: "@:/\\")
+            let heardProtected = occurrence.heard.unicodeScalars.filter { protected.contains($0) }
+            let canonicalProtected = occurrence.canonical.unicodeScalars.filter { protected.contains($0) }
+            return heardProtected.elementsEqual(canonicalProtected)
+        }
+    }
+
     private func isProviderEligible(_ scope: ContextualTransportScope) -> Bool {
-        scope == .syntheticDiagnostic || scope == .testDouble
+        scope == .personalDictation || scope == .syntheticDiagnostic || scope == .testDouble
     }
 }
 
@@ -916,6 +1056,7 @@ enum OpenRouterDecisionsError: Error, Equatable, Sendable {
     case redirected
     case malformedResponse
     case responseTooLarge
+    case requestTooLarge
     case timedOut
     case transportUnavailable
     case cancelled
@@ -1066,6 +1207,46 @@ final class DecisionsDelegateState: DecisionsDelegateStateContract, @unchecked S
     }
 }
 
+struct DecisionsTransportTaskIdentity: Hashable, Sendable {
+    private let session: ObjectIdentifier
+    let taskIdentifier: Int
+
+    init(session: AnyObject, taskIdentifier: Int) {
+        self.session = ObjectIdentifier(session)
+        self.taskIdentifier = taskIdentifier
+    }
+}
+
+final class DecisionsTransportContextRegistry<Value>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var values: [DecisionsTransportTaskIdentity: Value] = [:]
+
+    func insert(_ value: Value, session: AnyObject, taskIdentifier: Int) {
+        lock.withLock { values[.init(session: session, taskIdentifier: taskIdentifier)] = value }
+    }
+
+    func lookup(session: AnyObject, taskIdentifier: Int) -> Value? {
+        lock.withLock { values[.init(session: session, taskIdentifier: taskIdentifier)] }
+    }
+
+    func remove(session: AnyObject, taskIdentifier: Int) -> Value? {
+        lock.withLock { values.removeValue(forKey: .init(session: session, taskIdentifier: taskIdentifier)) }
+    }
+
+    func withValue<Result>(
+        session: AnyObject,
+        taskIdentifier: Int,
+        _ body: (Value) -> Result
+    ) -> Result? {
+        lock.withLock {
+            guard let value = values[.init(session: session, taskIdentifier: taskIdentifier)] else {
+                return nil
+            }
+            return body(value)
+        }
+    }
+}
+
 final class URLSessionDecisionsStreamingTransport: NSObject, URLSessionDecisionsStreamingTransportContract,
     URLSessionDataDelegate, URLSessionTaskDelegate, @unchecked Sendable {
     private final class TaskCanceller: @unchecked Sendable {
@@ -1087,8 +1268,7 @@ final class URLSessionDecisionsStreamingTransport: NSObject, URLSessionDecisions
     }
 
     private let time: any ContextualMonotonicTime
-    private let lock = NSLock()
-    private var contexts: [Int: RequestContext] = [:]
+    private let contexts = DecisionsTransportContextRegistry<RequestContext>()
 
     init(time: any ContextualMonotonicTime) { self.time = time }
 
@@ -1114,17 +1294,19 @@ final class URLSessionDecisionsStreamingTransport: NSObject, URLSessionDecisions
         let task = session.dataTask(with: request)
         canceller.task = task
         let context = RequestContext(state: state, session: session)
-        lock.withLock { contexts[task.taskIdentifier] = context }
+        contexts.insert(context, session: session, taskIdentifier: task.taskIdentifier)
         context.deadlineTask = Task { [weak self, weak state, time] in
             do {
                 try await time.sleep(until: deadline)
-                self?.lock.withLock { context.completionError = OpenRouterDecisionsError.timedOut }
+                self?.contexts.withValue(session: session, taskIdentifier: task.taskIdentifier) {
+                    $0.completionError = OpenRouterDecisionsError.timedOut
+                }
                 state?.fail(OpenRouterDecisionsError.timedOut)
             } catch { }
         }
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
-                lock.withLock { context.responseContinuation = continuation }
+                context.responseContinuation = continuation
                 task.resume()
             }
         } onCancel: { state.cancel() }
@@ -1137,8 +1319,7 @@ final class URLSessionDecisionsStreamingTransport: NSObject, URLSessionDecisions
         completionHandler: @escaping (URLSession.ResponseDisposition) -> Void
     ) {
         var continuation: CheckedContinuation<DecisionsResponseStream, Error>?
-        let context = lock.withLock { () -> RequestContext? in
-            guard let context = contexts[dataTask.taskIdentifier] else { return nil }
+        let context = contexts.withValue(session: session, taskIdentifier: dataTask.taskIdentifier) { context in
             continuation = context.responseContinuation
             context.responseContinuation = nil
             return context
@@ -1158,7 +1339,7 @@ final class URLSessionDecisionsStreamingTransport: NSObject, URLSessionDecisions
     }
 
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
-        lock.withLock { contexts[dataTask.taskIdentifier] }?.state.receive(data)
+        contexts.lookup(session: session, taskIdentifier: dataTask.taskIdentifier)?.state.receive(data)
     }
 
     func urlSession(
@@ -1166,7 +1347,7 @@ final class URLSessionDecisionsStreamingTransport: NSObject, URLSessionDecisions
         task: URLSessionTask,
         didCompleteWithError error: Error?
     ) {
-        let context = lock.withLock { contexts.removeValue(forKey: task.taskIdentifier) }
+        let context = contexts.remove(session: session, taskIdentifier: task.taskIdentifier)
         context?.deadlineTask?.cancel()
         if let continuation = context?.responseContinuation {
             context?.responseContinuation = nil
@@ -1185,9 +1366,8 @@ final class URLSessionDecisionsStreamingTransport: NSObject, URLSessionDecisions
         newRequest request: URLRequest,
         completionHandler: @escaping (URLRequest?) -> Void
     ) {
-        let context = lock.withLock { () -> RequestContext? in
-            let context = contexts[task.taskIdentifier]
-            context?.completionError = OpenRouterDecisionsError.redirected
+        let context = contexts.withValue(session: session, taskIdentifier: task.taskIdentifier) { context in
+            context.completionError = OpenRouterDecisionsError.redirected
             return context
         }
         context?.state.fail(OpenRouterDecisionsError.redirected)
@@ -1212,9 +1392,12 @@ actor OpenRouterDecisionsClient: OpenRouterDecisionsClientContract {
     static let endpoint = URL(string: "https://openrouter.ai/api/alpha/decisions")!
     static let model = "typesafe/jev-1.14"
     static let maximumResponseBytes = 64 * 1_024
+    static let maximumRequestBytes = 4_096
 
     private let transport: any DecisionsStreamingTransport
     private let credential: @Sendable () throws -> String
+    private let beforeTransportOpen: @Sendable () async -> Bool
+    private let onFailure: @Sendable (Error) async -> Void
 
     init(
         transport: any DecisionsStreamingTransport,
@@ -1222,6 +1405,20 @@ actor OpenRouterDecisionsClient: OpenRouterDecisionsClientContract {
     ) {
         self.transport = transport
         self.credential = credential
+        beforeTransportOpen = { true }
+        onFailure = { _ in }
+    }
+
+    init(
+        transport: any DecisionsStreamingTransport,
+        credential: @escaping @Sendable () throws -> String,
+        beforeTransportOpen: @escaping @Sendable () async -> Bool,
+        onFailure: @escaping @Sendable (Error) async -> Void = { _ in }
+    ) {
+        self.transport = transport
+        self.credential = credential
+        self.beforeTransportOpen = beforeTransportOpen
+        self.onFailure = onFailure
     }
 
     func decide(
@@ -1230,13 +1427,18 @@ actor OpenRouterDecisionsClient: OpenRouterDecisionsClientContract {
         occurrences: [ContextualCorrectionOccurrence],
         deadline: ContextualInstant
     ) async throws -> ContextualDecisionReceipt {
-        try await perform(
-            sentence: sentence,
-            language: language,
-            occurrences: occurrences,
-            deadline: deadline,
-            beforeTransportOpen: { true }
-        )
+        do {
+            return try await perform(
+                sentence: sentence,
+                language: language,
+                occurrences: occurrences,
+                deadline: deadline,
+                beforeTransportOpen: beforeTransportOpen
+            )
+        } catch {
+            await onFailure(error)
+            throw error
+        }
     }
 
     func decideSynthetic(
@@ -1268,11 +1470,11 @@ actor OpenRouterDecisionsClient: OpenRouterDecisionsClientContract {
         request.httpMethod = "POST"
         request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONEncoder().encode(Self.requestDTO(
+        request.httpBody = try Self.requestBody(
             sentence: sentence,
             language: language,
             occurrences: occurrences
-        ))
+        )
         guard await beforeTransportOpen() else {
             throw OpenRouterDecisionsError.authorizationInvalidated
         }
@@ -1347,6 +1549,22 @@ actor OpenRouterDecisionsClient: OpenRouterDecisionsClientContract {
         )
     }
 
+    static func requestBody(
+        sentence: String,
+        language: String,
+        occurrences: [ContextualCorrectionOccurrence]
+    ) throws -> Data {
+        let body = try JSONEncoder().encode(requestDTO(
+            sentence: sentence,
+            language: language,
+            occurrences: occurrences
+        ))
+        guard body.count <= maximumRequestBytes else {
+            throw OpenRouterDecisionsError.requestTooLarge
+        }
+        return body
+    }
+
     static func receipt(
         from data: Data,
         occurrences: [ContextualCorrectionOccurrence]
@@ -1397,7 +1615,8 @@ protocol ContextualCredentialStore: Sendable {
 
 enum KeychainContextualCredentialConstants {
     static let service = "br.com.luisroquette.Resenha.contextual-corrections"
-    static let account = "openrouter-synthetic-diagnostic"
+    static let syntheticAccount = "openrouter-synthetic-diagnostic"
+    static let personalAccount = "openrouter-personal-context"
 }
 
 enum ContextualCredentialError: Error, Equatable, Sendable {
@@ -1405,9 +1624,27 @@ enum ContextualCredentialError: Error, Equatable, Sendable {
     case keychainStatus(OSStatus)
 }
 
+enum OpenRouterCredential {
+    private static let prefix = "sk-or-v1-"
+
+    static func isValid(_ value: String) -> Bool {
+        guard value.hasPrefix(prefix) else { return false }
+        let suffix = value.dropFirst(prefix.count).utf8
+        return suffix.count == 64 && suffix.allSatisfy {
+            (48...57).contains($0) || (97...102).contains($0)
+        }
+    }
+}
+
 struct KeychainContextualCredentialStore: ContextualCredentialStore {
+    let account: String
+
+    init(account: String = KeychainContextualCredentialConstants.syntheticAccount) {
+        self.account = account
+    }
+
     func save(_ value: String) throws {
-        guard !value.isEmpty, let data = value.data(using: .utf8) else {
+        guard OpenRouterCredential.isValid(value), let data = value.data(using: .utf8) else {
             throw ContextualCredentialError.invalidValue
         }
         let query = baseQuery
@@ -1434,7 +1671,7 @@ struct KeychainContextualCredentialStore: ContextualCredentialStore {
         guard status == errSecSuccess,
               let data = result as? Data,
               let value = String(data: data, encoding: .utf8),
-              !value.isEmpty else {
+              OpenRouterCredential.isValid(value) else {
             throw status == errSecSuccess
                 ? ContextualCredentialError.invalidValue
                 : ContextualCredentialError.keychainStatus(status)
@@ -1453,7 +1690,7 @@ struct KeychainContextualCredentialStore: ContextualCredentialStore {
         [
             kSecClass: kSecClassGenericPassword,
             kSecAttrService: KeychainContextualCredentialConstants.service,
-            kSecAttrAccount: KeychainContextualCredentialConstants.account,
+            kSecAttrAccount: account,
             kSecAttrSynchronizable: false
         ]
     }
@@ -1697,6 +1934,209 @@ actor SyntheticDiagnosticGuard: SyntheticDiagnosticGuardStore {
 protocol ContextualOptInStore: AnyObject {
     var contextualCorrectionsEnabled: Bool { get }
     func persistContextualCorrectionsEnabled(_ enabled: Bool) throws
+}
+
+@MainActor
+protocol PersonalRemoteOptInStore: AnyObject {
+    var contextualCorrectionsEnabled: Bool { get }
+    var personalRemoteEnabled: Bool { get }
+    func persistPersonalRemoteEnabled(_ enabled: Bool) throws
+}
+
+@MainActor
+protocol PersonalRemoteAuthorizationStateStore: AnyObject {
+    func loadAuthorizedEpoch() throws -> UUID?
+    func persistAuthorizedEpoch(_ epoch: UUID) throws
+    func persistRevoked() throws
+}
+
+@MainActor
+final class UserDefaultsPersonalRemoteAuthorizationStateStore:
+    PersonalRemoteAuthorizationStateStore
+{
+    private static let key = "resenha.personalRemoteAuthorizationState"
+    private static let revoked = "revoked"
+    private let defaults: UserDefaults
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+    }
+
+    func loadAuthorizedEpoch() throws -> UUID? {
+        guard let value = defaults.object(forKey: Self.key) else { return nil }
+        guard let value = value as? String else {
+            throw PersonalRemoteAuthorizationError.durableStateUnavailable
+        }
+        if value == Self.revoked { return nil }
+        guard value.hasPrefix("authorized:"),
+              let epoch = UUID(uuidString: String(value.dropFirst("authorized:".count))) else {
+            throw PersonalRemoteAuthorizationError.durableStateUnavailable
+        }
+        return epoch
+    }
+
+    func persistAuthorizedEpoch(_ epoch: UUID) throws {
+        try persistAndVerify("authorized:\(epoch.uuidString)")
+    }
+
+    func persistRevoked() throws {
+        try persistAndVerify(Self.revoked)
+    }
+
+    private func persistAndVerify(_ value: String) throws {
+        defaults.set(value, forKey: Self.key)
+        guard defaults.object(forKey: Self.key) as? String == value else {
+            throw PersonalRemoteAuthorizationError.durableStateUnavailable
+        }
+    }
+}
+
+struct PersonalRemoteAuthorizationHealth: Equatable, Sendable {
+    let releaseDecision: PersonalRemoteReleaseDecision
+    let enabled: Bool
+    let credentialPresent: Bool
+    let locallyEligible: Bool
+    let durablyAuthorized: Bool
+    let revokedInProcess: Bool
+
+    var canDispatch: Bool {
+        releaseDecision == .personalRemoteAvailable
+            && enabled && credentialPresent && locallyEligible && durablyAuthorized
+            && !revokedInProcess
+    }
+}
+
+enum PersonalRemoteAuthorizationError: Error, Equatable, Sendable {
+    case consentRequired
+    case credentialUnverified
+    case durableStateUnavailable
+    case locallyIneligible
+    case releaseUnavailable
+}
+
+@MainActor
+protocol PersonalRemoteAuthorizationManaging: AnyObject {
+    func authorizePersonalRemote(explicitConsent: Bool, credential: String) throws
+    func revokePersonalRemote() throws
+    func personalRemoteHealth() -> PersonalRemoteAuthorizationHealth
+}
+
+@MainActor
+final class PersonalRemoteAuthorizationOwner: PersonalRemoteAuthorizationManaging {
+    private let optInStore: any PersonalRemoteOptInStore
+    private let credentialStore: any ContextualCredentialStore
+    private let authorizationStateStore: any PersonalRemoteAuthorizationStateStore
+    private let policy: ContextualCorrectionPolicy
+    private let storeSnapshot: @MainActor @Sendable () -> ContextualCorrectionStoreSnapshot
+    private var revokedInProcess = false
+
+    init(
+        optInStore: any PersonalRemoteOptInStore,
+        credentialStore: any ContextualCredentialStore,
+        authorizationStateStore: any PersonalRemoteAuthorizationStateStore,
+        policy: ContextualCorrectionPolicy,
+        storeSnapshot: @escaping @MainActor @Sendable () -> ContextualCorrectionStoreSnapshot
+    ) {
+        self.optInStore = optInStore
+        self.credentialStore = credentialStore
+        self.authorizationStateStore = authorizationStateStore
+        self.policy = policy
+        self.storeSnapshot = storeSnapshot
+    }
+
+    func authorizePersonalRemote(explicitConsent: Bool, credential: String) throws {
+        guard PersonalRemoteReleaseDecision.current == .personalRemoteAvailable else {
+            throw PersonalRemoteAuthorizationError.releaseUnavailable
+        }
+        guard explicitConsent else { throw PersonalRemoteAuthorizationError.consentRequired }
+        guard isLocallyEligible else { throw PersonalRemoteAuthorizationError.locallyIneligible }
+        revokedInProcess = true
+        policy.invalidate(.authorityChanged)
+        do {
+            try authorizationStateStore.persistRevoked()
+            try credentialStore.save(credential)
+            guard try credentialStore.load() == credential else {
+                throw PersonalRemoteAuthorizationError.credentialUnverified
+            }
+            try optInStore.persistPersonalRemoteEnabled(true)
+            guard optInStore.personalRemoteEnabled else {
+                throw PersonalRemoteAuthorizationError.credentialUnverified
+            }
+            let epoch = UUID()
+            try authorizationStateStore.persistAuthorizedEpoch(epoch)
+            guard try authorizationStateStore.loadAuthorizedEpoch() == epoch else {
+                throw PersonalRemoteAuthorizationError.durableStateUnavailable
+            }
+            revokedInProcess = false
+            policy.invalidate(.authorityChanged)
+        } catch {
+            revokedInProcess = true
+            try? authorizationStateStore.persistRevoked()
+            try? optInStore.persistPersonalRemoteEnabled(false)
+            try? credentialStore.delete()
+            policy.invalidate(.authorityChanged)
+            throw error
+        }
+    }
+
+    func revokePersonalRemote() throws {
+        revokedInProcess = true
+        policy.invalidate(.authorityChanged)
+        var firstError: Error?
+        do { try authorizationStateStore.persistRevoked() }
+        catch { firstError = error }
+        do { try optInStore.persistPersonalRemoteEnabled(false) }
+        catch { if firstError == nil { firstError = error } }
+        do { try credentialStore.delete() }
+        catch { if firstError == nil { firstError = error } }
+        let credentialStillPresent: Bool
+        do { credentialStillPresent = try credentialStore.load() != nil }
+        catch {
+            credentialStillPresent = true
+            if firstError == nil { firstError = error }
+        }
+        let durableStillAuthorized: Bool
+        do { durableStillAuthorized = try authorizationStateStore.loadAuthorizedEpoch() != nil }
+        catch {
+            durableStillAuthorized = true
+            if firstError == nil { firstError = error }
+        }
+        guard !optInStore.personalRemoteEnabled, !credentialStillPresent,
+              !durableStillAuthorized, firstError == nil else {
+            throw firstError ?? PersonalRemoteAuthorizationError.credentialUnverified
+        }
+    }
+
+    func personalRemoteHealth() -> PersonalRemoteAuthorizationHealth {
+        let credential = (try? credentialStore.load()) ?? nil
+        let durablyAuthorized: Bool
+        do { durablyAuthorized = try authorizationStateStore.loadAuthorizedEpoch() != nil }
+        catch { durablyAuthorized = false }
+        return .init(
+            releaseDecision: .current,
+            enabled: optInStore.personalRemoteEnabled,
+            credentialPresent: credential?.isEmpty == false,
+            locallyEligible: isLocallyEligible,
+            durablyAuthorized: durablyAuthorized,
+            revokedInProcess: revokedInProcess
+        )
+    }
+
+    func issueToken() -> ContextualPolicyToken {
+        policy.issueToken(scope: personalRemoteHealth().canDispatch ? .personalDictation : .disabled)
+    }
+
+    func handleProviderError(_ error: Error) {
+        guard case OpenRouterDecisionsError.invalidStatus(let status) = error,
+              [401, 402, 403, 429].contains(status) else { return }
+        try? revokePersonalRemote()
+    }
+
+    private var isLocallyEligible: Bool {
+        let snapshot = storeSnapshot()
+        return optInStore.contextualCorrectionsEnabled
+            && snapshot.health == .healthy && !snapshot.examples.isEmpty
+    }
 }
 
 struct SyntheticDiagnosticAuthorizationHealth: Equatable, Sendable {
@@ -1984,7 +2424,7 @@ final class SyntheticDiagnosticController: SyntheticDiagnosticControllerContract
                 throw SyntheticDiagnosticError.providerRejected
             case .transportUnavailable: throw SyntheticDiagnosticError.transportUnavailable
             case .cancelled: throw SyntheticDiagnosticError.cancelled
-            case .malformedResponse, .responseTooLarge:
+            case .malformedResponse, .responseTooLarge, .requestTooLarge:
                 throw SyntheticDiagnosticError.invalidResponse
             default: throw SyntheticDiagnosticError.authorizationUnavailable
             }

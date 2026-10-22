@@ -101,15 +101,40 @@ final class WhisperExecutionControl: @unchecked Sendable {
 }
 
 struct WhisperTranscriber: Sendable {
+    typealias Inference = @Sendable ([Float], String, String, WhisperExecutionControl) throws -> String
     static let maximumRuntime: TimeInterval = 10 * 60
     private static let engine = EmbeddedWhisperEngine()
-    var infer: @Sendable ([Float], String, String, WhisperExecutionControl) throws -> String = { samples, language, prompt, control in
+    private static let defaultInference: Inference = { samples, language, prompt, control in
         try WhisperTranscriber.engine.transcribe(samples: samples, model: WhisperPaths.resolve().model,
             language: language, prompt: prompt, control: control)
     }
-    var removeAudio: @Sendable (URL) throws -> Void = { url in
+    private static let defaultRollingScheduler = RollingWhisperScheduler(infer: defaultInference)
+    private static let defaultRemoveAudio: @Sendable (URL) throws -> Void = { url in
         do { try FileManager.default.removeItem(at: url) }
         catch let error as CocoaError where error.code == .fileNoSuchFile { }
+    }
+
+    private let infer: Inference
+    private let removeAudio: @Sendable (URL) throws -> Void
+    private let supportsRollingInference: Bool
+    private let rollingScheduler: RollingWhisperScheduler
+
+    init() {
+        infer = Self.defaultInference
+        removeAudio = Self.defaultRemoveAudio
+        supportsRollingInference = true
+        rollingScheduler = Self.defaultRollingScheduler
+    }
+
+    init(
+        infer: @escaping Inference,
+        removeAudio: @escaping @Sendable (URL) throws -> Void = WhisperTranscriber.defaultRemoveAudio,
+        supportsRollingInference: Bool = true
+    ) {
+        self.infer = infer
+        self.removeAudio = removeAudio
+        self.supportsRollingInference = supportsRollingInference
+        rollingScheduler = RollingWhisperScheduler(infer: infer)
     }
 
     // Consumes the captured WAV; callers that need a reusable fixture must pass a copy.
@@ -122,6 +147,24 @@ struct WhisperTranscriber: Sendable {
         try await withTaskCancellationHandler {
             try consumeRecording(audioURL: audioURL, language: language, glossaryText: glossaryText, control: control)
         } onCancel: { control.cancel() }
+    }
+
+    func makeRollingRecognizer(
+        language: TranscriptionLanguage = .portuguese,
+        glossaryText: String = TranscriptionGlossary.defaultText,
+        maximumRuntime: TimeInterval = WhisperTranscriber.maximumRuntime,
+        clock: @escaping @Sendable () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
+        onHypothesis: @escaping @Sendable (RollingWhisperHypothesis) -> Void
+    ) -> RollingWhisperRecognizer? {
+        guard supportsRollingInference else { return nil }
+        return RollingWhisperRecognizer(
+            scheduler: rollingScheduler,
+            language: language.rawValue,
+            prompt: TranscriptionGlossary(text: glossaryText).prompt,
+            maximumRuntime: maximumRuntime,
+            clock: clock,
+            onHypothesis: onHypothesis
+        )
     }
 
     private func consumeRecording(audioURL: URL, language: TranscriptionLanguage,
@@ -157,6 +200,219 @@ struct WhisperTranscriber: Sendable {
         try file.read(into: buffer)
         guard let channel = buffer.floatChannelData?.pointee else { throw WhisperError.invalidAudio }
         return Array(UnsafeBufferPointer(start: channel, count: Int(buffer.frameLength)))
+    }
+}
+
+struct RollingWhisperHypothesis: Equatable, Sendable {
+    let snapshotID: UInt64
+    let sampleRange: Range<Int64>
+    let capturedAt: TimeInterval
+    let candidateAt: TimeInterval
+    let text: String
+    let isStale: Bool
+
+    var isProvisional: Bool { true }
+}
+
+final class RollingWhisperRecognizer: @unchecked Sendable {
+    private let scheduler: RollingWhisperScheduler
+    private let sessionID: UUID
+
+    init(
+        scheduler: RollingWhisperScheduler,
+        language: String,
+        prompt: String,
+        maximumRuntime: TimeInterval,
+        clock: @escaping @Sendable () -> TimeInterval,
+        onHypothesis: @escaping @Sendable (RollingWhisperHypothesis) -> Void
+    ) {
+        self.scheduler = scheduler
+        sessionID = scheduler.register(
+            language: language,
+            prompt: prompt,
+            maximumRuntime: maximumRuntime,
+            clock: clock,
+            onHypothesis: onHypothesis
+        )
+    }
+
+    func submit(_ snapshot: AudioSampleSnapshot) {
+        scheduler.submit(snapshot, sessionID: sessionID)
+    }
+
+    func cancel() {
+        scheduler.cancel(sessionID: sessionID)
+    }
+
+    deinit {
+        scheduler.cancel(sessionID: sessionID)
+    }
+
+    var queuedInferenceCount: Int { scheduler.queuedInferenceCount }
+}
+
+final class RollingWhisperScheduler: @unchecked Sendable {
+    private struct Session: Sendable {
+        let language: String
+        let prompt: String
+        let maximumRuntime: TimeInterval
+        let clock: @Sendable () -> TimeInterval
+        let onHypothesis: @Sendable (RollingWhisperHypothesis) -> Void
+        var generation: UInt64 = 0
+        var lastDeliveredText: String?
+        var isCancelled = false
+    }
+
+    private struct Work: Sendable {
+        let sessionID: UUID
+        let snapshot: AudioSampleSnapshot
+        let generation: UInt64
+    }
+
+    private struct Active {
+        let work: Work
+        let control: WhisperExecutionControl
+    }
+
+    private let lock = NSLock()
+    private let infer: WhisperTranscriber.Inference
+    private var sessions: [UUID: Session] = [:]
+    private var active: Active?
+    private var pending: Work?
+
+    init(infer: @escaping WhisperTranscriber.Inference) {
+        self.infer = infer
+    }
+
+    func register(
+        language: String,
+        prompt: String,
+        maximumRuntime: TimeInterval,
+        clock: @escaping @Sendable () -> TimeInterval,
+        onHypothesis: @escaping @Sendable (RollingWhisperHypothesis) -> Void
+    ) -> UUID {
+        let id = UUID()
+        lock.withLock {
+            sessions[id] = Session(
+                language: language,
+                prompt: prompt,
+                maximumRuntime: maximumRuntime,
+                clock: clock,
+                onHypothesis: onHypothesis
+            )
+        }
+        return id
+    }
+
+    func submit(_ snapshot: AudioSampleSnapshot, sessionID: UUID) {
+        let activeToStart: Active? = lock.withLock {
+            guard let session = sessions[sessionID], !session.isCancelled else { return nil }
+            if active?.work.sessionID == sessionID,
+               active?.work.snapshot.samples == snapshot.samples,
+               active?.work.snapshot.sampleRange == snapshot.sampleRange { return nil }
+            if pending?.sessionID == sessionID,
+               pending?.snapshot.samples == snapshot.samples,
+               pending?.snapshot.sampleRange == snapshot.sampleRange { return nil }
+            let work = Work(sessionID: sessionID, snapshot: snapshot, generation: session.generation)
+            guard active == nil else {
+                pending = work
+                return nil
+            }
+            let newActive = Active(
+                work: work,
+                control: WhisperExecutionControl(maximumRuntime: session.maximumRuntime, clock: session.clock)
+            )
+            active = newActive
+            return newActive
+        }
+        if let activeToStart { run(activeToStart) }
+    }
+
+    func cancel(sessionID: UUID) {
+        let control: WhisperExecutionControl? = lock.withLock {
+            guard var session = sessions[sessionID], !session.isCancelled else { return nil }
+            session.isCancelled = true
+            session.generation &+= 1
+            sessions[sessionID] = session
+            if pending?.sessionID == sessionID { pending = nil }
+            if active?.work.sessionID == sessionID { return active?.control }
+            sessions.removeValue(forKey: sessionID)
+            return nil
+        }
+        control?.cancel()
+    }
+
+    var queuedInferenceCount: Int {
+        lock.withLock { (active == nil ? 0 : 1) + (pending == nil ? 0 : 1) }
+    }
+
+    private func run(_ item: Active) {
+        Task.detached(priority: .userInitiated) { [weak self] in
+            guard let self else { return }
+            let result = Result {
+                try item.control.check()
+                guard let session = self.lock.withLock({ self.sessions[item.work.sessionID] }) else {
+                    throw CancellationError()
+                }
+                let raw = try self.infer(
+                    item.work.snapshot.samples,
+                    session.language,
+                    session.prompt,
+                    item.control
+                )
+                return TranscriptNormalizer.normalize(raw)
+            }
+            self.finish(item, result: result)
+        }
+    }
+
+    private func finish(_ completed: Active, result: Result<String, Error>) {
+        var hypothesis: RollingWhisperHypothesis?
+        var callback: (@Sendable (RollingWhisperHypothesis) -> Void)?
+        var next: Active?
+        lock.withLock {
+            guard var session = sessions[completed.work.sessionID] else { return }
+            let stale = session.isCancelled
+                || completed.work.generation != session.generation
+                || active?.work.sessionID != completed.work.sessionID
+                || active?.work.snapshot.id != completed.work.snapshot.id
+            if case .success(let text) = result, !text.isEmpty,
+               (stale || session.lastDeliveredText != text) {
+                hypothesis = RollingWhisperHypothesis(
+                    snapshotID: completed.work.snapshot.id,
+                    sampleRange: completed.work.snapshot.sampleRange,
+                    capturedAt: completed.work.snapshot.capturedAt,
+                    candidateAt: session.clock(),
+                    text: text,
+                    isStale: stale
+                )
+                callback = session.onHypothesis
+                if !stale {
+                    session.lastDeliveredText = text
+                    sessions[completed.work.sessionID] = session
+                }
+            }
+            guard active?.work.sessionID == completed.work.sessionID,
+                  active?.work.snapshot.id == completed.work.snapshot.id else { return }
+            active = nil
+            if let pending, let pendingSession = sessions[pending.sessionID], !pendingSession.isCancelled {
+                self.pending = nil
+                let nextActive = Active(
+                    work: pending,
+                    control: WhisperExecutionControl(
+                        maximumRuntime: pendingSession.maximumRuntime,
+                        clock: pendingSession.clock
+                    )
+                )
+                active = nextActive
+                next = nextActive
+            } else {
+                pending = nil
+            }
+            if session.isCancelled { sessions.removeValue(forKey: completed.work.sessionID) }
+        }
+        if let hypothesis, let callback { callback(hypothesis) }
+        if let next { run(next) }
     }
 }
 

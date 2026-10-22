@@ -1,4 +1,6 @@
 import AppKit
+import AVFoundation
+import CryptoKit
 import XCTest
 import SwiftUI
 @testable import WhisperKey
@@ -118,6 +120,29 @@ private extension DictationCoordinator {
 }
 
 final class WhisperKeyTests: XCTestCase {
+    private func previewRevision(
+        attemptID: UUID,
+        revision: UInt64,
+        text: String
+    ) -> ContinuousContextRevision {
+        ContinuousContextRevision(
+            attemptID: attemptID,
+            revision: revision,
+            snapshotID: revision,
+            sampleRange: 0..<8_000,
+            sourceText: text,
+            language: "pt",
+            kind: .provisional,
+            generationIDs: .init(session: 1, work: revision),
+            capturedAt: 1,
+            candidateAt: 1.1,
+            emittedAt: 1.1,
+            stablePrefixCharacterCount: 0,
+            mutableSourceCharacterRange: 0..<text.count,
+            mutableSuffix: text
+        )
+    }
+
     func testApprovedBrandAssetsLoadAndMenuBarImageIsTemplateSized() throws {
         XCTAssertNotNil(NSImage(named: "ResenhaMark"))
         XCTAssertNotNil(NSImage(named: "ResenhaLockup"))
@@ -156,29 +181,53 @@ final class WhisperKeyTests: XCTestCase {
         XCTAssertTrue(preferences.showsHUD)
         XCTAssertTrue(preferences.soundsEnabled)
         XCTAssertTrue(preferences.keepsHistory)
+        XCTAssertFalse(preferences.localPreviewEnabled)
+        XCTAssertFalse(preferences.personalRemoteEnabled)
         XCTAssertEqual(preferences.transcriptionLanguage, .portuguese)
         XCTAssertTrue(preferences.transcriptionGlossary.contains("Resenha"))
         XCTAssertEqual(preferences.readySoundID, 60)
         var changed: HotkeyShortcut?
+        var localPreviewChanges: [Bool] = []
         preferences.onShortcutChange = { changed = $0 }
+        preferences.onLocalPreviewChange = { localPreviewChanges.append($0) }
         let customShortcut = HotkeyShortcut(keyCode: 40, flags: [.maskControl, .maskShift], keyLabel: "K")
         preferences.shortcut = customShortcut
         preferences.showsHUD = false
         preferences.soundsEnabled = false
         preferences.keepsHistory = false
+        preferences.localPreviewEnabled = true
         preferences.transcriptionLanguage = .spanish
         preferences.transcriptionGlossary = "coisa = COESA"
         preferences.readySoundID = 3
         XCTAssertEqual(changed, customShortcut)
+        XCTAssertEqual(localPreviewChanges, [true])
         let restored = ProductPreferences(defaults: defaults)
         XCTAssertEqual(restored.shortcut, customShortcut)
         XCTAssertFalse(restored.showsHUD)
         XCTAssertFalse(restored.soundsEnabled)
         XCTAssertFalse(restored.keepsHistory)
+        XCTAssertTrue(restored.localPreviewEnabled)
         XCTAssertEqual(restored.transcriptionLanguage, .spanish)
         XCTAssertEqual(restored.transcriptionGlossary, "coisa = COESA")
         XCTAssertEqual(restored.readySoundID, 3)
         XCTAssertEqual(restored.readySound.name, "Pum seco")
+    }
+
+    @MainActor
+    func testPersonalRemoteStartsContinuousContextWhenLocalPreviewIsOff() throws {
+        let suite = "ResenhaRemoteContinuous.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let preferences = ProductPreferences(defaults: defaults)
+
+        XCTAssertFalse(preferences.localPreviewEnabled)
+        XCTAssertFalse(preferences.personalRemoteEnabled)
+        XCTAssertFalse(preferences.continuousContextEnabled)
+        try preferences.persistPersonalRemoteEnabled(true)
+        XCTAssertFalse(preferences.localPreviewEnabled)
+        XCTAssertTrue(preferences.continuousContextEnabled)
+        try preferences.persistPersonalRemoteEnabled(false)
+        XCTAssertFalse(preferences.continuousContextEnabled)
     }
 
     func testGlossaryBuildsPromptAndReplacesOnlyWholeTerms() {
@@ -1967,6 +2016,106 @@ final class WhisperKeyTests: XCTestCase {
     }
 
     @MainActor
+    func testLocalPreviewModelBoundsUnicodeRejectsStaleSessionsAndClearsExplicitly() {
+        let model = FloatingPanelModel()
+        let attempt = UUID()
+        let otherAttempt = UUID()
+        model.show(.listening, now: 0)
+        let longUnicode = String(repeating: "🧑🏽‍💻", count: 300)
+
+        XCTAssertTrue(model.showPreview(previewRevision(attemptID: attempt, revision: 1, text: longUnicode)))
+        XCTAssertEqual(model.preview?.text.count, FloatingPreview.maximumCharacters)
+        XCTAssertTrue(model.preview?.text.hasSuffix("…") == true)
+        XCTAssertEqual(model.preview?.phase, .provisional)
+        XCTAssertFalse(model.showPreview(previewRevision(attemptID: attempt, revision: 1, text: "stale")))
+        XCTAssertFalse(model.showPreview(previewRevision(attemptID: otherAttempt, revision: 2, text: "other")))
+        XCTAssertTrue(model.showPreview(previewRevision(attemptID: attempt, revision: 2, text: "Olá, COESA 👋🏽")))
+        XCTAssertFalse(model.applyContextualPreview(attemptID: otherAttempt, revision: 2, text: "ignorado"))
+        XCTAssertFalse(model.applyContextualPreview(attemptID: attempt, revision: 1, text: "atrasado"))
+        XCTAssertTrue(model.applyContextualPreview(attemptID: attempt, revision: 2, text: "Olá, COESA Energia 👋🏽"))
+        XCTAssertEqual(model.preview?.text, "Olá, COESA Energia 👋🏽")
+
+        model.show(.transcribing, now: 1)
+        XCTAssertEqual(model.preview?.phase, .finalizing)
+        XCTAssertTrue(model.preview?.accessibilityLabel.contains("FINALIZANDO") == true)
+        model.clearPreview(attemptID: otherAttempt)
+        XCTAssertNotNil(model.preview)
+        model.clearPreview(attemptID: attempt)
+        XCTAssertNil(model.preview)
+
+        model.show(.listening, now: 2)
+        model.showLocalFallback(attemptID: attempt)
+        XCTAssertEqual(model.preview?.phase, .localFallback)
+        XCTAssertEqual(model.preview?.text, FloatingPreview.fallbackText)
+        XCTAssertNotEqual(FloatingPreviewPhase.provisional.symbol, FloatingPreviewPhase.localFallback.symbol)
+    }
+
+    @MainActor
+    func testLocalPreviewPanelCoalescesRapidRevisionsPreservesFocusContractAndCleansUp() async throws {
+        var now: TimeInterval = 10
+        let panel = FloatingPanelController(clock: { now }, previewCoalescingInterval: 0.08)
+        let attempt = UUID()
+        panel.show(.listening, target: .standalone(nil))
+        XCTAssertTrue(panel.ignoresMouseEvents)
+
+        panel.updateContinuousPreview(previewRevision(attemptID: attempt, revision: 1, text: "um"))
+        panel.updateContinuousPreview(previewRevision(attemptID: attempt, revision: 2, text: "um teste"))
+        panel.updateContinuousPreview(previewRevision(attemptID: attempt, revision: 3, text: "um teste local"))
+        XCTAssertEqual(panel.preview?.revision, 1)
+        now += 0.08
+        for _ in 0..<50 where panel.preview?.revision != 3 {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        XCTAssertEqual(panel.preview?.revision, 3)
+        XCTAssertEqual(panel.preview?.text, "um teste local")
+
+        panel.show(.transcribing, target: .standalone(nil))
+        XCTAssertEqual(panel.preview?.phase, .finalizing)
+        panel.hide()
+        XCTAssertNil(panel.preview)
+        XCTAssertFalse(panel.isVisible)
+    }
+
+    @MainActor
+    func testLocalPreviewViewFitsSmallScreenContrastAndReducedMotion() {
+        let model = FloatingPanelModel()
+        let attempt = UUID()
+        model.show(.listening, now: 0)
+        XCTAssertTrue(model.showPreview(previewRevision(
+            attemptID: attempt,
+            revision: 1,
+            text: "Uma frase longa com acentos, emoji 👩🏾‍💻 e nome COESA Energia"
+        )))
+        let smallScreen = CGSize(width: 320, height: 180)
+        let size = FloatingStatusView.panelSize(for: .listening, available: smallScreen, hasPreview: true)
+        XCTAssertLessThanOrEqual(size.width, smallScreen.width - 24)
+        XCTAssertLessThanOrEqual(size.height, smallScreen.height - 24)
+        let view = FloatingStatusView(
+            model: model,
+            fixtureContrast: .increased,
+            fixtureReduceTransparency: true,
+            fixtureReduceMotion: true
+        )
+        XCTAssertEqual(view.fixtureContrast, .increased)
+        XCTAssertEqual(view.fixtureReduceTransparency, true)
+        XCTAssertEqual(view.fixtureReduceMotion, true)
+        let host = NSHostingView(rootView: view)
+        host.frame = CGRect(origin: .zero, size: size)
+        host.layoutSubtreeIfNeeded()
+        XCTAssertEqual(host.frame.size, size)
+        XCTAssertTrue(model.preview?.accessibilityLabel.contains("PRÉVIA LOCAL") == true)
+    }
+
+    @MainActor
+    func testContinuousContextShippingLabelsAndRemoteAuthorityAvailableSmoke() {
+        XCTAssertEqual(FloatingPreviewPhase.provisional.title, "PRÉVIA LOCAL")
+        XCTAssertEqual(FloatingPreviewPhase.finalizing.title, "FINALIZANDO")
+        XCTAssertEqual(FloatingPreviewPhase.localFallback.title, "MODO LOCAL")
+        XCTAssertEqual(FloatingPreview.fallbackText, "O ditado continua sem prévia ao vivo.")
+        XCTAssertEqual(PersonalRemoteReleaseDecision.current, .personalRemoteAvailable)
+    }
+
+    @MainActor
     func testFeedbackUsesProcessingDimensionsAndEditorClampsSmallScreens() {
         XCTAssertEqual(FloatingStatusView.panelSize(for: .feedback, available: CGSize(width: 1440, height: 900)),
             CGSize(width: 280, height: 64))
@@ -2220,12 +2369,55 @@ final class WhisperKeyTests: XCTestCase {
         private let lock = NSLock()
         private var entries: [String] = []
         private var uptime: TimeInterval = 100
+        private var activeInferenceCount = 0
+        private var peakInferenceCount = 0
         func record(_ event: String) -> Int {
             lock.withLock { entries.append(event); return entries.filter { $0 == event }.count }
         }
         var events: [String] { lock.withLock { entries } }
         var now: TimeInterval { lock.withLock { uptime } }
         func advance(to value: TimeInterval) { lock.withLock { uptime = value } }
+        func beginInference() -> Int {
+            lock.withLock {
+                activeInferenceCount += 1
+                peakInferenceCount = max(peakInferenceCount, activeInferenceCount)
+                entries.append("infer")
+                return entries.filter { $0 == "infer" }.count
+            }
+        }
+        func endInference() { lock.withLock { activeInferenceCount -= 1 } }
+        var peakInferences: Int { lock.withLock { peakInferenceCount } }
+    }
+
+    private final class FakeAudioRecordingBackend: AudioRecordingBackend {
+        var isMeteringEnabled = false
+        private(set) var isRecording = false
+        private(set) var stopCount = 0
+        func prepareToRecord() -> Bool { true }
+        func record() -> Bool { isRecording = true; return true }
+        func stop() { stopCount += 1; isRecording = false }
+        func updateMeters() {}
+        func averagePower(forChannel channelNumber: Int) -> Float { -30 }
+    }
+
+    private final class FakeRollingAudioCapture: RollingAudioCapture, @unchecked Sendable {
+        private let onSnapshot: @Sendable (AudioSampleSnapshot) -> Void
+        private let onInterruption: @Sendable () -> Void
+        private(set) var startCount = 0
+        private(set) var stopCount = 0
+
+        init(
+            onSnapshot: @escaping @Sendable (AudioSampleSnapshot) -> Void,
+            onInterruption: @escaping @Sendable () -> Void = {}
+        ) {
+            self.onSnapshot = onSnapshot
+            self.onInterruption = onInterruption
+        }
+
+        func start() throws { startCount += 1 }
+        func stop() { stopCount += 1 }
+        func emit(_ snapshot: AudioSampleSnapshot) { onSnapshot(snapshot) }
+        func interrupt() { onInterruption() }
     }
 
     private func temporaryWhisperRecording() throws -> (directory: URL, audio: URL) {
@@ -2235,6 +2427,1094 @@ final class WhisperKeyTests: XCTestCase {
         let audio = directory.appendingPathComponent("recording.wav")
         try FileManager.default.copyItem(at: fixture, to: audio)
         return (directory, audio)
+    }
+
+    func testRollingAudioAccumulatorKeepsOwnedBoundedSamplesAndMonotonicRanges() throws {
+        let accumulator = BoundedAudioSampleAccumulator(configuration: .init(
+            maximumRetainedSamples: 5,
+            snapshotStrideSamples: 2
+        ))
+        let source = [Float](repeating: 1, count: 4)
+        XCTAssertNil(accumulator.append([source[0]], capturedAt: 10))
+        let first = try XCTUnwrap(accumulator.append(Array(source[1...2]), capturedAt: 11))
+        XCTAssertEqual(first.id, 1)
+        XCTAssertEqual(first.samples, [1, 1, 1])
+        XCTAssertEqual(first.sampleRange, 0..<3)
+        XCTAssertEqual(first.capturedAt, 11)
+        XCTAssertEqual(first.enqueuedAt, 11)
+
+        for value in 2...10_000 {
+            _ = accumulator.append([Float(value)], capturedAt: TimeInterval(value))
+            XCTAssertLessThanOrEqual(accumulator.retainedSampleCount, 5)
+        }
+        let final = try XCTUnwrap(accumulator.append([10_001, 10_002], capturedAt: 10_002))
+        XCTAssertEqual(final.samples, [9_998, 9_999, 10_000, 10_001, 10_002])
+        XCTAssertEqual(final.sampleRange.count, final.samples.count)
+        XCTAssertEqual(final.sampleRange.upperBound, 10_004)
+
+        accumulator.reset()
+        XCTAssertEqual(accumulator.retainedSampleCount, 0)
+        let reset = try XCTUnwrap(accumulator.append([7, 8], capturedAt: 30))
+        XCTAssertEqual(reset.id, 1)
+        XCTAssertEqual(reset.sampleRange, 0..<2)
+    }
+
+    func testAudioCaptureTimestampUsesTapHostTimeForFinalFrameAndKeepsPublicationSeparate() throws {
+        let startSeconds = 1_000.0
+        let start = AVAudioTime(hostTime: AVAudioTime.hostTime(forSeconds: startSeconds))
+        let capturedAt = AudioCaptureTimestamp.finalFrame(
+            startingAt: start,
+            frameCount: 800,
+            sampleRate: 16_000,
+            fallback: 9_999
+        )
+        XCTAssertEqual(capturedAt, startSeconds + 799.0 / 16_000.0, accuracy: 0.000_001)
+
+        let accumulator = BoundedAudioSampleAccumulator(configuration: .init(
+            maximumRetainedSamples: 800,
+            snapshotStrideSamples: 800
+        ))
+        let snapshot = try XCTUnwrap(accumulator.append(
+            [Float](repeating: 0, count: 800),
+            capturedAt: capturedAt,
+            enqueuedAt: capturedAt + 0.2
+        ))
+        XCTAssertEqual(snapshot.capturedAt, capturedAt)
+        XCTAssertEqual(snapshot.enqueuedAt, capturedAt + 0.2)
+    }
+
+    @MainActor
+    func testAudioRecorderRollingLifecycleStopsOnceAndRejectsLateCallbacks() async throws {
+        let firstBackend = FakeAudioRecordingBackend()
+        var firstCapture: FakeRollingAudioCapture?
+        let recorder = AudioRecorder(
+            recorderFactory: { url, _ in
+                FileManager.default.createFile(atPath: url.path, contents: Data())
+                return firstBackend
+            },
+            rollingCaptureFactory: { _, callback, interruption in
+                let capture = FakeRollingAudioCapture(
+                    onSnapshot: callback,
+                    onInterruption: interruption
+                )
+                firstCapture = capture
+                return capture
+            }
+        )
+        let unexpected = expectation(description: "No snapshots after terminal stop")
+        unexpected.isInverted = true
+        try recorder.start(
+            rolling: .init(maximumRetainedSamples: 100, snapshotStrideSamples: 10),
+            onSnapshot: { _ in unexpected.fulfill() }
+        )
+        XCTAssertThrowsError(try recorder.start()) { error in
+            guard case AudioRecorderError.alreadyRecording = error else {
+                return XCTFail("Expected alreadyRecording, got \(error)")
+            }
+        }
+        XCTAssertEqual(firstCapture?.startCount, 1)
+        let output = try recorder.stop()
+        defer { try? FileManager.default.removeItem(at: output) }
+        XCTAssertEqual(firstBackend.stopCount, 1)
+        XCTAssertEqual(firstCapture?.stopCount, 1)
+        firstCapture?.emit(.init(id: 1, samples: [1], sampleRange: 0..<1, capturedAt: 1))
+        await fulfillment(of: [unexpected], timeout: 0.15)
+
+        let secondBackend = FakeAudioRecordingBackend()
+        var secondCapture: FakeRollingAudioCapture?
+        var cancelledURL: URL?
+        let unexpectedAfterCancel = expectation(description: "No snapshots after cancellation")
+        unexpectedAfterCancel.isInverted = true
+        let cancelledRecorder = AudioRecorder(
+            recorderFactory: { url, _ in
+                cancelledURL = url
+                FileManager.default.createFile(atPath: url.path, contents: Data())
+                return secondBackend
+            },
+            rollingCaptureFactory: { _, callback, interruption in
+                let capture = FakeRollingAudioCapture(
+                    onSnapshot: callback,
+                    onInterruption: interruption
+                )
+                secondCapture = capture
+                return capture
+            }
+        )
+        try cancelledRecorder.start(
+            rolling: .init(maximumRetainedSamples: 100, snapshotStrideSamples: 10),
+            onSnapshot: { _ in unexpectedAfterCancel.fulfill() }
+        )
+        cancelledRecorder.cancel()
+        cancelledRecorder.cancel()
+        secondCapture?.emit(.init(id: 2, samples: [2], sampleRange: 1..<2, capturedAt: 2))
+        await fulfillment(of: [unexpectedAfterCancel], timeout: 0.15)
+        XCTAssertEqual(secondBackend.stopCount, 1)
+        XCTAssertEqual(secondCapture?.stopCount, 1)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: try XCTUnwrap(cancelledURL).path))
+
+        let interruptedBackend = FakeAudioRecordingBackend()
+        var interruptedCapture: FakeRollingAudioCapture?
+        let unexpectedAfterInterruption = expectation(description: "No snapshots after interruption")
+        unexpectedAfterInterruption.isInverted = true
+        let interruptedRecorder = AudioRecorder(
+            recorderFactory: { url, _ in
+                FileManager.default.createFile(atPath: url.path, contents: Data())
+                return interruptedBackend
+            },
+            rollingCaptureFactory: { _, callback, interruption in
+                let capture = FakeRollingAudioCapture(
+                    onSnapshot: callback,
+                    onInterruption: interruption
+                )
+                interruptedCapture = capture
+                return capture
+            }
+        )
+        try interruptedRecorder.start(
+            rolling: .init(maximumRetainedSamples: 100, snapshotStrideSamples: 10),
+            onSnapshot: { _ in unexpectedAfterInterruption.fulfill() }
+        )
+        interruptedCapture?.interrupt()
+        await Task.yield()
+        interruptedCapture?.emit(.init(id: 3, samples: [3], sampleRange: 2..<3, capturedAt: 3))
+        await fulfillment(of: [unexpectedAfterInterruption], timeout: 0.15)
+        let interruptedOutput = try interruptedRecorder.stop()
+        defer { try? FileManager.default.removeItem(at: interruptedOutput) }
+        XCTAssertEqual(interruptedCapture?.stopCount, 1)
+        XCTAssertEqual(interruptedBackend.stopCount, 1)
+    }
+
+    func testRollingWhisperKeepsOneActiveAndLatestPendingThenCoalescesEqualText() async throws {
+        let firstStarted = expectation(description: "First rolling inference started")
+        let secondStarted = expectation(description: "Latest pending inference started")
+        let results = expectation(description: "Only distinct current hypothesis delivered")
+        results.expectedFulfillmentCount = 2
+        let releaseFirst = DispatchSemaphore(value: 0)
+        let probe = WhisperExecutionProbe()
+        let transcriber = WhisperTranscriber(infer: { samples, _, _, _ in
+            let call = probe.record("infer")
+            if call == 1 {
+                firstStarted.fulfill()
+                _ = releaseFirst.wait(timeout: .now() + 2)
+                return "primeira"
+            }
+            secondStarted.fulfill()
+            return samples.last == 3 ? "mais recente" : "obsoleta"
+        })
+        let recognizer = try XCTUnwrap(transcriber.makeRollingRecognizer(glossaryText: "") { hypothesis in
+            _ = probe.record("result-\(hypothesis.snapshotID)-\(hypothesis.text)")
+            results.fulfill()
+        })
+        func snapshot(_ id: UInt64, _ value: Float) -> AudioSampleSnapshot {
+            .init(id: id, samples: [value], sampleRange: Int64(id - 1)..<Int64(id), capturedAt: Double(id))
+        }
+
+        recognizer.submit(snapshot(1, 1))
+        await fulfillment(of: [firstStarted], timeout: 1)
+        recognizer.submit(snapshot(2, 2))
+        recognizer.submit(snapshot(3, 3))
+        recognizer.submit(snapshot(3, 3))
+        XCTAssertEqual(recognizer.queuedInferenceCount, 2)
+        releaseFirst.signal()
+
+        await fulfillment(of: [secondStarted, results], timeout: 2)
+        XCTAssertEqual(probe.events.filter { $0 == "infer" }.count, 2)
+        XCTAssertTrue(probe.events.contains("result-1-primeira"))
+        XCTAssertTrue(probe.events.contains("result-3-mais recente"))
+        XCTAssertFalse(probe.events.contains { $0.contains("result-2-") })
+        XCTAssertEqual(recognizer.queuedInferenceCount, 0)
+    }
+
+    func testRollingWhisperCancellationTagsNoncooperativeLateResultAsStale() async throws {
+        let started = expectation(description: "Rolling inference started")
+        let staleResult = expectation(description: "Late result tagged stale")
+        let release = DispatchSemaphore(value: 0)
+        let transcriber = WhisperTranscriber(infer: { _, _, _, _ in
+            started.fulfill()
+            _ = release.wait(timeout: .now() + 2)
+            return "resultado tardio"
+        })
+        let recognizer = try XCTUnwrap(transcriber.makeRollingRecognizer(glossaryText: "") { hypothesis in
+            XCTAssertTrue(hypothesis.isStale)
+            XCTAssertTrue(hypothesis.isProvisional)
+            staleResult.fulfill()
+        })
+        recognizer.submit(.init(id: 9, samples: [1], sampleRange: 0..<1, capturedAt: 1))
+        await fulfillment(of: [started], timeout: 1)
+        recognizer.cancel()
+        release.signal()
+        await fulfillment(of: [staleResult], timeout: 1)
+        XCTAssertEqual(recognizer.queuedInferenceCount, 0)
+    }
+
+    func testRollingWhisperSharesBackpressureAcrossAttemptsWhileOldWorkIgnoresCancellation() async throws {
+        let oldStarted = expectation(description: "Old attempt started")
+        let newStarted = expectation(description: "New attempt started")
+        let hypotheses = expectation(description: "Old stale and new current hypotheses")
+        hypotheses.expectedFulfillmentCount = 2
+        let releaseOld = DispatchSemaphore(value: 0)
+        let probe = WhisperExecutionProbe()
+        let transcriber = WhisperTranscriber(infer: { samples, _, _, _ in
+            let call = probe.beginInference()
+            defer { probe.endInference() }
+            if call == 1 {
+                oldStarted.fulfill()
+                _ = releaseOld.wait(timeout: .now() + 2)
+                return "antiga"
+            }
+            newStarted.fulfill()
+            return samples.last == 2 ? "nova" : "inesperada"
+        })
+        let old = try XCTUnwrap(transcriber.makeRollingRecognizer(glossaryText: "") { hypothesis in
+            XCTAssertTrue(hypothesis.isStale)
+            _ = probe.record("old-\(hypothesis.text)")
+            hypotheses.fulfill()
+        })
+        let new = try XCTUnwrap(transcriber.makeRollingRecognizer(glossaryText: "") { hypothesis in
+            XCTAssertFalse(hypothesis.isStale)
+            _ = probe.record("new-\(hypothesis.text)")
+            hypotheses.fulfill()
+        })
+
+        old.submit(.init(id: 1, samples: [1], sampleRange: 0..<1, capturedAt: 1))
+        await fulfillment(of: [oldStarted], timeout: 1)
+        old.cancel()
+        new.submit(.init(id: 2, samples: [2], sampleRange: 0..<1, capturedAt: 2))
+        XCTAssertEqual(new.queuedInferenceCount, 2)
+        XCTAssertEqual(probe.peakInferences, 1)
+        releaseOld.signal()
+
+        await fulfillment(of: [newStarted, hypotheses], timeout: 2)
+        XCTAssertEqual(probe.peakInferences, 1)
+        XCTAssertEqual(probe.events.filter { $0 == "infer" }.count, 2)
+        XCTAssertTrue(probe.events.contains("old-antiga"))
+        XCTAssertTrue(probe.events.contains("new-nova"))
+        XCTAssertEqual(new.queuedInferenceCount, 0)
+    }
+
+    func testUnsupportedRollingRecognitionLeavesCompletedWAVFallbackAuthoritative() async throws {
+        let recording = try temporaryWhisperRecording()
+        defer { try? FileManager.default.removeItem(at: recording.directory) }
+        let transcriber = WhisperTranscriber(
+            infer: { _, _, _, _ in "Transcrição final." },
+            supportsRollingInference: false
+        )
+        XCTAssertNil(transcriber.makeRollingRecognizer { _ in XCTFail("Unsupported rolling path must stay closed") })
+
+        let final = try await transcriber.transcribe(audioURL: recording.audio, glossaryText: "")
+        XCTAssertEqual(final, "Transcrição final.")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: recording.audio.path))
+    }
+
+    private struct SessionEvent: ContinuousContextRollingEvent {
+        let snapshotID: UInt64
+        let sampleRange: Range<Int64>
+        let capturedAt: TimeInterval
+        let candidateAt: TimeInterval
+        let text: String
+        var isStale = false
+    }
+
+    private actor RevisionLoopProvider: ContextualDecisionProvider {
+        enum Mode: Sendable {
+            case immediate(ContextualDecisionReceipt)
+            case failure(OpenRouterDecisionsError)
+            case suspended
+        }
+
+        private let mode: Mode
+        private var continuation: CheckedContinuation<ContextualDecisionReceipt, Error>?
+        private var startWaiters: [CheckedContinuation<Void, Never>] = []
+        private(set) var requestCount = 0
+
+        init(_ mode: Mode) { self.mode = mode }
+
+        func decide(
+            sentence: String,
+            language: String,
+            occurrences: [ContextualCorrectionOccurrence],
+            deadline: ContextualInstant
+        ) async throws -> ContextualDecisionReceipt {
+            requestCount += 1
+            let waiters = startWaiters
+            startWaiters.removeAll()
+            waiters.forEach { $0.resume() }
+            switch mode {
+            case .immediate(let receipt): return receipt
+            case .failure(let error): throw error
+            case .suspended:
+                return try await withCheckedThrowingContinuation { continuation = $0 }
+            }
+        }
+
+        func waitUntilStarted() async {
+            if requestCount > 0 { return }
+            await withCheckedContinuation { startWaiters.append($0) }
+        }
+
+        func resume(_ receipt: ContextualDecisionReceipt) {
+            continuation?.resume(returning: receipt)
+            continuation = nil
+        }
+    }
+
+    private final class RevisionLifetimeProbe: @unchecked Sendable {}
+
+    private final class RevisionWeakLifetimeReference {
+        weak var value: RevisionLifetimeProbe?
+        init(_ value: RevisionLifetimeProbe) { self.value = value }
+    }
+
+    private final class RevisionCancellationProvider: ContextualDecisionProvider, @unchecked Sendable {
+        private let lock = NSLock()
+        private var continuation: CheckedContinuation<ContextualDecisionReceipt, Error>?
+        private var startWaiters: [CheckedContinuation<Void, Never>] = []
+        private var cancelled = false
+        private var retainedRequestText: String?
+        private var retainedRequestProbe: RevisionLifetimeProbe?
+        private var cancellationCountStorage = 0
+        private var decisionCountStorage = 0
+
+        init(requestProbe: RevisionLifetimeProbe) {
+            retainedRequestProbe = requestProbe
+        }
+
+        func decide(
+            sentence: String,
+            language: String,
+            occurrences: [ContextualCorrectionOccurrence],
+            deadline: ContextualInstant
+        ) async throws -> ContextualDecisionReceipt {
+            try await withTaskCancellationHandler {
+                try await withCheckedThrowingContinuation { continuation in
+                    var startWaiters: [CheckedContinuation<Void, Never>] = []
+                    let cancelImmediately = lock.withLock {
+                        decisionCountStorage += 1
+                        retainedRequestText = sentence
+                        startWaiters = self.startWaiters
+                        self.startWaiters.removeAll()
+                        guard !cancelled else { return true }
+                        self.continuation = continuation
+                        return false
+                    }
+                    startWaiters.forEach { $0.resume() }
+                    if cancelImmediately {
+                        continuation.resume(throwing: CancellationError())
+                    }
+                }
+            } onCancel: {
+                self.cancelRequest()
+            }
+        }
+
+        func waitUntilStarted() async {
+            let shouldWait = lock.withLock { retainedRequestText == nil }
+            guard shouldWait else { return }
+            await withCheckedContinuation { waiter in
+                let alreadyStarted = lock.withLock {
+                    guard retainedRequestText == nil else { return true }
+                    startWaiters.append(waiter)
+                    return false
+                }
+                if alreadyStarted { waiter.resume() }
+            }
+        }
+
+        @discardableResult
+        func completeLate(with receipt: ContextualDecisionReceipt) -> Bool {
+            let continuation = lock.withLock {
+                let continuation = self.continuation
+                self.continuation = nil
+                return continuation
+            }
+            continuation?.resume(returning: receipt)
+            return continuation != nil
+        }
+
+        var cancellationCount: Int { lock.withLock { cancellationCountStorage } }
+        var decisionCount: Int { lock.withLock { decisionCountStorage } }
+        var capturedRequestText: String? { lock.withLock { retainedRequestText } }
+
+        private func cancelRequest() {
+            let continuation = lock.withLock {
+                cancelled = true
+                cancellationCountStorage += 1
+                retainedRequestText = nil
+                retainedRequestProbe = nil
+                let continuation = self.continuation
+                self.continuation = nil
+                return continuation
+            }
+            continuation?.resume(throwing: CancellationError())
+        }
+    }
+
+    private final class RevisionWeakProviderReference {
+        weak var value: RevisionCancellationProvider?
+        init(_ value: RevisionCancellationProvider) { self.value = value }
+    }
+
+    private final class RevisionUptime: @unchecked Sendable {
+        private let lock = NSLock()
+        private var value = 0.0
+        func now() -> TimeInterval { lock.withLock { value } }
+        func set(milliseconds: Int) { lock.withLock { value = Double(milliseconds) / 1_000 } }
+    }
+
+    private final class RevisionGeneration: @unchecked Sendable {
+        private let lock = NSLock()
+        private var value: UInt64
+        init(_ value: UInt64) { self.value = value }
+        func read() -> UInt64 { lock.withLock { value } }
+        func set(_ value: UInt64) { lock.withLock { self.value = value } }
+    }
+
+    @MainActor
+    private final class RevisionSnapshotBox {
+        var value: ContextualCorrectionStoreSnapshot
+        init(_ value: ContextualCorrectionStoreSnapshot) { self.value = value }
+    }
+
+    private func revisionReceipt(
+        choice: ContextualDecisionChoice = .replace,
+        confidence: Double = 0.99,
+        probability: Double = 0.99
+    ) -> ContextualDecisionReceipt {
+        .init(
+            decisions: [.init(
+                questionID: "o1",
+                choice: choice,
+                confidence: confidence,
+                chosenProbability: probability,
+                runnerUpProbability: 1 - probability
+            )],
+            resolvedModel: "fixture/deterministic",
+            inputTokens: nil,
+            outputTokens: nil,
+            costUSD: nil
+        )
+    }
+
+    private var revisionExample: ContextualCorrectionExample {
+        .init(
+            id: UUID(uuidString: "60000000-0000-0000-0000-000000000001")!,
+            language: "pt",
+            heard: "rosto",
+            canonical: "Hostel",
+            sentence: "Reservei um rosto.",
+            occurrenceOrdinal: 1
+        )
+    }
+
+    func testContinuousContextAdmissionHonors499500501MillisecondsAndLatestWins() throws {
+        for boundary in [499, 500, 501] {
+            let uptime = RevisionUptime()
+            let session = ContinuousContextSession(now: { uptime.now() })
+            XCTAssertTrue(session.start(attemptID: UUID(), language: "pt"))
+            _ = session.ingest(SessionEvent(
+                snapshotID: 1, sampleRange: 0..<100, capturedAt: 0,
+                candidateAt: 0, text: "Reservei um rosto."
+            ))
+            let active = try XCTUnwrap(session.takeNextWork())
+            uptime.set(milliseconds: 100)
+            _ = session.ingest(SessionEvent(
+                snapshotID: 2, sampleRange: 0..<200, capturedAt: 0.05,
+                candidateAt: 0.1, text: "Reservei outro rosto."
+            ))
+            _ = session.ingest(SessionEvent(
+                snapshotID: 3, sampleRange: 0..<300, capturedAt: 0.08,
+                candidateAt: 0.1, text: "Reservei o último rosto."
+            ))
+            XCTAssertEqual(session.scheduledWorkCount, 2)
+            XCTAssertFalse(session.completeWork(active))
+            uptime.set(milliseconds: boundary)
+            let next = session.takeNextWork()
+            XCTAssertEqual(next != nil, boundary >= 500, "boundary-\(boundary)")
+            if let next { XCTAssertEqual(next.revision, 3, "boundary-\(boundary)") }
+        }
+    }
+
+    @MainActor
+    func testRevisionBoundLoopAccepts199AndRejects200And201Milliseconds() async throws {
+        for boundary in [199, 200, 201] {
+            let uptime = RevisionUptime()
+            let time = ManualContextualTime()
+            let provider = RevisionLoopProvider(.suspended)
+            let session = ContinuousContextSession(now: { uptime.now() })
+            XCTAssertTrue(session.start(attemptID: UUID(), language: "pt"))
+            _ = session.ingest(SessionEvent(
+                snapshotID: 1, sampleRange: 0..<100, capturedAt: 0,
+                candidateAt: 0, text: "Reservei um rosto."
+            ))
+            let snapshot = ContextualCorrectionStoreSnapshot(
+                examples: [revisionExample], generation: 7, health: .healthy
+            )
+            let loop = RevisionBoundJevLoop(
+                session: session,
+                provider: provider,
+                time: time,
+                storeSnapshot: { snapshot },
+                policyGeneration: { 11 }
+            )
+            let task = Task { await loop.evaluateNext(scope: .testDouble) }
+            await provider.waitUntilStarted()
+            uptime.set(milliseconds: boundary)
+            time.advance(milliseconds: Int64(boundary))
+            await provider.resume(revisionReceipt())
+            let result = await task.value
+            XCTAssertEqual(
+                result?.text,
+                boundary == 199 ? "Reservei um Hostel." : "Reservei um rosto.",
+                "boundary-\(boundary)"
+            )
+            XCTAssertEqual(
+                session.contextualPreviewText,
+                boundary == 199 ? "Reservei um Hostel." : nil,
+                "boundary-\(boundary)"
+            )
+        }
+    }
+
+    @MainActor
+    private func runRevisionBoundCancellationScenario() async throws -> (
+        RevisionWeakLifetimeReference,
+        RevisionWeakProviderReference
+    ) {
+        let uptime = RevisionUptime()
+        let session = ContinuousContextSession(now: { uptime.now() })
+        XCTAssertTrue(session.start(attemptID: UUID(), language: "pt"))
+        _ = session.ingest(SessionEvent(
+            snapshotID: 1, sampleRange: 0..<100, capturedAt: 0,
+            candidateAt: 0, text: "Reservei um rosto."
+        ))
+        let snapshot = ContextualCorrectionStoreSnapshot(
+            examples: [revisionExample], generation: 7, health: .healthy
+        )
+        var requestProbe: RevisionLifetimeProbe? = RevisionLifetimeProbe()
+        weak var weakRequestProbe = requestProbe
+        var taskProbe: RevisionLifetimeProbe? = RevisionLifetimeProbe()
+        let weakTaskProbe = RevisionWeakLifetimeReference(try XCTUnwrap(taskProbe))
+        var provider: RevisionCancellationProvider? = RevisionCancellationProvider(
+            requestProbe: try XCTUnwrap(requestProbe)
+        )
+        let weakProvider = RevisionWeakProviderReference(try XCTUnwrap(provider))
+        var loop: RevisionBoundJevLoop? = RevisionBoundJevLoop(
+            session: session,
+            provider: try XCTUnwrap(provider),
+            time: ManualContextualTime(),
+            storeSnapshot: { snapshot },
+            policyGeneration: { 11 }
+        )
+        var task: Task<RevisionBoundContextualResult?, Never>? = Task { [
+            loop = try XCTUnwrap(loop),
+            taskProbe = try XCTUnwrap(taskProbe)
+        ] in
+            defer { withExtendedLifetime(taskProbe) {} }
+            return await loop.evaluateNext(scope: .testDouble)
+        }
+        requestProbe = nil
+        taskProbe = nil
+        await provider?.waitUntilStarted()
+        XCTAssertEqual(provider?.capturedRequestText, "Reservei um rosto.")
+
+        uptime.set(milliseconds: 100)
+        _ = session.ingest(SessionEvent(
+            snapshotID: 2, sampleRange: 0..<200, capturedAt: 0.05,
+            candidateAt: 0.1, text: "Reservei outro rosto."
+        ))
+        XCTAssertEqual(session.scheduledWorkCount, 2)
+
+        session.cancel()
+        let result = await task?.value
+        XCTAssertEqual(result?.text, "Reservei um rosto.")
+        XCTAssertEqual(provider?.cancellationCount, 1)
+        XCTAssertNil(provider?.capturedRequestText)
+        XCTAssertNil(weakRequestProbe)
+        XCTAssertEqual(session.state, .cancelled)
+        XCTAssertEqual(session.scheduledWorkCount, 0)
+        XCTAssertNil(session.latestRevision)
+        XCTAssertNil(session.contextualPreviewText)
+        XCTAssertFalse(provider?.completeLate(with: revisionReceipt()) ?? true)
+        XCTAssertNil(session.commitFinalCandidate())
+        XCTAssertEqual(session.state, .cancelled)
+        XCTAssertNil(session.contextualPreviewText)
+
+        task = nil
+        loop = nil
+        provider = nil
+        await Task.yield()
+        return (weakTaskProbe, weakProvider)
+    }
+
+    @MainActor
+    func testRevisionBoundLoopSessionCancelCancelsProviderAndReleasesRequestOwnership() async throws {
+        let (taskProbe, provider) = try await runRevisionBoundCancellationScenario()
+        await Task.yield()
+        XCTAssertNil(taskProbe.value)
+        XCTAssertNil(provider.value)
+    }
+
+    @MainActor
+    func testRevisionBoundLoopAuthorityInvalidationCancelsOpenedProviderAndDiscardsResponse() async throws {
+        let uptime = RevisionUptime()
+        let session = ContinuousContextSession(now: { uptime.now() })
+        XCTAssertTrue(session.start(attemptID: UUID(), language: "pt"))
+        _ = session.ingest(SessionEvent(
+            snapshotID: 1, sampleRange: 0..<100, capturedAt: 0,
+            candidateAt: 0, text: "Reservei um rosto."
+        ))
+        let snapshot = ContextualCorrectionStoreSnapshot(
+            examples: [revisionExample], generation: 7, health: .healthy
+        )
+        let policy = ContextualCorrectionPolicy()
+        let provider = RevisionCancellationProvider(requestProbe: RevisionLifetimeProbe())
+        let loop = RevisionBoundJevLoop(
+            session: session,
+            provider: provider,
+            time: ManualContextualTime(),
+            storeSnapshot: { snapshot },
+            policyGeneration: { policy.generation },
+            policy: policy
+        )
+        let token = policy.issueToken(scope: .personalDictation)
+        let task = Task {
+            await loop.evaluateNext(scope: token.scope, policyToken: token)
+        }
+        await provider.waitUntilStarted()
+
+        policy.invalidate(.authorityChanged)
+        let completed = await task.value
+        let result = try XCTUnwrap(completed)
+        XCTAssertEqual(result.outcome.category, .abstained)
+        XCTAssertEqual(result.text, "Reservei um rosto.")
+        XCTAssertEqual(provider.cancellationCount, 1)
+        XCTAssertFalse(provider.completeLate(with: revisionReceipt()))
+
+        uptime.set(milliseconds: 1_000)
+        _ = session.ingest(SessionEvent(
+            snapshotID: 2, sampleRange: 0..<200, capturedAt: 0.5,
+            candidateAt: 0.5, text: "Reservei outro rosto."
+        ))
+        let staleResult = await loop.evaluateNext(scope: token.scope, policyToken: token)
+        XCTAssertEqual(staleResult?.outcome.category, .abstained)
+        XCTAssertEqual(provider.cancellationCount, 1)
+        XCTAssertEqual(provider.decisionCount, 1)
+
+        uptime.set(milliseconds: 2_000)
+        _ = session.ingest(SessionEvent(
+            snapshotID: 3, sampleRange: 0..<300, capturedAt: 1.5,
+            candidateAt: 1.5, text: "Reservei mais um rosto."
+        ))
+        let unbound = await loop.evaluateNext(scope: .personalDictation)
+        XCTAssertEqual(unbound?.outcome.category, .abstained)
+        XCTAssertEqual(provider.decisionCount, 1)
+    }
+
+    @MainActor
+    func testRevisionBoundLoopFailsOpenForProviderErrorsInvalidOutputAndChangedAuthority() async throws {
+        for error in [
+            OpenRouterDecisionsError.invalidStatus(401),
+            .invalidStatus(429),
+            .invalidStatus(500),
+            .transportUnavailable
+        ] {
+            let session = ContinuousContextSession(now: { 0 })
+            XCTAssertTrue(session.start(attemptID: UUID(), language: "pt"))
+            _ = session.ingest(SessionEvent(
+                snapshotID: 1, sampleRange: 0..<100, capturedAt: 0,
+                candidateAt: 0, text: "Reservei um rosto."
+            ))
+            let snapshot = ContextualCorrectionStoreSnapshot(
+                examples: [revisionExample], generation: 1, health: .healthy
+            )
+            let loop = RevisionBoundJevLoop(
+                session: session,
+                provider: RevisionLoopProvider(.failure(error)),
+                time: ManualContextualTime(),
+                storeSnapshot: { snapshot },
+                policyGeneration: { 1 }
+            )
+            let output = await loop.evaluateNext(scope: .testDouble)
+            XCTAssertEqual(output?.text, "Reservei um rosto.")
+            XCTAssertEqual(session.contextualPreviewText, "Reservei um rosto.")
+        }
+
+        let invalid = revisionReceipt(confidence: 0.89, probability: 0.89)
+        let invalidSession = ContinuousContextSession(now: { 0 })
+        XCTAssertTrue(invalidSession.start(attemptID: UUID(), language: "pt"))
+        _ = invalidSession.ingest(SessionEvent(
+            snapshotID: 1, sampleRange: 0..<100, capturedAt: 0,
+            candidateAt: 0, text: "Reservei um rosto."
+        ))
+        let healthy = ContextualCorrectionStoreSnapshot(
+            examples: [revisionExample], generation: 1, health: .healthy
+        )
+        let invalidLoop = RevisionBoundJevLoop(
+            session: invalidSession,
+            provider: RevisionLoopProvider(.immediate(invalid)),
+            time: ManualContextualTime(),
+            storeSnapshot: { healthy },
+            policyGeneration: { 3 }
+        )
+        let invalidResult = await invalidLoop.evaluateNext(scope: .testDouble)
+        XCTAssertEqual(invalidResult?.text, "Reservei um rosto.")
+
+        let session = ContinuousContextSession(now: { 0 })
+        XCTAssertTrue(session.start(attemptID: UUID(), language: "pt"))
+        _ = session.ingest(SessionEvent(
+            snapshotID: 1, sampleRange: 0..<100, capturedAt: 0,
+            candidateAt: 0, text: "Reservei um rosto."
+        ))
+        let policyGeneration = RevisionGeneration(3)
+        let provider = RevisionLoopProvider(.suspended)
+        let snapshot = ContextualCorrectionStoreSnapshot(
+            examples: [revisionExample], generation: 1, health: .healthy
+        )
+        let loop = RevisionBoundJevLoop(
+            session: session,
+            provider: provider,
+            time: ManualContextualTime(),
+            storeSnapshot: { snapshot },
+            policyGeneration: { policyGeneration.read() }
+        )
+        let task = Task { await loop.evaluateNext(scope: .testDouble) }
+        await provider.waitUntilStarted()
+        policyGeneration.set(4)
+        await provider.resume(invalid)
+        let changedAuthority = await task.value
+        XCTAssertEqual(changedAuthority?.text, "Reservei um rosto.")
+        XCTAssertEqual(session.contextualPreviewText, "Reservei um rosto.")
+    }
+
+    @MainActor
+    func testRevisionBoundLoopBindsStoreGenerationAndRepeatedOccurrenceIdentity() async throws {
+        let repeatedReceipt = ContextualDecisionReceipt(
+            decisions: [
+                .init(
+                    questionID: "o1", choice: .keepOriginal, confidence: 0.99,
+                    chosenProbability: 0.99, runnerUpProbability: 0.01
+                ),
+                .init(
+                    questionID: "o2", choice: .replace, confidence: 0.99,
+                    chosenProbability: 0.99, runnerUpProbability: 0.01
+                )
+            ],
+            resolvedModel: "fixture/deterministic",
+            inputTokens: nil,
+            outputTokens: nil,
+            costUSD: nil
+        )
+        let session = ContinuousContextSession(now: { 0 })
+        let attemptID = UUID()
+        XCTAssertTrue(session.start(attemptID: attemptID, language: "pt"))
+        _ = session.ingest(SessionEvent(
+            snapshotID: 9, sampleRange: 100..<900, capturedAt: 0,
+            candidateAt: 0, text: "Lavei o rosto e reservei um rosto."
+        ))
+        let snapshot = ContextualCorrectionStoreSnapshot(
+            examples: [revisionExample], generation: 17, health: .healthy
+        )
+        let loop = RevisionBoundJevLoop(
+            session: session,
+            provider: RevisionLoopProvider(.immediate(repeatedReceipt)),
+            time: ManualContextualTime(),
+            storeSnapshot: { snapshot },
+            policyGeneration: { 23 }
+        )
+        let evaluated = await loop.evaluateNext(scope: .testDouble)
+        let result = try XCTUnwrap(evaluated)
+        XCTAssertEqual(result.text, "Lavei o rosto e reservei um Hostel.")
+        XCTAssertEqual(result.identity.attemptID, attemptID)
+        XCTAssertEqual(result.identity.revision, 1)
+        XCTAssertEqual(result.identity.snapshotID, 9)
+        XCTAssertEqual(result.identity.sampleRange, 100..<900)
+        XCTAssertEqual(result.identity.storeGeneration, 17)
+        XCTAssertEqual(result.identity.policyGeneration, 23)
+
+        let staleSession = ContinuousContextSession(now: { 0 })
+        XCTAssertTrue(staleSession.start(attemptID: UUID(), language: "pt"))
+        _ = staleSession.ingest(SessionEvent(
+            snapshotID: 1, sampleRange: 0..<100, capturedAt: 0,
+            candidateAt: 0, text: "Reservei um rosto."
+        ))
+        let provider = RevisionLoopProvider(.suspended)
+        let box = RevisionSnapshotBox(snapshot)
+        let staleLoop = RevisionBoundJevLoop(
+            session: staleSession,
+            provider: provider,
+            time: ManualContextualTime(),
+            storeSnapshot: { box.value },
+            policyGeneration: { 23 }
+        )
+        let task = Task { await staleLoop.evaluateNext(scope: .testDouble) }
+        await provider.waitUntilStarted()
+        box.value = .init(examples: [], generation: 18, health: .healthy)
+        await provider.resume(revisionReceipt())
+        let stale = await task.value
+        XCTAssertEqual(stale?.text, "Reservei um rosto.")
+        XCTAssertEqual(staleSession.contextualPreviewText, "Reservei um rosto.")
+    }
+
+    @MainActor
+    func testRevisionBoundLoopRejectsStaleCallbackAndDisabledScopeWithoutTransport() async throws {
+        let uptime = RevisionUptime()
+        let provider = RevisionLoopProvider(.suspended)
+        let session = ContinuousContextSession(now: { uptime.now() })
+        XCTAssertTrue(session.start(attemptID: UUID(), language: "pt"))
+        _ = session.ingest(SessionEvent(
+            snapshotID: 1, sampleRange: 0..<100, capturedAt: 0,
+            candidateAt: 0, text: "Reservei um rosto."
+        ))
+        let snapshot = ContextualCorrectionStoreSnapshot(
+            examples: [revisionExample], generation: 1, health: .healthy
+        )
+        let loop = RevisionBoundJevLoop(
+            session: session,
+            provider: provider,
+            time: ManualContextualTime(),
+            storeSnapshot: { snapshot },
+            policyGeneration: { 1 }
+        )
+        let task = Task { await loop.evaluateNext(scope: .testDouble) }
+        await provider.waitUntilStarted()
+        uptime.set(milliseconds: 100)
+        _ = session.ingest(SessionEvent(
+            snapshotID: 2, sampleRange: 0..<200, capturedAt: 0.05,
+            candidateAt: 0.1, text: "Reservei outro rosto."
+        ))
+        await provider.resume(revisionReceipt())
+        let stale = await task.value
+        XCTAssertEqual(stale?.text, "Reservei um rosto.")
+        XCTAssertNil(session.contextualPreviewText)
+
+        uptime.set(milliseconds: 500)
+        let blocked = await loop.evaluateNext(scope: .disabled)
+        XCTAssertEqual(blocked?.text, "Reservei outro rosto.")
+        let requestCount = await provider.requestCount
+        XCTAssertEqual(requestCount, 1)
+    }
+
+    func testContinuousContextSessionReconcilesImmutableUnicodeSnapshotsAndRejectsOldWork() throws {
+        var uptime: TimeInterval = 20
+        let attemptID = UUID()
+        let session = ContinuousContextSession(now: { uptime })
+        XCTAssertTrue(session.start(attemptID: attemptID, language: "pt"))
+
+        func event(_ id: UInt64, _ text: String) -> SessionEvent {
+            SessionEvent(
+                snapshotID: id,
+                sampleRange: 0..<Int64(id * 100),
+                capturedAt: uptime - 0.1,
+                candidateAt: uptime,
+                text: text
+            )
+        }
+
+        let first = try XCTUnwrap(session.ingest(event(1, "A COE")))
+        XCTAssertEqual(first.revision, 1)
+        XCTAssertEqual(first.stablePrefixCharacterCount, 0)
+        XCTAssertEqual(first.mutableSuffix, "A COE")
+        let firstWork = try XCTUnwrap(session.takeNextWork())
+
+        uptime = 21
+        let splitWord = try XCTUnwrap(session.ingest(event(2, "A COESA chegou 👩🏽‍💻")))
+        XCTAssertEqual(splitWord.stablePrefixCharacterCount, 5)
+        XCTAssertEqual(splitWord.mutableSourceCharacterRange, 5..<splitWord.sourceText.count)
+        XCTAssertEqual(splitWord.mutableSuffix, "SA chegou 👩🏽‍💻")
+        uptime = 22
+        let retracted = try XCTUnwrap(session.ingest(event(3, "A coisa mudou")))
+        XCTAssertEqual(retracted.stablePrefixCharacterCount, 2)
+        XCTAssertEqual(retracted.mutableSuffix, "coisa mudou")
+        XCTAssertEqual(session.scheduledWorkCount, 2)
+
+        XCTAssertFalse(session.completeWork(firstWork))
+        let latestWork = try XCTUnwrap(session.takeNextWork())
+        XCTAssertEqual(latestWork.revision, retracted.revision)
+        XCTAssertTrue(session.completeWork(latestWork))
+        XCTAssertNil(session.ingest(event(3, "callback reordenado")))
+        XCTAssertNil(session.ingest(event(4, "A coisa mudou")))
+        XCTAssertEqual(session.latestRevision?.revision, 3)
+    }
+
+    func testContinuousContextSessionBoundsAudioTextAndLatestWinsUnderLongStream() throws {
+        let configuration = ContinuousContextSession.Configuration(
+            maximumContextAge: 0.01,
+            maximumContextCharacters: 12,
+            maximumWorkAge: 0.2,
+            sampleRate: 1_000
+        )
+        let session = ContinuousContextSession(configuration: configuration, now: { 50 })
+        XCTAssertTrue(session.start(attemptID: UUID(), language: "pt"))
+
+        for id in 1...10_000 {
+            let upper = Int64(id * 20)
+            session.retainAudio(.init(
+                id: UInt64(id),
+                samples: (0..<20).map(Float.init),
+                sampleRange: (upper - 20)..<upper,
+                capturedAt: Double(id)
+            ))
+            _ = session.ingest(SessionEvent(
+                snapshotID: UInt64(id),
+                sampleRange: 0..<upper,
+                capturedAt: 49,
+                candidateAt: 50,
+                text: "prefixo-\(id)-abcdefghijklmnop"
+            ))
+            if id == 1 { XCTAssertNotNil(session.takeNextWork()) }
+            XCTAssertLessThanOrEqual(session.retainedAudioSampleCount, 10)
+            XCTAssertLessThanOrEqual(session.retainedContextCharacterCount, 12)
+            XCTAssertLessThanOrEqual(session.scheduledWorkCount, 2)
+        }
+
+        XCTAssertEqual(session.retainedContext, "efghijklmnop")
+        XCTAssertEqual(session.retainedAudioSampleCount, 10)
+    }
+
+    func testContinuousContextSessionFinalizationIsFrozenExactlyOnceAndReleasesState() throws {
+        let attemptID = UUID()
+        let session = ContinuousContextSession(now: { 9 })
+        XCTAssertTrue(session.start(attemptID: attemptID, language: "pt"))
+        _ = session.ingest(SessionEvent(
+            snapshotID: 1,
+            sampleRange: 0..<100,
+            capturedAt: 8,
+            candidateAt: 9,
+            text: "texto parcial"
+        ))
+        let lateWork = try XCTUnwrap(session.takeNextWork())
+        session.retainAudio(.init(id: 1, samples: [1, 2], sampleRange: 0..<2, capturedAt: 8))
+
+        let final = try XCTUnwrap(session.finalize(SessionEvent(
+            snapshotID: 2,
+            sampleRange: 0..<200,
+            capturedAt: 8.5,
+            candidateAt: 9,
+            text: "texto final"
+        ), attemptID: attemptID))
+        XCTAssertEqual(final.kind, .final)
+        XCTAssertEqual(session.state, .finalizing)
+        XCTAssertEqual(session.finalCandidate?.sourceText, "texto final")
+        XCTAssertFalse(session.completeWork(lateWork))
+        XCTAssertNil(session.ingest(SessionEvent(
+            snapshotID: 3,
+            sampleRange: 0..<300,
+            capturedAt: 8.8,
+            candidateAt: 9,
+            text: "texto tardio"
+        )))
+
+        let committed = try XCTUnwrap(session.commitFinalCandidate())
+        XCTAssertEqual(committed.sourceText, "texto final")
+        XCTAssertEqual(committed.attemptID, attemptID)
+        XCTAssertEqual(session.state, .committed)
+        XCTAssertNil(session.commitFinalCandidate())
+        XCTAssertNil(session.latestRevision)
+        XCTAssertNil(session.finalCandidate)
+        XCTAssertEqual(session.retainedAudioSampleCount, 0)
+        XCTAssertEqual(session.retainedContextCharacterCount, 0)
+        XCTAssertEqual(session.scheduledWorkCount, 0)
+    }
+
+    func testContinuousContextSessionFinalizesAnUnchangedLastHypothesisAndExpiresWork() throws {
+        var uptime: TimeInterval = 4
+        let attemptID = UUID()
+        let session = ContinuousContextSession(now: { uptime })
+        XCTAssertTrue(session.start(attemptID: attemptID, language: "pt"))
+        let partial = SessionEvent(
+            snapshotID: 1,
+            sampleRange: 0..<100,
+            capturedAt: 3,
+            candidateAt: 4,
+            text: "mesmo texto"
+        )
+        _ = session.ingest(partial)
+        let expiring = try XCTUnwrap(session.takeNextWork())
+        uptime = 4.201
+        XCTAssertFalse(session.completeWork(expiring))
+
+        let final = try XCTUnwrap(session.finalize(SessionEvent(
+            snapshotID: 2,
+            sampleRange: 0..<200,
+            capturedAt: 3.5,
+            candidateAt: 4.2,
+            text: "mesmo texto"
+        ), attemptID: attemptID))
+        XCTAssertEqual(final.mutableSourceCharacterRange, final.sourceText.count..<final.sourceText.count)
+        XCTAssertEqual(session.finalCandidate?.sourceText, "mesmo texto")
+    }
+
+    func testContinuousContextSessionAcceptsAuthoritativeFinalForLatestFramesOnlyOnce() throws {
+        let attemptID = UUID()
+        let session = ContinuousContextSession(now: { 10 })
+        XCTAssertTrue(session.start(attemptID: attemptID, language: "pt"))
+        let provisional = SessionEvent(
+            snapshotID: 7,
+            sampleRange: 100..<500,
+            capturedAt: 9,
+            candidateAt: 9.5,
+            text: "A coisa chegou"
+        )
+        _ = try XCTUnwrap(session.ingest(provisional))
+
+        let olderFinal = SessionEvent(
+            snapshotID: 6,
+            sampleRange: 0..<400,
+            capturedAt: 8,
+            candidateAt: 10,
+            text: "texto antigo"
+        )
+        XCTAssertNil(session.finalize(olderFinal, attemptID: attemptID))
+        XCTAssertNil(session.finalize(provisional, attemptID: UUID()))
+
+        let authoritativeFinal = SessionEvent(
+            snapshotID: 7,
+            sampleRange: 100..<500,
+            capturedAt: 9,
+            candidateAt: 10,
+            text: "A COESA chegou"
+        )
+        let revision = try XCTUnwrap(session.finalize(authoritativeFinal, attemptID: attemptID))
+        XCTAssertEqual(revision.kind, .final)
+        XCTAssertEqual(revision.sourceText, "A COESA chegou")
+        XCTAssertEqual(session.state, .finalizing)
+
+        XCTAssertNil(session.finalize(authoritativeFinal, attemptID: attemptID))
+        XCTAssertNil(session.ingest(SessionEvent(
+            snapshotID: 8,
+            sampleRange: 100..<600,
+            capturedAt: 9.5,
+            candidateAt: 10,
+            text: "callback tardio"
+        )))
+        XCTAssertEqual(session.commitFinalCandidate()?.sourceText, "A COESA chegou")
+        XCTAssertNil(session.commitFinalCandidate())
+    }
+
+    func testContinuousContextSessionCancelAndFailureReleaseAllSensitiveState() {
+        for terminal in [ContinuousContextSessionState.cancelled, .failed] {
+            weak var weakSession: ContinuousContextSession?
+            autoreleasepool {
+                let session = ContinuousContextSession(now: { 3 })
+                weakSession = session
+                XCTAssertTrue(session.start(attemptID: UUID(), language: "pt"))
+                _ = session.ingest(SessionEvent(
+                    snapshotID: 1,
+                    sampleRange: 0..<2,
+                    capturedAt: 2,
+                    candidateAt: 3,
+                    text: "conteúdo privado"
+                ))
+                session.retainAudio(.init(id: 1, samples: [1, 2], sampleRange: 0..<2, capturedAt: 2))
+                terminal == .cancelled ? session.cancel() : session.fail()
+                XCTAssertEqual(session.state, terminal)
+                XCTAssertNil(session.latestRevision)
+                XCTAssertEqual(session.retainedAudioSampleCount, 0)
+                XCTAssertEqual(session.retainedContextCharacterCount, 0)
+                XCTAssertEqual(session.scheduledWorkCount, 0)
+            }
+            XCTAssertNil(weakSession)
+        }
     }
 
     func testEmbeddedWhisperTranscribesOfficialFixtureWhenLocalModelIsAvailable() async throws {
@@ -3220,16 +4500,16 @@ final class ContextualResolverTests: XCTestCase {
         XCTAssertEqual(output, #"Reservei um Hostel $1 \\ Centro."#)
     }
 
-    func testResolverRejectsDisabledAndPersonalScopesBeforeProvider() async {
+    func testResolverRejectsDisabledScopeAndAllowsAuthorizedPersonalScope() async {
         let provider = ResolverDecisionProviderStub([decision("o1", .replace)])
         let item = fixture(provider: provider)
-        for scope in [ContextualTransportScope.disabled, .personalDictation] {
-            let input = "Reservei um rosto."
-            let output = await item.0.resolve(request(input, store: item.1, policy: item.2, scope: scope))
-            XCTAssertEqual(output, input)
-        }
+        let input = "Reservei um rosto."
+        let disabled = await item.0.resolve(request(input, store: item.1, policy: item.2, scope: .disabled))
+        XCTAssertEqual(disabled, input)
+        let personal = await item.0.resolve(request(input, store: item.1, policy: item.2, scope: .personalDictation))
+        XCTAssertEqual(personal, "Reservei um Hostel.")
         let requestCount = await provider.requestCount
-        XCTAssertEqual(requestCount, 0)
+        XCTAssertEqual(requestCount, 1)
     }
 
     func testResolverRejectsUnhealthyStoreBeforeMatchingOrProvider() async throws {
@@ -3533,6 +4813,88 @@ final class ContextualTransportCorpusTests: XCTestCase {
         XCTAssertEqual(receipt.costUSD, Decimal(string: "0.000014994"))
     }
 
+    func testDecisionsRequestPayloadAccepts4095And4096BytesAndRejects4097() throws {
+        let baseSentence = "rosto"
+        let base = try OpenRouterDecisionsClient.requestBody(
+            sentence: baseSentence,
+            language: "pt",
+            occurrences: [occurrence(in: baseSentence)]
+        ).count
+        for target in [4_095, 4_096] {
+            let sentence = baseSentence + String(repeating: "a", count: target - base)
+            let body = try OpenRouterDecisionsClient.requestBody(
+                sentence: sentence,
+                language: "pt",
+                occurrences: [occurrence(in: sentence)]
+            )
+            XCTAssertEqual(body.count, target)
+        }
+        let rejected = baseSentence + String(repeating: "a", count: 4_097 - base)
+        XCTAssertThrowsError(try OpenRouterDecisionsClient.requestBody(
+            sentence: rejected,
+            language: "pt",
+            occurrences: [occurrence(in: rejected)]
+        )) { error in
+            XCTAssertEqual(error as? OpenRouterDecisionsError, .requestTooLarge)
+        }
+    }
+
+    func testOpenRouterCredentialRejectsMaskedAndMalformedValues() {
+        let valid = "sk-or-v1-" + String(repeating: "a", count: 64)
+        XCTAssertTrue(OpenRouterCredential.isValid(valid))
+        for invalid in [
+            "",
+            "candidate",
+            "sk-or-v1-" + String(repeating: "a", count: 39),
+            "sk-or-v1-" + String(repeating: "a", count: 65),
+            "sk-or-v1-" + String(repeating: "g", count: 64),
+            valid + " ",
+            String(repeating: "•", count: 148)
+        ] {
+            XCTAssertFalse(OpenRouterCredential.isValid(invalid), invalid)
+        }
+    }
+
+    func testTransportRegistryIsolatesCancelledOldAndNewRequestsWithSameTaskIdentifier() {
+        let oldSession = NSObject()
+        let newSession = NSObject()
+        let oldCancellations = LockedInteger()
+        let newCancellations = LockedInteger()
+        let old = DecisionsDelegateState(maximumResponseBytes: 8) { oldCancellations.increment() }
+        let new = DecisionsDelegateState(maximumResponseBytes: 8) { newCancellations.increment() }
+        let registry = DecisionsTransportContextRegistry<DecisionsDelegateState>()
+
+        registry.insert(old, session: oldSession, taskIdentifier: 1)
+        registry.insert(new, session: newSession, taskIdentifier: 1)
+        XCTAssertTrue(registry.remove(session: oldSession, taskIdentifier: 1) === old)
+        old.cancel()
+        registry.lookup(session: newSession, taskIdentifier: 1)?.receive(Data([1, 2, 3]))
+        XCTAssertNil(registry.lookup(session: oldSession, taskIdentifier: 1))
+        XCTAssertTrue(registry.lookup(session: newSession, taskIdentifier: 1) === new)
+        XCTAssertEqual(old.snapshot(), .init(acceptedBytes: 0, queuedChunkCount: 0, cancelCount: 1))
+        XCTAssertEqual(new.snapshot(), .init(acceptedBytes: 3, queuedChunkCount: 1, cancelCount: 0))
+        XCTAssertEqual(oldCancellations.read(), 1)
+        XCTAssertEqual(newCancellations.read(), 0)
+    }
+
+    func testRevisionCandidateValidationProtectsNumbersNegationsAndIdentifiers() {
+        func example(_ heard: String, _ canonical: String) -> ContextualCorrectionExample {
+            .init(
+                id: UUID(), language: "pt", heard: heard, canonical: canonical,
+                sentence: "Confirme \(heard).", occurrenceOrdinal: 1
+            )
+        }
+        XCTAssertNil(ContextualCorrectionResolver.validatedDecisionInput(
+            examples: [example("10", "100")], text: "Confirme 10.", language: "pt"
+        ))
+        XCTAssertNil(ContextualCorrectionResolver.validatedDecisionInput(
+            examples: [example("não", "agora")], text: "Confirme não.", language: "pt"
+        ))
+        XCTAssertNil(ContextualCorrectionResolver.validatedDecisionInput(
+            examples: [example("a/b", "ab")], text: "Confirme a/b.", language: "pt"
+        ))
+    }
+
     func testURLSessionDelegateStateCancelsBeforeQueueingByte65537() async throws {
         let cancellations = LockedInteger()
         let state = DecisionsDelegateState(maximumResponseBytes: 65_536) { cancellations.increment() }
@@ -3686,6 +5048,346 @@ private enum ContextualCorpusOutcomeKind: String, Codable {
 }
 private enum ContextualCorpusChoice: String, Codable { case keepOriginal = "keep_original", replace = "replace_1" }
 
+private struct ContinuousContextEventsFixture: Decodable {
+    struct Event: Decodable {
+        let revision: Int
+        let logicalOffsetMilliseconds: Int
+        let text: String
+        let isFinal: Bool
+    }
+
+    struct Case: Decodable {
+        let id: String
+        let category: String
+        let noChangeRequired: Bool
+        let sourceEvents: [Event]
+        let expectedCompletedRecordingText: String
+        let expectedFinalReferenceText: String
+        let allowedContextualAlternatives: [String]
+    }
+
+    let schemaVersion: Int
+    let corpusVersion: String
+    let language: String
+    let provenance: String
+    let evidenceScope: String
+    let eventTimeBasis: String
+    let containsAudioOrPCM: Bool
+    let cases: [Case]
+
+    static let frozenSHA256 = "46c5794007c61b5135374cc275f01d5a012838807c28df6624d77fd556dd9415"
+    static let requiredCategories: Set<String> = [
+        "homophone", "technical_term", "names_identifiers", "negation", "numbers",
+        "code_switching", "unicode", "pauses", "retractions", "repeated_occurrences",
+        "topic_changes"
+    ]
+
+    static func load(bundle: Bundle) throws -> (fixture: Self, data: Data, url: URL) {
+        let url = try XCTUnwrap(bundle.url(forResource: "continuous-context-events", withExtension: "json"))
+        let data = try Data(contentsOf: url)
+        return (try JSONDecoder().decode(Self.self, from: data), data, url)
+    }
+
+    func validate() -> Bool {
+        let contextualCases = cases.filter { !$0.noChangeRequired }
+        let controls = cases.filter(\.noChangeRequired)
+        guard schemaVersion == 1,
+              corpusVersion == "2026-10-21.1",
+              language == "pt-BR",
+              provenance == "synthetic_invented",
+              evidenceScope == "semantic_orchestration_only",
+              eventTimeBasis == "simulated_logical_milliseconds",
+              !containsAudioOrPCM,
+              contextualCases.count >= 40,
+              controls.count >= 10,
+              Set(cases.map(\.id)).count == cases.count,
+              Set(cases.map(\.category)).isSuperset(of: Self.requiredCategories) else { return false }
+
+        for item in cases {
+            guard !item.sourceEvents.isEmpty,
+                  !item.expectedCompletedRecordingText.isEmpty,
+                  !item.expectedFinalReferenceText.isEmpty,
+                  !item.allowedContextualAlternatives.isEmpty,
+                  item.allowedContextualAlternatives.contains(item.expectedFinalReferenceText),
+                  item.sourceEvents.last?.isFinal == true,
+                  item.sourceEvents.last?.text == item.expectedCompletedRecordingText else { return false }
+
+            for (index, event) in item.sourceEvents.enumerated() {
+                guard event.revision == index + 1,
+                      event.logicalOffsetMilliseconds >= 0,
+                      !event.text.isEmpty else { return false }
+                if index > 0 {
+                    guard event.logicalOffsetMilliseconds > item.sourceEvents[index - 1].logicalOffsetMilliseconds else {
+                        return false
+                    }
+                }
+            }
+
+            if item.noChangeRequired {
+                guard item.expectedFinalReferenceText == item.expectedCompletedRecordingText,
+                      item.allowedContextualAlternatives == [item.expectedCompletedRecordingText] else { return false }
+            }
+        }
+        return true
+    }
+}
+
+private struct ContinuousContextCorpusTrace: Codable, Equatable {
+    let caseID: String
+    let category: String
+    let revisionCount: Int
+    let noChangeRequired: Bool
+    let baselineMatchesReference: Bool
+    let mockedContextualMatchesReference: Bool
+    let contextualOutcome: String
+    let maximumScheduledWorkCount: Int
+    let simulatedDecisionOffsetMilliseconds: Int
+}
+
+private struct ContinuousContextCorpusReport: Codable, Equatable {
+    let schemaVersion: Int
+    let corpusVersion: String
+    let corpusSHA256: String
+    let generatedBy: String
+    let evidenceScope: String
+    let timeBasis: String
+    let remoteAuthority: String
+    let personalRemoteRequestCount: Int
+    let totalCases: Int
+    let contextualCases: Int
+    let controls: Int
+    let baselineErrors: Int
+    let mockedContextualErrors: Int
+    let improvements: Int
+    let regressions: Int
+    let controlMeaningChanges: Int
+    let timeoutFallbackErrors: Int
+    let featureOffErrors: Int
+    let maximumScheduledWorkCount: Int
+    let unsupportedProofClaims: [String]
+    let traces: [ContinuousContextCorpusTrace]
+}
+
+private enum ContinuousContextCorpusRunnerError: Error {
+    case invalidFixture
+    case invalidEvent
+    case missingWork
+    case rejectedMockResult
+}
+
+private final class ContinuousContextCorpusClock: @unchecked Sendable {
+    private let lock = NSLock()
+    private var seconds = 0.0
+
+    func now() -> TimeInterval { lock.withLock { seconds } }
+    func set(milliseconds: Int) { lock.withLock { seconds = Double(milliseconds) / 1_000 } }
+    func set(seconds: TimeInterval) { lock.withLock { self.seconds = seconds } }
+}
+
+private struct ContinuousContextCorpusEvent: ContinuousContextRollingEvent {
+    let snapshotID: UInt64
+    let sampleRange: Range<Int64>
+    let capturedAt: TimeInterval
+    let candidateAt: TimeInterval
+    let text: String
+    let isStale = false
+}
+
+private enum ContinuousContextCorpusRunner {
+    private enum Mode {
+        case localCandidate
+        case mockedContextual
+        case timeoutFallback
+        case featureOff
+    }
+
+    private struct Result {
+        let output: String
+        let outcome: String
+        let maximumScheduledWorkCount: Int
+        let simulatedDecisionOffsetMilliseconds: Int
+    }
+
+    static func run(bundle: Bundle) throws -> ContinuousContextCorpusReport {
+        let loaded = try ContinuousContextEventsFixture.load(bundle: bundle)
+        guard loaded.fixture.validate(),
+              SHA256.hash(data: loaded.data).map({ String(format: "%02x", $0) }).joined()
+                == ContinuousContextEventsFixture.frozenSHA256 else {
+            throw ContinuousContextCorpusRunnerError.invalidFixture
+        }
+
+        var traces: [ContinuousContextCorpusTrace] = []
+        var baselineErrors = 0
+        var mockedErrors = 0
+        var improvements = 0
+        var regressions = 0
+        var controlMeaningChanges = 0
+        var timeoutErrors = 0
+        var featureOffErrors = 0
+        var maximumScheduledWorkCount = 0
+
+        for item in loaded.fixture.cases.sorted(by: { $0.id < $1.id }) {
+            let baseline = try execute(item, mode: .localCandidate)
+            let mocked = try execute(item, mode: .mockedContextual)
+            let timeout = try execute(item, mode: .timeoutFallback)
+            let featureOff = try execute(item, mode: .featureOff)
+            let baselineMatches = baseline.output == item.expectedFinalReferenceText
+            let mockedMatches = mocked.output == item.expectedFinalReferenceText
+
+            baselineErrors += baselineMatches ? 0 : 1
+            mockedErrors += mockedMatches ? 0 : 1
+            improvements += !baselineMatches && mockedMatches ? 1 : 0
+            regressions += baselineMatches && !mockedMatches ? 1 : 0
+            controlMeaningChanges += item.noChangeRequired && mocked.output != baseline.output ? 1 : 0
+            timeoutErrors += timeout.output == item.expectedFinalReferenceText ? 0 : 1
+            featureOffErrors += featureOff.output == item.expectedFinalReferenceText ? 0 : 1
+            maximumScheduledWorkCount = max(
+                maximumScheduledWorkCount,
+                baseline.maximumScheduledWorkCount,
+                mocked.maximumScheduledWorkCount,
+                timeout.maximumScheduledWorkCount,
+                featureOff.maximumScheduledWorkCount
+            )
+            traces.append(.init(
+                caseID: item.id,
+                category: item.category,
+                revisionCount: item.sourceEvents.count,
+                noChangeRequired: item.noChangeRequired,
+                baselineMatchesReference: baselineMatches,
+                mockedContextualMatchesReference: mockedMatches,
+                contextualOutcome: mocked.outcome,
+                maximumScheduledWorkCount: mocked.maximumScheduledWorkCount,
+                simulatedDecisionOffsetMilliseconds: mocked.simulatedDecisionOffsetMilliseconds
+            ))
+        }
+
+        let report = ContinuousContextCorpusReport(
+            schemaVersion: 1,
+            corpusVersion: loaded.fixture.corpusVersion,
+            corpusSHA256: ContinuousContextEventsFixture.frozenSHA256,
+            generatedBy: "WhisperKeyTests.ContinuousContextCorpusRunner/v1",
+            evidenceScope: loaded.fixture.evidenceScope,
+            timeBasis: loaded.fixture.eventTimeBasis,
+            remoteAuthority: "closed",
+            personalRemoteRequestCount: 0,
+            totalCases: loaded.fixture.cases.count,
+            contextualCases: loaded.fixture.cases.filter { !$0.noChangeRequired }.count,
+            controls: loaded.fixture.cases.filter(\.noChangeRequired).count,
+            baselineErrors: baselineErrors,
+            mockedContextualErrors: mockedErrors,
+            improvements: improvements,
+            regressions: regressions,
+            controlMeaningChanges: controlMeaningChanges,
+            timeoutFallbackErrors: timeoutErrors,
+            featureOffErrors: featureOffErrors,
+            maximumScheduledWorkCount: maximumScheduledWorkCount,
+            unsupportedProofClaims: [
+                "acoustic_asr_accuracy",
+                "capture_to_candidate_latency",
+                "completed_wav_vs_rolling_asr",
+                "cold_warm_hardware_latency",
+                "cpu_memory_thermal"
+            ],
+            traces: traces
+        )
+        if let path = ProcessInfo.processInfo.environment["CONTINUOUS_CONTEXT_CORPUS_REPORT_PATH"] {
+            try JSONEncoder.sorted.encode(report).write(to: URL(fileURLWithPath: path), options: .atomic)
+        }
+        return report
+    }
+
+    private static func execute(
+        _ item: ContinuousContextEventsFixture.Case,
+        mode: Mode
+    ) throws -> Result {
+        let clock = ContinuousContextCorpusClock()
+        let session = ContinuousContextSession(now: { clock.now() })
+        let attemptID = UUID(uuidString: "71000000-0000-0000-0000-000000000001")!
+        guard session.start(attemptID: attemptID, language: "pt-BR") else {
+            throw ContinuousContextCorpusRunnerError.invalidEvent
+        }
+        var maximumScheduledWorkCount = 0
+        var finalEvent: ContinuousContextCorpusEvent?
+        for source in item.sourceEvents {
+            clock.set(milliseconds: source.logicalOffsetMilliseconds)
+            let event = ContinuousContextCorpusEvent(
+                snapshotID: UInt64(source.revision),
+                sampleRange: 0..<Int64(source.revision * 100),
+                capturedAt: clock.now(),
+                candidateAt: clock.now(),
+                text: source.text
+            )
+            guard session.ingest(event) != nil else {
+                throw ContinuousContextCorpusRunnerError.invalidEvent
+            }
+            finalEvent = event
+            maximumScheduledWorkCount = max(maximumScheduledWorkCount, session.scheduledWorkCount)
+        }
+        guard let finalEvent else { throw ContinuousContextCorpusRunnerError.invalidEvent }
+
+        let output: String
+        let outcome: String
+        switch mode {
+        case .mockedContextual:
+            guard item.allowedContextualAlternatives.contains(item.expectedFinalReferenceText),
+                  let work = session.takeNextWork() else {
+                throw ContinuousContextCorpusRunnerError.missingWork
+            }
+            let changed = work.sourceText != item.expectedFinalReferenceText
+            let result = RevisionBoundContextualResult(
+                identity: work.identity(policyGeneration: 1, storeGeneration: 1),
+                originalText: work.sourceText,
+                text: item.expectedFinalReferenceText,
+                outcome: .init(
+                    category: changed ? .replaced : .kept,
+                    decisions: [.init(
+                        questionID: "fixture-\(item.id)",
+                        choice: changed ? .replace : .keepOriginal,
+                        selectedProbability: 0.99,
+                        runnerUpProbability: 0.01
+                    )]
+                )
+            )
+            guard session.applyContextualResult(result, for: work) else {
+                throw ContinuousContextCorpusRunnerError.rejectedMockResult
+            }
+            output = session.contextualPreviewText ?? work.sourceText
+            outcome = changed ? "replaced" : "kept"
+        case .timeoutFallback:
+            guard let work = session.takeNextWork() else {
+                throw ContinuousContextCorpusRunnerError.missingWork
+            }
+            clock.set(seconds: work.expiresAt)
+            let fallback = RevisionBoundContextualResult(
+                identity: work.identity(policyGeneration: 1, storeGeneration: 1),
+                originalText: work.sourceText,
+                text: work.sourceText,
+                outcome: .init(category: .abstained, decisions: [])
+            )
+            guard !session.applyContextualResult(fallback, for: work) else {
+                throw ContinuousContextCorpusRunnerError.rejectedMockResult
+            }
+            output = work.sourceText
+            outcome = "timed_out_keep_original"
+        case .localCandidate:
+            output = finalEvent.text
+            outcome = "local_candidate"
+        case .featureOff:
+            session.cancel()
+            output = finalEvent.text
+            outcome = "feature_off_keep_original"
+        }
+
+        maximumScheduledWorkCount = max(maximumScheduledWorkCount, session.scheduledWorkCount)
+        return .init(
+            output: output,
+            outcome: outcome,
+            maximumScheduledWorkCount: maximumScheduledWorkCount,
+            simulatedDecisionOffsetMilliseconds: item.sourceEvents.last?.logicalOffsetMilliseconds ?? 0
+        )
+    }
+}
+
 private struct ContextualCorpusFixture: Decodable {
     struct Learning: Codable {
         let id: String
@@ -3792,6 +5494,118 @@ private struct ContextualCorpusFixture: Decodable {
 }
 
 extension ContextualTransportCorpusTests {
+    func testContinuousContextCorpusIsBundledFrozenAndSchemaValid() throws {
+        let testBundle = Bundle(for: ContextualTransportCorpusTests.self)
+        let loaded = try ContinuousContextEventsFixture.load(bundle: testBundle)
+
+        XCTAssertTrue(loaded.url.path.contains("WhisperKeyTests.xctest/Contents/Resources"))
+        XCTAssertTrue(loaded.fixture.validate())
+        XCTAssertEqual(loaded.fixture.cases.filter { !$0.noChangeRequired }.count, 43)
+        XCTAssertEqual(loaded.fixture.cases.filter(\.noChangeRequired).count, 10)
+        XCTAssertEqual(
+            SHA256.hash(data: loaded.data).map { String(format: "%02x", $0) }.joined(),
+            ContinuousContextEventsFixture.frozenSHA256,
+            "The pre-implementation corpus changed. Re-plan and freeze a new baseline before resuming implementation."
+        )
+
+        let appURL = try XCTUnwrap(Bundle.main.url(forResource: "continuous-context-events", withExtension: "json"))
+        XCTAssertTrue(appURL.path.contains("Resenha.app/Contents/Resources"))
+        XCTAssertEqual(try Data(contentsOf: appURL), loaded.data)
+    }
+
+    func testContinuousContextFrozenCorpusImprovesDeterministicOrchestrationWithoutControlRegressions() throws {
+        let bundle = Bundle(for: ContextualTransportCorpusTests.self)
+        let first = try ContinuousContextCorpusRunner.run(bundle: bundle)
+        let second = try ContinuousContextCorpusRunner.run(bundle: bundle)
+
+        XCTAssertEqual(first, second)
+        XCTAssertEqual(first.corpusSHA256, ContinuousContextEventsFixture.frozenSHA256)
+        XCTAssertEqual(first.totalCases, 53)
+        XCTAssertEqual(first.contextualCases, 43)
+        XCTAssertEqual(first.controls, 10)
+        XCTAssertEqual(first.baselineErrors, 35)
+        XCTAssertEqual(first.mockedContextualErrors, 0)
+        XCTAssertEqual(first.improvements, 35)
+        XCTAssertEqual(first.regressions, 0)
+        XCTAssertEqual(first.controlMeaningChanges, 0)
+        XCTAssertEqual(first.timeoutFallbackErrors, first.baselineErrors)
+        XCTAssertEqual(first.featureOffErrors, first.baselineErrors)
+        XCTAssertLessThanOrEqual(first.maximumScheduledWorkCount, 2)
+        XCTAssertEqual(first.remoteAuthority, "closed")
+        XCTAssertEqual(first.personalRemoteRequestCount, 0)
+    }
+
+    func testContinuousContextFrozenCorpusTraceIsSanitizedAndOrchestrationOnly() throws {
+        let bundle = Bundle(for: ContextualTransportCorpusTests.self)
+        let loaded = try ContinuousContextEventsFixture.load(bundle: bundle)
+        let report = try ContinuousContextCorpusRunner.run(bundle: bundle)
+        let encoded = try JSONEncoder.sorted.encode(report)
+        let json = try XCTUnwrap(String(data: encoded, encoding: .utf8))
+
+        XCTAssertEqual(report.evidenceScope, "semantic_orchestration_only")
+        XCTAssertEqual(report.timeBasis, "simulated_logical_milliseconds")
+        XCTAssertEqual(Set(report.traces.map(\.caseID)).count, loaded.fixture.cases.count)
+        XCTAssertEqual(Set(report.traces.map(\.category)), ContinuousContextEventsFixture.requiredCategories)
+        XCTAssertEqual(Set(report.unsupportedProofClaims), [
+            "acoustic_asr_accuracy",
+            "capture_to_candidate_latency",
+            "completed_wav_vs_rolling_asr",
+            "cold_warm_hardware_latency",
+            "cpu_memory_thermal"
+        ])
+        for item in loaded.fixture.cases {
+            XCTAssertFalse(json.contains(item.expectedCompletedRecordingText), item.id)
+            XCTAssertFalse(json.contains(item.expectedFinalReferenceText), item.id)
+            XCTAssertFalse(json.contains(item.sourceEvents[0].text), item.id)
+        }
+        for forbiddenKey in ["audio", "pcm", "transcript", "sourceText", "outputText", "sentence"] {
+            XCTAssertFalse(json.localizedCaseInsensitiveContains("\"\(forbiddenKey)\""), forbiddenKey)
+        }
+    }
+
+    func testContinuousContextCorpusQueueIsBoundedAndExpiredWorkFailsOpen() throws {
+        let clock = ContinuousContextCorpusClock()
+        let session = ContinuousContextSession(now: { clock.now() })
+        XCTAssertTrue(session.start(attemptID: UUID(), language: "pt-BR"))
+
+        for revision in 1...200 {
+            clock.set(milliseconds: revision * 10)
+            let event = ContinuousContextCorpusEvent(
+                snapshotID: UInt64(revision),
+                sampleRange: 0..<Int64(revision * 100),
+                capturedAt: clock.now(),
+                candidateAt: clock.now(),
+                text: "fixture-revision-\(revision)"
+            )
+            XCTAssertNotNil(session.ingest(event))
+            if revision == 1 { XCTAssertNotNil(session.takeNextWork()) }
+            XCTAssertLessThanOrEqual(session.scheduledWorkCount, 2)
+        }
+
+        XCTAssertEqual(session.scheduledWorkCount, 2)
+        clock.set(milliseconds: 2_500)
+        XCTAssertNil(session.takeNextWork(), "An active item and latest-only pending item must not create extra work")
+        session.cancel()
+        XCTAssertEqual(session.scheduledWorkCount, 0)
+        XCTAssertEqual(session.state, .cancelled)
+
+        let expiryClock = ContinuousContextCorpusClock()
+        let expirySession = ContinuousContextSession(now: { expiryClock.now() })
+        XCTAssertTrue(expirySession.start(attemptID: UUID(), language: "pt-BR"))
+        XCTAssertNotNil(expirySession.ingest(ContinuousContextCorpusEvent(
+            snapshotID: 1,
+            sampleRange: 0..<100,
+            capturedAt: 0,
+            candidateAt: 0,
+            text: "fixture-timeout"
+        )))
+        let work = try XCTUnwrap(expirySession.takeNextWork())
+        expiryClock.set(seconds: work.expiresAt)
+        XCTAssertFalse(expirySession.completeWork(work))
+        XCTAssertNil(expirySession.contextualPreviewText)
+        XCTAssertEqual(expirySession.scheduledWorkCount, 0)
+    }
+
     func testCorpusSchemaFreezesLearningEvaluationAndDiagnosticIDs() throws {
         let fixture = try ContextualCorpusFixture.load()
         XCTAssertTrue(fixture.validate())
@@ -3846,6 +5660,7 @@ extension ContextualTransportCorpusTests {
 private final class CoordinatorPipelineProbe: DictationOutputSink {
     enum Event: Equatable {
         case providerInput(String)
+        case preview(String?)
         case staged(String)
         case history(String)
         case inserted
@@ -3946,13 +5761,18 @@ final class ContextualCoordinatorTests: XCTestCase {
         let probe: CoordinatorPipelineProbe
         let provider: ControlledCoordinatorProvider
         let coordinator: DictationCoordinator
+        let continuousSession: ContinuousContextSession?
     }
 
     private func makeHarness(
         providerMode: ControlledCoordinatorProvider.Mode,
         store: ContextualCorrectionStore? = nil,
         policy: ContextualCorrectionPolicy? = nil,
-        scope: ContextualTransportScope = .testDouble
+        scope: ContextualTransportScope = .testDouble,
+        continuousEnabled: Bool = false,
+        personalRemoteEnabled: Bool = false,
+        localPreviewVisible: Bool? = nil,
+        wiresContinuousRemote: Bool = false
     ) -> Harness {
         let actualPolicy = policy ?? ContextualCorrectionPolicy()
         let actualStore = store ?? ContextualCorrectionStore(
@@ -3968,6 +5788,9 @@ final class ContextualCoordinatorTests: XCTestCase {
         actualStore.onMutation = { actualPolicy.invalidate(.storeMutated) }
         let probe = CoordinatorPipelineProbe()
         let provider = ControlledCoordinatorProvider(mode: providerMode, probe: probe)
+        let continuousMode = continuousEnabled || personalRemoteEnabled
+        let previewVisible = localPreviewVisible ?? continuousEnabled
+        let continuousSession = continuousMode ? ContinuousContextSession() : nil
         let time = ContinuousContextualTime()
         let resolver = ContextualCorrectionResolver(
             store: actualStore,
@@ -3983,6 +5806,26 @@ final class ContextualCoordinatorTests: XCTestCase {
             soundsEnabled: { false },
             language: { .portuguese },
             onTranscript: { probe.events.append(.history($0)) },
+            continuousContextEnabled: { continuousMode },
+            continuousPreviewVisible: { previewVisible },
+            continuousContextSessionFactory: { continuousSession ?? ContinuousContextSession() },
+            onContinuousPreview: {
+                if continuousMode { probe.events.append(.preview($0?.sourceText)) }
+            },
+            continuousContextLoopFactory: { session in
+                guard wiresContinuousRemote else { return nil }
+                return RevisionBoundJevLoop(
+                    session: session,
+                    provider: provider,
+                    time: time,
+                    storeSnapshot: { actualStore.snapshot },
+                    policyGeneration: { actualPolicy.generation },
+                    policy: actualPolicy
+                )
+            },
+            onContinuousContextualPreview: { _, _, text in
+                probe.events.append(.preview(text))
+            },
             outputSink: probe,
             contextualResolver: resolver,
             contextualTokenSource: { _ in actualPolicy.issueToken(scope: scope) },
@@ -3994,7 +5837,8 @@ final class ContextualCoordinatorTests: XCTestCase {
             policy: actualPolicy,
             probe: probe,
             provider: provider,
-            coordinator: coordinator
+            coordinator: coordinator,
+            continuousSession: continuousSession
         )
     }
 
@@ -4002,6 +5846,149 @@ final class ContextualCoordinatorTests: XCTestCase {
         coordinator.transition(to: .recording)
         coordinator.transition(to: .transcribing)
         return coordinator.attemptID
+    }
+
+    private func beginContinuous(_ harness: Harness) -> UUID {
+        harness.coordinator.transition(to: .recording)
+        XCTAssertTrue(harness.coordinator.beginContinuousContextForActiveAttempt())
+        return harness.coordinator.attemptID
+    }
+
+    private func emitPartial(
+        _ text: String,
+        to harness: Harness,
+        attemptID: UUID,
+        snapshotID: UInt64 = 1
+    ) {
+        harness.coordinator.receiveContinuousHypothesis(
+            .init(
+                snapshotID: snapshotID,
+                sampleRange: 0..<8_000,
+                capturedAt: 1,
+                candidateAt: 2,
+                text: text,
+                isStale: false
+            ),
+            attemptID: attemptID,
+            session: harness.continuousSession
+        )
+    }
+
+    func testContinuousCoordinatorPreviewsLocallyThenCommitsAuthoritativeFinalOnce() async throws {
+        let harness = makeHarness(providerMode: .replace, scope: .disabled, continuousEnabled: true)
+        let attempt = beginContinuous(harness)
+        emitPartial("A COIS Energia chegou", to: harness, attemptID: attempt)
+        XCTAssertEqual(harness.probe.events, [.preview("A COIS Energia chegou")])
+        harness.coordinator.transition(to: .transcribing)
+
+        try await harness.coordinator.finishTranscription(
+            "A COESA Energia chegou", attemptID: attempt, language: .portuguese
+        )
+
+        XCTAssertEqual(harness.probe.events, [
+            .preview("A COIS Energia chegou"),
+            .staged("A COESA Energia chegou"),
+            .history("A COESA Energia chegou"),
+            .inserted,
+            .preview(nil),
+            .completed("A COESA Energia chegou")
+        ])
+        XCTAssertEqual(harness.continuousSession?.state, .committed)
+    }
+
+    func testContinuousCoordinatorDispatchesAuthorizedPersonalRevisionWithLocalPreviewToggleOff() async {
+        let harness = makeHarness(
+            providerMode: .replace,
+            scope: .personalDictation,
+            continuousEnabled: false,
+            personalRemoteEnabled: true,
+            wiresContinuousRemote: true
+        )
+        let attempt = beginContinuous(harness)
+        emitPartial("Reservei um rosto.", to: harness, attemptID: attempt)
+        await harness.provider.waitUntilStarted()
+        for _ in 0..<20 where harness.probe.events.last != .providerInput("Reservei um rosto.") {
+            await Task.yield()
+        }
+
+        XCTAssertEqual(harness.probe.events, [.providerInput("Reservei um rosto.")])
+        XCTAssertFalse(harness.probe.events.contains {
+            if case .preview(let text) = $0 { text != nil } else { false }
+        })
+        let callsBeforeRevocation = await harness.provider.calls
+        XCTAssertEqual(callsBeforeRevocation, 1)
+
+        harness.coordinator.continuousContextModeChanged()
+        emitPartial("Reservei outro rosto.", to: harness, attemptID: attempt, snapshotID: 2)
+        await Task.yield()
+        let callsAfterRevocation = await harness.provider.calls
+        XCTAssertEqual(callsAfterRevocation, 1)
+        XCTAssertFalse(harness.probe.events.contains {
+            if case .preview(let text) = $0 { text != nil } else { false }
+        })
+    }
+
+    func testContinuousCoordinatorRejectsDuplicateFinalAndLatePreview() async throws {
+        let harness = makeHarness(providerMode: .replace, scope: .disabled, continuousEnabled: true)
+        let attempt = beginContinuous(harness)
+        emitPartial("texto parcial", to: harness, attemptID: attempt)
+        harness.coordinator.transition(to: .transcribing)
+
+        try await harness.coordinator.finishTranscription(
+            "texto final", attemptID: attempt, language: .portuguese
+        )
+        emitPartial("texto atrasado", to: harness, attemptID: attempt, snapshotID: 2)
+        try await harness.coordinator.finishTranscription(
+            "duplicado", attemptID: attempt, language: .portuguese
+        )
+
+        XCTAssertEqual(harness.probe.events.filter {
+            if case .staged = $0 { true } else { false }
+        }, [.staged("texto final")])
+        XCTAssertFalse(harness.probe.events.contains(.preview("texto atrasado")))
+    }
+
+    func testContinuousCoordinatorModeChangeClearsPreviewWithoutBlockingFinalFallback() async throws {
+        let harness = makeHarness(providerMode: .replace, scope: .disabled, continuousEnabled: true)
+        let attempt = beginContinuous(harness)
+        emitPartial("texto parcial", to: harness, attemptID: attempt)
+        harness.coordinator.continuousContextModeChanged()
+        emitPartial("texto atrasado", to: harness, attemptID: attempt, snapshotID: 2)
+        harness.coordinator.transition(to: .transcribing)
+
+        try await harness.coordinator.finishTranscription(
+            "texto final local", attemptID: attempt, language: .portuguese
+        )
+
+        XCTAssertEqual(harness.probe.events, [
+            .preview("texto parcial"),
+            .preview(nil),
+            .staged("texto final local"),
+            .history("texto final local"),
+            .inserted,
+            .preview(nil),
+            .completed("texto final local")
+        ])
+        XCTAssertEqual(harness.continuousSession?.state, .cancelled)
+    }
+
+    func testContinuousCoordinatorFeatureOffPreservesExistingFinalPath() async throws {
+        let harness = makeHarness(providerMode: .replace, scope: .disabled)
+        harness.coordinator.transition(to: .recording)
+        XCTAssertFalse(harness.coordinator.beginContinuousContextForActiveAttempt())
+        harness.coordinator.transition(to: .transcribing)
+        let attempt = harness.coordinator.attemptID
+
+        try await harness.coordinator.finishTranscription(
+            "texto local", attemptID: attempt, language: .portuguese
+        )
+
+        XCTAssertEqual(harness.probe.events, [
+            .staged("texto local"),
+            .history("texto local"),
+            .inserted,
+            .completed("texto local")
+        ])
     }
 
     func testCoordinatorUsesRealResolverAndOneResolvedStringForClipboardHistoryAndCompletion() async throws {
@@ -4033,16 +6020,183 @@ final class ContextualCoordinatorTests: XCTestCase {
         _ = URLSessionDecisionsStreamingTransport(time: composition.shared)
     }
 
-    func testCoordinatorProductionTokenSourceUsesOnlyDisabledOrPersonalScope() {
+    func testPersonalRemoteRequiresDistinctConsentCredentialAndLocalEligibility() async throws {
+        XCTAssertEqual(PersonalRemoteReleaseDecision.current, .personalRemoteAvailable)
+        XCTAssertEqual(PersonalRemoteReleaseDecision.allCases, [.personalRemoteAvailable])
         let policy = ContextualCorrectionPolicy()
-        let optIn = ContextualOptInStoreStub(enabled: false)
-        let source = DictationCoordinator.productionContextualTokenSource(
+        let optIn = PersonalRemoteOptInStoreStub()
+        let credential = InMemoryCredentialStore()
+        let authorizationState = InMemoryPersonalRemoteAuthorizationStateStore(
+            backing: PersonalRemoteAuthorizationStateBacking()
+        )
+        let file = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ResenhaTests/\(UUID().uuidString)/contextual.json")
+        let store = ContextualCorrectionStore(fileURL: file)
+        let owner = PersonalRemoteAuthorizationOwner(
+            optInStore: optIn,
+            credentialStore: credential,
+            authorizationStateStore: authorizationState,
             policy: policy,
-            isEnabled: { optIn.contextualCorrectionsEnabled }
+            storeSnapshot: { store.snapshot }
+        )
+        let source = DictationCoordinator.productionContextualTokenSource(
+            authorization: owner
         )
         XCTAssertEqual(source(UUID()).scope, .disabled)
-        try? optIn.persistContextualCorrectionsEnabled(true)
+        XCTAssertThrowsError(try owner.authorizePersonalRemote(explicitConsent: true, credential: "personal-key")) {
+            XCTAssertEqual($0 as? PersonalRemoteAuthorizationError, .locallyIneligible)
+        }
+        XCTAssertTrue(store.save(.init(
+            id: UUID(), language: "pt", heard: "rosto", canonical: "Hostel",
+            sentence: "Reservei um rosto.", occurrenceOrdinal: 1
+        )).isSuccess)
+        XCTAssertThrowsError(try owner.authorizePersonalRemote(explicitConsent: false, credential: "personal-key")) {
+            XCTAssertEqual($0 as? PersonalRemoteAuthorizationError, .consentRequired)
+        }
+        try owner.authorizePersonalRemote(explicitConsent: true, credential: "personal-key")
         XCTAssertEqual(source(UUID()).scope, .personalDictation)
+        try owner.revokePersonalRemote()
+        XCTAssertEqual(source(UUID()).scope, .disabled)
+        XCTAssertFalse(optIn.personalRemoteEnabled)
+        XCTAssertNil(try credential.load())
+        try owner.authorizePersonalRemote(explicitConsent: true, credential: "personal-key-2")
+        owner.handleProviderError(OpenRouterDecisionsError.invalidStatus(402))
+        XCTAssertEqual(source(UUID()).scope, .disabled)
+        XCTAssertFalse(optIn.personalRemoteEnabled)
+        XCTAssertNil(try credential.load())
+
+        let failingOptIn = PersonalRemoteOptInStoreStub()
+        let failingCredential = InMemoryCredentialStore()
+        let durableBacking = PersonalRemoteAuthorizationStateBacking()
+        let failingAuthorizationState = InMemoryPersonalRemoteAuthorizationStateStore(
+            backing: durableBacking
+        )
+        let failingOwner = PersonalRemoteAuthorizationOwner(
+            optInStore: failingOptIn,
+            credentialStore: failingCredential,
+            authorizationStateStore: failingAuthorizationState,
+            policy: ContextualCorrectionPolicy(),
+            storeSnapshot: { store.snapshot }
+        )
+        try failingOwner.authorizePersonalRemote(explicitConsent: true, credential: "retained-key")
+        failingOptIn.failOnDisable = true
+        failingCredential.setDeleteFailure(true)
+        XCTAssertThrowsError(try failingOwner.revokePersonalRemote())
+        XCTAssertTrue(failingOptIn.personalRemoteEnabled)
+        XCTAssertEqual(try failingCredential.load(), "retained-key")
+        XCTAssertTrue(failingOwner.personalRemoteHealth().revokedInProcess)
+        XCTAssertFalse(failingOwner.personalRemoteHealth().canDispatch)
+        XCTAssertEqual(failingOwner.issueToken().scope, .disabled)
+        let reconstructedAuthorizationState = InMemoryPersonalRemoteAuthorizationStateStore(
+            backing: durableBacking
+        )
+        let reconstructedOwner = PersonalRemoteAuthorizationOwner(
+            optInStore: failingOptIn,
+            credentialStore: failingCredential,
+            authorizationStateStore: reconstructedAuthorizationState,
+            policy: ContextualCorrectionPolicy(),
+            storeSnapshot: { store.snapshot }
+        )
+        XCTAssertFalse(reconstructedOwner.personalRemoteHealth().canDispatch)
+        XCTAssertEqual(reconstructedOwner.issueToken().scope, .disabled)
+        let blockedTransport = DecisionsStreamingTransportStub(chunks: [])
+        let blockedClient = OpenRouterDecisionsClient(
+            transport: blockedTransport,
+            credential: { "retained-key" },
+            beforeTransportOpen: {
+                await reconstructedOwner.personalRemoteHealth().canDispatch
+            }
+        )
+        let blockedSentence = "Reservei um rosto."
+        let blockedRange = try XCTUnwrap(blockedSentence.range(of: "rosto"))
+        do {
+            _ = try await blockedClient.decide(
+                sentence: blockedSentence,
+                language: "pt",
+                occurrences: [.init(
+                    questionID: "o1", heard: "rosto", canonical: "Hostel",
+                    ordinal: 1, range: blockedRange
+                )],
+                deadline: .init(offset: .seconds(1))
+            )
+            XCTFail("Revoked authority must block before transport open")
+        } catch {
+            XCTAssertEqual(error as? OpenRouterDecisionsError, .authorizationInvalidated)
+        }
+        XCTAssertNil(blockedTransport.snapshot().capturedRequest)
+
+        failingOptIn.failOnDisable = false
+        failingCredential.setDeleteFailure(false)
+        XCTAssertEqual(reconstructedOwner.issueToken().scope, .disabled)
+        try reconstructedOwner.authorizePersonalRemote(explicitConsent: true, credential: "new-explicit-key")
+        XCTAssertFalse(reconstructedOwner.personalRemoteHealth().revokedInProcess)
+        XCTAssertEqual(reconstructedOwner.issueToken().scope, .personalDictation)
+
+        for (index, status) in [401, 402, 403, 429].enumerated() {
+            failingOptIn.failOnDisable = true
+            failingCredential.setDeleteFailure(true)
+            reconstructedOwner.handleProviderError(OpenRouterDecisionsError.invalidStatus(status))
+            XCTAssertTrue(reconstructedOwner.personalRemoteHealth().revokedInProcess)
+            XCTAssertFalse(reconstructedOwner.personalRemoteHealth().canDispatch)
+            XCTAssertEqual(reconstructedOwner.issueToken().scope, .disabled)
+            guard index < 3 else { continue }
+            failingOptIn.failOnDisable = false
+            failingCredential.setDeleteFailure(false)
+            try reconstructedOwner.authorizePersonalRemote(
+                explicitConsent: true,
+                credential: "explicit-key-\(status)"
+            )
+        }
+
+        reconstructedAuthorizationState.readFails = true
+        XCTAssertFalse(reconstructedOwner.personalRemoteHealth().canDispatch)
+        XCTAssertEqual(reconstructedOwner.issueToken().scope, .disabled)
+        reconstructedAuthorizationState.readFails = false
+        failingOptIn.failOnDisable = false
+        failingCredential.setDeleteFailure(false)
+        try reconstructedOwner.authorizePersonalRemote(explicitConsent: true, credential: "write-test-key")
+        reconstructedAuthorizationState.writeFails = true
+        XCTAssertThrowsError(try reconstructedOwner.revokePersonalRemote())
+        XCTAssertFalse(failingOptIn.personalRemoteEnabled)
+        XCTAssertNil(try failingCredential.load())
+        XCTAssertFalse(reconstructedOwner.personalRemoteHealth().canDispatch)
+        XCTAssertEqual(reconstructedOwner.issueToken().scope, .disabled)
+        let writeFailureReconstructedOwner = PersonalRemoteAuthorizationOwner(
+            optInStore: failingOptIn,
+            credentialStore: failingCredential,
+            authorizationStateStore: InMemoryPersonalRemoteAuthorizationStateStore(
+                backing: durableBacking
+            ),
+            policy: ContextualCorrectionPolicy(),
+            storeSnapshot: { store.snapshot }
+        )
+        XCTAssertFalse(writeFailureReconstructedOwner.personalRemoteHealth().canDispatch)
+        XCTAssertEqual(writeFailureReconstructedOwner.issueToken().scope, .disabled)
+    }
+
+    func testPersonalRemoteDurableStatePersistsAcrossStoreReconstructionAndRejectsCorruption() throws {
+        let suite = "ResenhaTests.PersonalRemoteState.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let epoch = UUID()
+
+        try UserDefaultsPersonalRemoteAuthorizationStateStore(defaults: defaults)
+            .persistAuthorizedEpoch(epoch)
+        XCTAssertEqual(
+            try UserDefaultsPersonalRemoteAuthorizationStateStore(defaults: defaults)
+                .loadAuthorizedEpoch(),
+            epoch
+        )
+        try UserDefaultsPersonalRemoteAuthorizationStateStore(defaults: defaults).persistRevoked()
+        XCTAssertNil(
+            try UserDefaultsPersonalRemoteAuthorizationStateStore(defaults: defaults)
+                .loadAuthorizedEpoch()
+        )
+        defaults.set(7, forKey: "resenha.personalRemoteAuthorizationState")
+        XCTAssertThrowsError(
+            try UserDefaultsPersonalRemoteAuthorizationStateStore(defaults: defaults)
+                .loadAuthorizedEpoch()
+        )
     }
 
     func testCoordinatorTestTokenSourceUsesTestDoubleScope() async throws {
@@ -4154,7 +6308,8 @@ final class ContextualCoordinatorTests: XCTestCase {
             ContextualPolicyInvalidationReason.optedOut,
             .credentialDeleted,
             .storeMutated,
-            .appTerminated
+            .appTerminated,
+            .authorityChanged
         ] {
             let policy = ContextualCorrectionPolicy()
             let resolver = policy.issueToken(scope: .testDouble)
@@ -4221,16 +6376,20 @@ final class ContextualCoordinatorTests: XCTestCase {
     }
 
     func testCoordinatorProviderFailureFlowsOriginalExactlyOnce() async throws {
-        let harness = makeHarness(providerMode: .failure)
-        let attempt = begin(harness.coordinator)
+        let harness = makeHarness(providerMode: .failure, continuousEnabled: true)
+        let attempt = beginContinuous(harness)
+        emitPartial("Reservei um rosto", to: harness, attemptID: attempt)
+        harness.coordinator.transition(to: .transcribing)
         try await harness.coordinator.finishTranscription(
             "Reservei um rosto.", attemptID: attempt, language: .portuguese
         )
         XCTAssertEqual(harness.probe.events, [
+            .preview("Reservei um rosto"),
             .providerInput("Reservei um rosto."),
             .staged("Reservei um rosto."),
             .history("Reservei um rosto."),
             .inserted,
+            .preview(nil),
             .completed("Reservei um rosto.")
         ])
     }
@@ -4541,7 +6700,7 @@ final class ContextualFeedbackSettingsTests: XCTestCase {
         XCTAssertEqual(ContextualSettingsModel.disclosureLines, [
             "Correções contextuais (beta)",
             "Beta local, desligado por padrão: salva e organiza exemplos confirmados neste Mac.",
-            "Neste beta, esses exemplos ainda não aplicam correções automáticas ao ditado pessoal.",
+            "Avaliação remota pessoal é separada e começa desligada.",
             "Diagnóstico de infraestrutura: envia somente a frase sintética identificada ao OpenRouter/TypeSafe, uma única vez.",
             "O diagnóstico não recebe nem corrige seu ditado pessoal."
         ])
@@ -4555,6 +6714,16 @@ final class ContextualFeedbackSettingsTests: XCTestCase {
         await model.setLocalBetaEnabled(false)
         let requestCount = await provider.requestCount()
         XCTAssertEqual(requestCount, 0)
+        XCTAssertFalse(fixture.preferences.personalRemoteEnabled)
+        XCTAssertNotEqual(
+            KeychainContextualCredentialConstants.syntheticAccount,
+            KeychainContextualCredentialConstants.personalAccount
+        )
+        XCTAssertTrue(ContextualSettingsModel.personalDisclosure.contains("somente a frase transcrita"))
+        XCTAssertTrue(ContextualSettingsModel.personalDisclosure.contains("Nunca envia áudio"))
+        XCTAssertTrue(ContextualSettingsModel.personalDisclosure.contains("500 ms"))
+        XCTAssertTrue(ContextualSettingsModel.personalDisclosure.contains("4096 bytes"))
+        XCTAssertFalse(ContextualSettingsModel.personalDisclosure.localizedCaseInsensitiveContains("ZDR"))
     }
 
     func testContextualControlsHaveExactAccessibilityLabelsAndRestoreFocus() throws {
@@ -4562,6 +6731,8 @@ final class ContextualFeedbackSettingsTests: XCTestCase {
         XCTAssertEqual(ContextualSettingsModel.deleteExampleAccessibilityLabel, "Apagar exemplo contextual")
         XCTAssertEqual(ContextualSettingsModel.deleteAllAccessibilityLabel, "Apagar todos os exemplos contextuais")
         XCTAssertEqual(ContextualSettingsModel.removeCredentialAccessibilityLabel, "Remover chave do diagnóstico")
+        XCTAssertEqual(ContextualSettingsModel.authorizePersonalAccessibilityLabel, "Ativar avaliação remota pessoal")
+        XCTAssertEqual(ContextualSettingsModel.revokePersonalAccessibilityLabel, "Desativar avaliação remota e remover chave")
         let fixture = try SettingsFixture.make()
         defer { fixture.defaults.removePersistentDomain(forName: fixture.suiteName) }
         let storage = makeStore()
@@ -4631,6 +6802,7 @@ private final class InMemoryCredentialStore: ContextualCredentialStore, @uncheck
     private var value: String?
     private(set) var calls: [String] = []
     var loadOverride: String?
+    private var deleteFails = false
 
     func save(_ value: String) throws {
         lock.withLock { calls.append("credential-save"); self.value = value }
@@ -4638,8 +6810,48 @@ private final class InMemoryCredentialStore: ContextualCredentialStore, @uncheck
     func load() throws -> String? {
         lock.withLock { calls.append("credential-load"); return loadOverride ?? value }
     }
-    func delete() throws { lock.withLock { calls.append("credential-delete"); value = nil } }
+    func delete() throws {
+        try lock.withLock {
+            calls.append("credential-delete")
+            if deleteFails { throw ContextualCredentialError.invalidValue }
+            value = nil
+        }
+    }
+    func setDeleteFailure(_ enabled: Bool) { lock.withLock { deleteFails = enabled } }
     func snapshotCalls() -> [String] { lock.withLock { calls } }
+}
+
+@MainActor
+private final class PersonalRemoteAuthorizationStateBacking {
+    var epoch: UUID?
+}
+
+@MainActor
+private final class InMemoryPersonalRemoteAuthorizationStateStore:
+    PersonalRemoteAuthorizationStateStore
+{
+    private let backing: PersonalRemoteAuthorizationStateBacking
+    var readFails = false
+    var writeFails = false
+
+    init(backing: PersonalRemoteAuthorizationStateBacking) {
+        self.backing = backing
+    }
+
+    func loadAuthorizedEpoch() throws -> UUID? {
+        if readFails { throw PersonalRemoteAuthorizationError.durableStateUnavailable }
+        return backing.epoch
+    }
+
+    func persistAuthorizedEpoch(_ epoch: UUID) throws {
+        if writeFails { throw PersonalRemoteAuthorizationError.durableStateUnavailable }
+        backing.epoch = epoch
+    }
+
+    func persistRevoked() throws {
+        if writeFails { throw PersonalRemoteAuthorizationError.durableStateUnavailable }
+        backing.epoch = nil
+    }
 }
 
 @MainActor
@@ -4650,6 +6862,20 @@ private final class ContextualOptInStoreStub: ContextualOptInStore {
     func persistContextualCorrectionsEnabled(_ enabled: Bool) throws {
         writes.append(enabled)
         contextualCorrectionsEnabled = enabled
+    }
+}
+
+@MainActor
+private final class PersonalRemoteOptInStoreStub: PersonalRemoteOptInStore {
+    var contextualCorrectionsEnabled = true
+    private(set) var personalRemoteEnabled = false
+    private(set) var writes: [Bool] = []
+    var failOnDisable = false
+
+    func persistPersonalRemoteEnabled(_ enabled: Bool) throws {
+        writes.append(enabled)
+        if !enabled, failOnDisable { throw PersonalRemoteAuthorizationError.credentialUnverified }
+        personalRemoteEnabled = enabled
     }
 }
 

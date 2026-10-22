@@ -188,11 +188,15 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
     private let model = FloatingPanelModel()
     private lazy var panel: NSPanel = makePanel()
     private var dismissalTask: Task<Void, Never>?
+    private var previewTask: Task<Void, Never>?
+    private var pendingPreview: ContinuousContextRevision?
+    private var lastPreviewPresentation: TimeInterval?
     private var onDismiss: (@MainActor () -> Void)?
     private(set) var dismissal = PanelDismissal()
     private(set) var target: PanelTarget = .standalone(nil)
     private var screenSelection = PanelScreenSelection()
     private let clock: () -> TimeInterval
+    private let previewCoalescingInterval: TimeInterval
     private(set) var selectedScreenID: UInt32?
     private var feedback: CorrectionSession?
     private var offeredFeedback: FeedbackOffer?
@@ -224,12 +228,17 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
     var frame: CGRect { panel.frame }
     var recordingMeter: RecordingMeter { model.recording }
     var feedbackPhase: FeedbackBubblePhase { model.feedbackPhase }
+    var preview: FloatingPreview? { model.preview }
     var activePresentationTaskCount: Int { dismissalTask == nil ? 0 : 1 }
     var feedbackTargetWindows: [NSPanel] { feedbackTargets }
     var correctionSession: CorrectionSession? { feedback }
 
-    init(clock: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }) {
+    init(
+        clock: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
+        previewCoalescingInterval: TimeInterval = 0.08
+    ) {
         self.clock = clock
+        self.previewCoalescingInterval = max(0, previewCoalescingInterval)
         super.init()
         NotificationCenter.default.addObserver(self, selector: #selector(screensChanged), name: NSApplication.didChangeScreenParametersNotification, object: nil)
         NSWorkspace.shared.notificationCenter.addObserver(self, selector: #selector(applicationActivated(_:)), name: NSWorkspace.didActivateApplicationNotification, object: nil)
@@ -239,6 +248,7 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
 
     deinit {
         dismissalTask?.cancel()
+        previewTask?.cancel()
         MainActor.assumeIsolated {
             feedback?.clear()
             removeFeedbackTargets()
@@ -262,6 +272,11 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
 
     private func present(_ status: FloatingStatus, target: PanelTarget) {
         invalidateDismissal()
+        if status == .transcribing || status == .inserting {
+            flushPendingPreview()
+        } else if status != .listening {
+            clearContinuousPreview()
+        }
         self.target = target
         model.show(status, now: clock())
         panel.ignoresMouseEvents = true
@@ -316,10 +331,70 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
     func hide() {
         discardFeedback()
         invalidateDismissal()
+        clearContinuousPreview()
         panel.orderOut(nil)
         panel.contentView = nil
         screenSelection.endSession()
         model.recording = RecordingMeter()
+    }
+
+    func updateContinuousPreview(_ revision: ContinuousContextRevision?) {
+        guard let revision else {
+            clearContinuousPreview()
+            return
+        }
+        guard model.status == .listening else { return }
+        pendingPreview = revision
+        let elapsed = clock() - (lastPreviewPresentation ?? -.infinity)
+        guard elapsed < previewCoalescingInterval else {
+            flushPendingPreview()
+            return
+        }
+        guard previewTask == nil else { return }
+        let delay = max(0, previewCoalescingInterval - elapsed)
+        previewTask = Task { [weak self] in
+            do { try await Task.sleep(for: .seconds(delay), clock: .suspending) }
+            catch { return }
+            guard !Task.isCancelled else { return }
+            self?.previewTask = nil
+            self?.flushPendingPreview()
+        }
+    }
+
+    func updateContinuousContextualPreview(attemptID: UUID, revision: UInt64, text: String) {
+        guard model.status == .listening,
+              model.applyContextualPreview(attemptID: attemptID, revision: revision, text: text) else { return }
+        if panel.isVisible { positionPanel() }
+    }
+
+    func showLocalPreviewFallback(attemptID: UUID) {
+        guard model.status == .listening else { return }
+        pendingPreview = nil
+        previewTask?.cancel()
+        previewTask = nil
+        model.showLocalFallback(attemptID: attemptID)
+        if panel.isVisible { positionPanel() }
+        announce("Modo local. A prévia ao vivo está indisponível; o ditado continua neste Mac.")
+    }
+
+    func clearContinuousPreview(attemptID: UUID? = nil) {
+        if let attemptID, pendingPreview?.attemptID != attemptID, model.preview?.attemptID != attemptID { return }
+        pendingPreview = nil
+        previewTask?.cancel()
+        previewTask = nil
+        lastPreviewPresentation = nil
+        model.clearPreview(attemptID: attemptID)
+        if panel.isVisible { positionPanel() }
+    }
+
+    private func flushPendingPreview() {
+        previewTask?.cancel()
+        previewTask = nil
+        guard let revision = pendingPreview else { return }
+        pendingPreview = nil
+        guard model.showPreview(revision) else { return }
+        lastPreviewPresentation = clock()
+        if panel.isVisible { positionPanel() }
     }
 
     func configureFeedback(preferences: ProductPreferences) {
@@ -714,7 +789,11 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
         guard let screen else { return }
         selectedScreenID = screen.id
         if screenSelection.hasSession { _ = screenSelection.sessionScreen(screens: screens, mainID: screen.id) }
-        let size = FloatingStatusView.panelSize(for: model.status, available: screen.visibleFrame.size)
+        let size = FloatingStatusView.panelSize(
+            for: model.status,
+            available: screen.visibleFrame.size,
+            hasPreview: model.preview != nil
+        )
         panel.setFrame(PanelPlacement.panelFrame(size: size, visibleFrame: screen.visibleFrame), display: true)
         positionFeedbackTargets()
     }

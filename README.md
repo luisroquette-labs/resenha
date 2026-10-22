@@ -15,19 +15,28 @@ campo ativo com a permissão de Acessibilidade.
 - HUD compacto com nível real do microfone, sons configuráveis e feedback de erro.
 - Atalho livre configurado dentro do app, inclusive Option direita isolada.
 - Correções contextuais locais, desligadas por padrão e separadas do glossário.
+- Prévia local opcional durante a fala, mostrada somente no HUD do Resenha.
 - Sem conta, anúncios, analytics ou backend. Uma chave descartável é aceita apenas para o diagnóstico sintético opcional.
 
 ## Privacidade
 
 O áudio nunca sai do Mac. O modelo de 181 MB é baixado uma vez da distribuição
-oficial do whisper.cpp e validado por tamanho e SHA-256. Resenha não coleta
-dados e não inclui SDKs de rastreamento. Leia a [política de privacidade](docs/PRIVACY.md).
+oficial do whisper.cpp e validado por tamanho e SHA-256. Resenha não inclui
+SDKs de rastreamento. Leia a [política de privacidade](docs/PRIVACY.md).
 
 O beta guarda no máximo 100 exemplos locais, com frases de até 600 caracteres,
-todos apagáveis. Ditados pessoais nunca são enviados: neste beta, o resolvedor
-preserva o texto original. Somente um diagnóstico explícito e sintético pode
+todos apagáveis. A avaliação remota de texto começa desligada e exige
+consentimento e chave pessoais. Um diagnóstico explícito e sintético separado pode
 consultar `typesafe/jev-1.14` via OpenRouter/TypeSafe, com limite de 900 ms e
 uma única tentativa. Esse diagnóstico não comprova qualidade em PT-BR.
+
+A inteligência contextual contínua ainda é experimental. O reconhecedor local
+produz hipóteses provisórias; o avaliador Jev autorizado pode apenas escolher
+entre alternativas permitidas e ligadas ao texto já
+reconhecido. Ele não recebe áudio, não prevê palavras ainda não ditas e não gera
+texto livre. Sem opt-in, credencial e exemplos elegíveis, a prévia e a
+finalização permanecem locais e fazem zero requisições.
+Metas de latência não são apresentadas como desempenho medido sem prova física.
 
 ## Rodar o projeto
 
@@ -69,6 +78,7 @@ Gatekeeper. Cada artefato recebe um arquivo `.sha256` correspondente.
 Atalho global escolhido no Resenha
   → AVFoundation (PCM mono, 16 kHz)
   → whisper.cpp + Metal
+  → hipóteses locais provisórias no HUD (opcional)
   → pós-processamento determinístico
   → NSPasteboard + Command-V no campo ativo
 ```

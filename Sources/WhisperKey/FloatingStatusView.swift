@@ -47,17 +47,123 @@ enum FloatingStatus: Equatable {
     var accessibilityLabel: String { [title, secondary].compactMap { $0 }.joined(separator: ". ") }
 }
 
+enum FloatingPreviewPhase: Equatable {
+    case provisional
+    case finalizing
+    case localFallback
+
+    var title: String {
+        switch self {
+        case .provisional: "PRÉVIA LOCAL"
+        case .finalizing: "FINALIZANDO"
+        case .localFallback: "MODO LOCAL"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .provisional: "text.bubble"
+        case .finalizing: "checkmark.circle"
+        case .localFallback: "lock.fill"
+        }
+    }
+}
+
+struct FloatingPreview: Equatable {
+    static let maximumCharacters = 240
+    static let fallbackText = "O ditado continua sem prévia ao vivo."
+
+    let attemptID: UUID
+    let revision: UInt64
+    let text: String
+    let phase: FloatingPreviewPhase
+
+    init(attemptID: UUID, revision: UInt64, text: String, phase: FloatingPreviewPhase) {
+        self.attemptID = attemptID
+        self.revision = revision
+        self.text = Self.bounded(text)
+        self.phase = phase
+    }
+
+    static func bounded(_ text: String) -> String {
+        guard text.count > maximumCharacters else { return text }
+        return String(text.prefix(maximumCharacters - 1)) + "…"
+    }
+
+    var accessibilityLabel: String { "\(phase.title). \(text)" }
+}
+
 @MainActor
 final class FloatingPanelModel: ObservableObject {
     @Published var status: FloatingStatus = .ready
     @Published var recording = RecordingMeter()
     @Published var feedbackPhase: FeedbackBubblePhase = .hidden
+    @Published private(set) var preview: FloatingPreview?
 
     func show(_ status: FloatingStatus, now: TimeInterval) {
         if status == .listening {
             if self.status != status || !recording.isRecording { recording.start(at: now) }
         } else { recording = RecordingMeter() }
+        if status == .transcribing || status == .inserting {
+            markPreviewFinalizing()
+        } else if status != .listening {
+            clearPreview()
+        }
         self.status = status
+    }
+
+    @discardableResult
+    func showPreview(_ revision: ContinuousContextRevision) -> Bool {
+        guard revision.kind == .provisional,
+              preview == nil || preview?.attemptID == revision.attemptID,
+              revision.revision > (preview?.revision ?? 0) else { return false }
+        preview = FloatingPreview(
+            attemptID: revision.attemptID,
+            revision: revision.revision,
+            text: revision.sourceText,
+            phase: .provisional
+        )
+        return true
+    }
+
+    @discardableResult
+    func applyContextualPreview(attemptID: UUID, revision: UInt64, text: String) -> Bool {
+        guard let preview,
+              preview.phase == .provisional,
+              preview.attemptID == attemptID,
+              preview.revision == revision else { return false }
+        self.preview = FloatingPreview(
+            attemptID: attemptID,
+            revision: revision,
+            text: text,
+            phase: .provisional
+        )
+        return true
+    }
+
+    func showLocalFallback(attemptID: UUID) {
+        guard preview == nil || preview?.attemptID == attemptID else { return }
+        preview = FloatingPreview(
+            attemptID: attemptID,
+            revision: preview?.revision ?? 0,
+            text: FloatingPreview.fallbackText,
+            phase: .localFallback
+        )
+    }
+
+    func markPreviewFinalizing() {
+        guard let preview, preview.phase == .provisional else { return }
+        self.preview = FloatingPreview(
+            attemptID: preview.attemptID,
+            revision: preview.revision,
+            text: preview.text,
+            phase: .finalizing
+        )
+    }
+
+    func clearPreview(attemptID: UUID? = nil) {
+        guard attemptID == nil || preview?.attemptID == attemptID else { return }
+        preview = nil
     }
 }
 
@@ -131,7 +237,10 @@ struct FloatingStatusView: View {
     }
 
     @MainActor
-    static func panelSize(for status: FloatingStatus, available: CGSize) -> CGSize {
+    static func panelSize(for status: FloatingStatus, available: CGSize, hasPreview: Bool = false) -> CGSize {
+        if hasPreview && (status == .listening || status.isBusy) {
+            return CGSize(width: min(420, max(0, available.width - 24)), height: min(116, max(0, available.height - 24)))
+        }
         if status == .listening { return CGSize(width: 340, height: 72) }
         guard status.isFailure else { return CGSize(width: 280, height: 64) }
         let width = min(360, max(0, available.width - 24))
@@ -146,7 +255,7 @@ struct FloatingStatusView: View {
 
     var body: some View {
         Group {
-            if model.status == .listening {
+            if model.status == .listening && model.preview == nil {
                 RecordingWaveformView(meter: model.recording, fixtureReduceMotion: fixtureReduceMotion)
             } else if model.status == .feedback {
                 feedbackContent
@@ -185,7 +294,7 @@ struct FloatingStatusView: View {
             }
         }
         .accessibilityElement(children: model.status == .feedback ? .contain : .ignore)
-        .accessibilityLabel(model.status.accessibilityLabel)
+        .accessibilityLabel(accessibilityLabel)
     }
 
     private var feedbackContent: some View {
@@ -200,32 +309,64 @@ struct FloatingStatusView: View {
     }
 
     private var statusContent: some View {
-        HStack(spacing: 12) {
-            Group {
-                if model.status.isBusy {
-                    ProgressView().controlSize(.small).tint(ResenhaTheme.signal).accessibilityLabel(model.status.title)
-                } else if let symbol = model.status.symbol {
-                    Image(systemName: symbol)
-                        .foregroundStyle(model.status.isFailure ? ResenhaTheme.signal : Color.primary)
-                        .accessibilityHidden(true)
+        VStack(alignment: .leading, spacing: 8) {
+            if model.status == .listening {
+                RecordingWaveformView(meter: model.recording, fixtureReduceMotion: fixtureReduceMotion)
+                    .frame(height: 32)
+                    .accessibilityHidden(true)
+            } else {
+                HStack(spacing: 12) {
+                    Group {
+                        if model.status.isBusy {
+                            ProgressView().controlSize(.small).tint(ResenhaTheme.signal).accessibilityLabel(model.status.title)
+                        } else if let symbol = model.status.symbol {
+                            Image(systemName: symbol)
+                                .foregroundStyle(model.status.isFailure ? ResenhaTheme.signal : Color.primary)
+                                .accessibilityHidden(true)
+                        }
+                    }
+                    .frame(width: 20)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(model.status.title)
+                            .font(.system(size: 14, weight: .semibold, design: .rounded))
+                            .foregroundStyle(.primary)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                        if let secondary = model.status.secondary {
+                            Text(secondary)
+                                .font(.system(size: 12))
+                                .foregroundStyle((fixtureContrast ?? contrast) == .increased ? Color.primary : Color.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
-            .frame(width: 20)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(model.status.title)
-                    .font(.system(size: 14, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.primary)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-                if let secondary = model.status.secondary {
-                    Text(secondary)
+            if let preview = model.preview {
+                HStack(alignment: .firstTextBaseline, spacing: 7) {
+                    Image(systemName: preview.phase.symbol)
+                        .font(.system(size: 10, weight: .semibold))
+                        .accessibilityHidden(true)
+                    Text(preview.phase.title)
+                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .tracking(0.8)
+                    Text(preview.text)
                         .font(.system(size: 12))
                         .foregroundStyle((fixtureContrast ?? contrast) == .increased ? Color.primary : Color.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .lineLimit(2)
+                        .truncationMode(.tail)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                .foregroundStyle(preview.phase == .localFallback ? Color.primary : ResenhaTheme.accent)
+                .accessibilityHidden(true)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
+    }
+
+    private var accessibilityLabel: String {
+        [model.status.accessibilityLabel, model.preview?.accessibilityLabel]
+            .compactMap { $0 }
+            .joined(separator: ". ")
     }
 }
 

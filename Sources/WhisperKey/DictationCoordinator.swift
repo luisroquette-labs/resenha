@@ -31,6 +31,10 @@ final class ContextRetentionProbe {
 
 typealias ContextualPolicyTokenSource = @MainActor @Sendable (UUID) -> ContextualPolicyToken
 typealias ContextualStoreGenerationSource = @MainActor @Sendable () -> UInt64
+typealias ContinuousContextSessionFactory = @MainActor @Sendable () -> ContinuousContextSession
+typealias ContinuousContextPreview = @MainActor @Sendable (ContinuousContextRevision?) -> Void
+typealias ContinuousContextualPreview = @MainActor @Sendable (UUID, UInt64, String) -> Void
+typealias ContinuousContextLoopFactory = @MainActor @Sendable (ContinuousContextSession) -> RevisionBoundJevLoop?
 
 @MainActor
 protocol DictationOutputSink {
@@ -115,21 +119,40 @@ struct DictationErrorPresentation: Equatable {
 
 @MainActor
 final class DictationCoordinator {
+    private struct AuthoritativeFinalEvent: ContinuousContextRollingEvent {
+        let snapshotID: UInt64
+        let sampleRange: Range<Int64>
+        let capturedAt: TimeInterval
+        let candidateAt: TimeInterval
+        let text: String
+        let isStale = false
+    }
+
+    private static let rollingAudioConfiguration = RollingAudioConfiguration(
+        maximumRetainedSamples: 30 * 16_000,
+        snapshotStrideSamples: 8_000
+    )
+
     static func productionContextualTokenSource(
-        policy: ContextualCorrectionPolicy,
-        isEnabled: @escaping @MainActor @Sendable () -> Bool
+        authorization: PersonalRemoteAuthorizationOwner
     ) -> ContextualPolicyTokenSource {
-        { _ in policy.issueToken(scope: isEnabled() ? .personalDictation : .disabled) }
+        { _ in authorization.issueToken() }
     }
 
     private let permissions: PermissionService
     private let panel: FloatingPanelController
-    private let recorder = AudioRecorder()
+    private let recorder: AudioRecorder
     private let transcriber: WhisperTranscriber
     private let outputSink: any DictationOutputSink
     private let contextualResolver: any ContextualResolving
     private let contextualTokenSource: ContextualPolicyTokenSource
     private let contextualStoreGeneration: ContextualStoreGenerationSource
+    private let continuousContextEnabled: @MainActor @Sendable () -> Bool
+    private let continuousPreviewVisible: @MainActor @Sendable () -> Bool
+    private let continuousContextSessionFactory: ContinuousContextSessionFactory
+    private let onContinuousPreview: ContinuousContextPreview
+    private let continuousContextLoopFactory: ContinuousContextLoopFactory
+    private let onContinuousContextualPreview: ContinuousContextualPreview
     private let cuePlayer = DictationCuePlayer()
     private(set) var phase = DictationPhase.idle {
         didSet { if oldValue != phase { onPhaseChange?(phase) } }
@@ -140,6 +163,11 @@ final class DictationCoordinator {
     private var targetApplication: NSRunningApplication?
     private var task: Task<Void, Never>?
     private var executionControl: WhisperExecutionControl?
+    private var continuousSession: ContinuousContextSession?
+    private var continuousJevLoop: RevisionBoundJevLoop?
+    private var continuousJevTask: Task<Void, Never>?
+    private var rollingRecognizer: RollingWhisperRecognizer?
+    private var finalOutputAttemptID: UUID?
     private(set) var attemptID = UUID()
     private let showsHUD: () -> Bool
     private let soundsEnabled: () -> Bool
@@ -161,6 +189,13 @@ final class DictationCoordinator {
         onTranscript: @escaping (String) -> Void = { _ in },
         onFailure: @escaping (DictationErrorPresentation) -> Void = { _ in },
         transcriber: WhisperTranscriber = WhisperTranscriber(),
+        recorder: AudioRecorder? = nil,
+        continuousContextEnabled: @escaping @MainActor @Sendable () -> Bool = { false },
+        continuousPreviewVisible: @escaping @MainActor @Sendable () -> Bool = { true },
+        continuousContextSessionFactory: @escaping ContinuousContextSessionFactory = { ContinuousContextSession() },
+        onContinuousPreview: @escaping ContinuousContextPreview = { _ in },
+        continuousContextLoopFactory: @escaping ContinuousContextLoopFactory = { _ in nil },
+        onContinuousContextualPreview: @escaping ContinuousContextualPreview = { _, _, _ in },
         outputSink: any DictationOutputSink,
         contextualResolver: any ContextualResolving,
         contextualTokenSource: @escaping ContextualPolicyTokenSource,
@@ -175,11 +210,18 @@ final class DictationCoordinator {
         self.onTranscript = onTranscript
         self.onFailure = onFailure
         self.transcriber = transcriber
+        self.recorder = recorder ?? AudioRecorder()
+        self.continuousContextEnabled = continuousContextEnabled
+        self.continuousPreviewVisible = continuousPreviewVisible
+        self.continuousContextSessionFactory = continuousContextSessionFactory
+        self.onContinuousPreview = onContinuousPreview
+        self.continuousContextLoopFactory = continuousContextLoopFactory
+        self.onContinuousContextualPreview = onContinuousContextualPreview
         self.outputSink = outputSink
         self.contextualResolver = contextualResolver
         self.contextualTokenSource = contextualTokenSource
         self.contextualStoreGeneration = contextualStoreGeneration
-        recorder.onLevel = { [weak panel] level in
+        self.recorder.onLevel = { [weak panel] level in
             panel?.updateRecordingLevel(level)
             onRecordingLevel(level)
         }
@@ -187,6 +229,7 @@ final class DictationCoordinator {
 
     func hotkeyPressed() {
         guard phase == .idle else { return }
+        invalidateContinuousContext()
         panel.hide()
         attemptID = UUID()
         currentError = nil
@@ -200,10 +243,32 @@ final class DictationCoordinator {
         }
 
         do {
-            try recorder.start()
+            let requestedContinuousPreview = continuousPreviewVisible()
+            var startedContinuousPreview = false
+            if beginContinuousContextForActiveAttempt() {
+                do {
+                    try recorder.start(
+                        rolling: Self.rollingAudioConfiguration,
+                        onSnapshot: { [weak self] snapshot in
+                            Task { @MainActor in self?.receiveContinuousSnapshot(snapshot) }
+                        }
+                    )
+                    startedContinuousPreview = true
+                } catch {
+                    invalidateContinuousContext()
+                    try recorder.start()
+                }
+            } else {
+                try recorder.start()
+            }
             transition(to: .recording)
             if soundsEnabled() { cuePlayer.play(.started) }
-            if showsHUD() { panel.show(.listening, target: panelTarget) }
+            if showsHUD() {
+                panel.show(.listening, target: panelTarget)
+                if requestedContinuousPreview && !startedContinuousPreview {
+                    panel.showLocalPreviewFallback(attemptID: attemptID)
+                }
+            }
         } catch {
             fail(DictationErrorPresentation(error: error))
         }
@@ -211,6 +276,8 @@ final class DictationCoordinator {
 
     func hotkeyReleased() {
         guard phase == .recording else { return }
+        rollingRecognizer?.cancel()
+        rollingRecognizer = nil
         do {
             transcribeRecording(at: try recorder.stop())
         } catch {
@@ -280,13 +347,16 @@ final class DictationCoordinator {
               phase == .transcribing,
               generation == contextualStoreGeneration(),
               token.generation == contextualTokenSource(attemptID).generation else {
-            if self.attemptID == attemptID { reset() }
+            if self.attemptID == attemptID, phase == .transcribing { reset() }
             return
         }
 
+        guard finalOutputAttemptID == nil else { return }
+        let frozenFinal = freezeFinal(final, attemptID: attemptID)
+        finalOutputAttemptID = attemptID
         let target = targetApplication
-        let changeCount = try outputSink.stage(final)
-        onTranscript(final)
+        let changeCount = try outputSink.stage(frozenFinal)
+        onTranscript(frozenFinal)
         transition(to: .inserting)
         if showsHUD() { panel.show(.inserting, target: panelTarget) }
         try await outputSink.insertStaged(into: target, changeCount: changeCount)
@@ -301,7 +371,7 @@ final class DictationCoordinator {
         let completion = DictationCompletion(
             id: attemptID,
             targetApplication: target,
-            text: final,
+            text: frozenFinal,
             language: language
         )
         reset()
@@ -334,6 +404,54 @@ final class DictationCoordinator {
         reset()
     }
 
+    @discardableResult
+    func beginContinuousContextForActiveAttempt() -> Bool {
+        guard continuousSession == nil, continuousContextEnabled() else { return false }
+        let session = continuousContextSessionFactory()
+        let continuousAttemptID = attemptID
+        guard session.start(attemptID: attemptID, language: sessionLanguage.rawValue),
+              let recognizer = transcriber.makeRollingRecognizer(
+                language: sessionLanguage,
+                glossaryText: glossaryText(),
+                onHypothesis: { [weak self, weak session] hypothesis in
+                    Task { @MainActor in
+                        guard let self, let session else { return }
+                        self.receiveContinuousHypothesis(
+                            hypothesis,
+                            attemptID: continuousAttemptID,
+                            session: session
+                        )
+                    }
+                }
+              ) else {
+            session.cancel()
+            return false
+        }
+        continuousSession = session
+        continuousJevLoop = continuousContextLoopFactory(session)
+        rollingRecognizer = recognizer
+        return true
+    }
+
+    func receiveContinuousHypothesis(
+        _ hypothesis: RollingWhisperHypothesis,
+        attemptID: UUID,
+        session: ContinuousContextSession? = nil
+    ) {
+        let session = session ?? continuousSession
+        guard let session,
+              session === continuousSession,
+              self.attemptID == attemptID,
+              phase == .recording,
+              let revision = session.ingest(hypothesis) else { return }
+        if continuousPreviewVisible() { onContinuousPreview(revision) }
+        scheduleContinuousContextEvaluation(for: session)
+    }
+
+    func continuousContextModeChanged() {
+        invalidateContinuousContext()
+    }
+
     func permissionLost(_ snapshot: PermissionSnapshot) {
         guard !snapshot.isReady, phase.shouldStopRecordingForPermissionLoss else { return }
         fail(.permission(snapshot))
@@ -352,6 +470,7 @@ final class DictationCoordinator {
         currentError = error
         onFailure(error)
         recorder.cancel()
+        failContinuousContext()
         phase = .failed
         let attemptID = attemptID
         guard showsHUD() else {
@@ -365,12 +484,105 @@ final class DictationCoordinator {
     }
 
     private func reset(clearError: Bool = true) {
+        invalidateContinuousContext()
         attemptID = UUID()
         task = nil
         executionControl = nil
+        finalOutputAttemptID = nil
         targetApplication = nil
         panel.hide()
         if clearError { currentError = nil }
         phase = .idle
+    }
+
+    private func receiveContinuousSnapshot(_ snapshot: AudioSampleSnapshot) {
+        guard phase == .recording, let continuousSession else { return }
+        continuousSession.retainAudio(snapshot)
+        rollingRecognizer?.submit(snapshot)
+    }
+
+    private func freezeFinal(_ text: String, attemptID: UUID) -> String {
+        guard let continuousSession,
+              let latest = continuousSession.latestRevision else { return text }
+        let event = AuthoritativeFinalEvent(
+            snapshotID: latest.snapshotID,
+            sampleRange: latest.sampleRange,
+            capturedAt: latest.capturedAt,
+            candidateAt: ProcessInfo.processInfo.systemUptime,
+            text: text
+        )
+        guard continuousSession.finalize(event, attemptID: attemptID) != nil,
+              let candidate = continuousSession.commitFinalCandidate(),
+              candidate.attemptID == attemptID else {
+            continuousSession.fail()
+            return text
+        }
+        return candidate.sourceText
+    }
+
+    private func failContinuousContext() {
+        continuousJevTask?.cancel()
+        continuousJevTask = nil
+        continuousJevLoop = nil
+        rollingRecognizer?.cancel()
+        rollingRecognizer = nil
+        continuousSession?.fail()
+        continuousSession = nil
+        onContinuousPreview(nil)
+    }
+
+    private func invalidateContinuousContext() {
+        continuousJevTask?.cancel()
+        continuousJevTask = nil
+        continuousJevLoop = nil
+        rollingRecognizer?.cancel()
+        rollingRecognizer = nil
+        continuousSession?.cancel()
+        continuousSession = nil
+        onContinuousPreview(nil)
+    }
+
+    private func scheduleContinuousContextEvaluation(for session: ContinuousContextSession) {
+        guard continuousJevTask == nil,
+              session === continuousSession,
+              let loop = continuousJevLoop else { return }
+        let scheduledAttemptID = attemptID
+        continuousJevTask = Task { [weak self, weak session] in
+            guard let self, let session else { return }
+            defer {
+                self.continuousJevTask = nil
+                if session === self.continuousSession,
+                   session.nextWorkDelay() != nil,
+                   self.attemptID == scheduledAttemptID {
+                    self.scheduleContinuousContextEvaluation(for: session)
+                }
+            }
+            while !Task.isCancelled,
+                  session === self.continuousSession,
+                  self.attemptID == scheduledAttemptID,
+                  self.phase == .recording {
+                let token = self.contextualTokenSource(scheduledAttemptID)
+                guard token.scope == .personalDictation,
+                      let delay = session.nextWorkDelay() else { return }
+                if delay > 0 {
+                    do { try await Task.sleep(for: .seconds(delay), clock: .continuous) }
+                    catch { return }
+                }
+                guard !Task.isCancelled,
+                      session === self.continuousSession,
+                      self.attemptID == scheduledAttemptID,
+                      self.phase == .recording else { return }
+                if let result = await loop.evaluateNext(scope: token.scope, policyToken: token),
+                   result.outcome.category != .abstained,
+                   session.contextualPreviewText == result.text,
+                   self.continuousPreviewVisible() {
+                    self.onContinuousContextualPreview(
+                        result.identity.attemptID,
+                        result.identity.revision,
+                        result.text
+                    )
+                }
+            }
+        }
     }
 }
