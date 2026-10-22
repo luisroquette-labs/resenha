@@ -6,7 +6,12 @@ protocol ContinuousContextRollingEvent: Sendable {
     var capturedAt: TimeInterval { get }
     var candidateAt: TimeInterval { get }
     var text: String { get }
+    var tokenEvidence: [WhisperTokenEvidence] { get }
     var isStale: Bool { get }
+}
+
+extension ContinuousContextRollingEvent {
+    var tokenEvidence: [WhisperTokenEvidence] { [] }
 }
 
 extension RollingWhisperHypothesis: ContinuousContextRollingEvent {}
@@ -60,6 +65,41 @@ struct ContinuousContextRevision: Equatable, Sendable {
     let stablePrefixCharacterCount: Int
     let mutableSourceCharacterRange: Range<Int>
     let mutableSuffix: String
+    let tokenEvidence: [WhisperTokenEvidence]
+
+    init(
+        attemptID: UUID,
+        revision: UInt64,
+        snapshotID: UInt64,
+        sampleRange: Range<Int64>,
+        sourceText: String,
+        language: String,
+        kind: ContinuousContextRevisionKind,
+        generationIDs: ContinuousContextGenerationIDs,
+        capturedAt: TimeInterval,
+        candidateAt: TimeInterval,
+        emittedAt: TimeInterval,
+        stablePrefixCharacterCount: Int,
+        mutableSourceCharacterRange: Range<Int>,
+        mutableSuffix: String,
+        tokenEvidence: [WhisperTokenEvidence] = []
+    ) {
+        self.attemptID = attemptID
+        self.revision = revision
+        self.snapshotID = snapshotID
+        self.sampleRange = sampleRange
+        self.sourceText = sourceText
+        self.language = language
+        self.kind = kind
+        self.generationIDs = generationIDs
+        self.capturedAt = capturedAt
+        self.candidateAt = candidateAt
+        self.emittedAt = emittedAt
+        self.stablePrefixCharacterCount = stablePrefixCharacterCount
+        self.mutableSourceCharacterRange = mutableSourceCharacterRange
+        self.mutableSuffix = mutableSuffix
+        self.tokenEvidence = tokenEvidence
+    }
 }
 
 struct ContinuousContextWork: Equatable, Sendable {
@@ -76,6 +116,39 @@ struct ContinuousContextWork: Equatable, Sendable {
     let generationIDs: ContinuousContextGenerationIDs
     let eligibleAt: TimeInterval
     let expiresAt: TimeInterval
+    let tokenEvidence: [WhisperTokenEvidence]
+
+    init(
+        id: UInt64,
+        attemptID: UUID,
+        revision: UInt64,
+        snapshotID: UInt64,
+        sampleRange: Range<Int64>,
+        sourceText: String,
+        language: String,
+        mutableSuffix: String,
+        stablePrefixCharacterCount: Int,
+        mutableSourceCharacterRange: Range<Int>,
+        generationIDs: ContinuousContextGenerationIDs,
+        eligibleAt: TimeInterval,
+        expiresAt: TimeInterval,
+        tokenEvidence: [WhisperTokenEvidence] = []
+    ) {
+        self.id = id
+        self.attemptID = attemptID
+        self.revision = revision
+        self.snapshotID = snapshotID
+        self.sampleRange = sampleRange
+        self.sourceText = sourceText
+        self.language = language
+        self.mutableSuffix = mutableSuffix
+        self.stablePrefixCharacterCount = stablePrefixCharacterCount
+        self.mutableSourceCharacterRange = mutableSourceCharacterRange
+        self.generationIDs = generationIDs
+        self.eligibleAt = eligibleAt
+        self.expiresAt = expiresAt
+        self.tokenEvidence = tokenEvidence
+    }
 }
 
 struct ContinuousContextFinalCandidate: Equatable, Sendable {
@@ -234,7 +307,8 @@ final class ContinuousContextSession: @unchecked Sendable {
                 emittedAt: now(),
                 stablePrefixCharacterCount: stableCount,
                 mutableSourceCharacterRange: stableCount..<event.text.count,
-                mutableSuffix: mutableSuffix
+                mutableSuffix: mutableSuffix,
+                tokenEvidence: event.tokenEvidence
             )
             storage.nextRevision &+= 1
             storage.lastSourceText = event.text
@@ -271,7 +345,8 @@ final class ContinuousContextSession: @unchecked Sendable {
                     mutableSourceCharacterRange: revision.mutableSourceCharacterRange,
                     generationIDs: generations,
                     eligibleAt: eligibleAt,
-                    expiresAt: eligibleAt + configuration.maximumWorkAge
+                    expiresAt: eligibleAt + configuration.maximumWorkAge,
+                    tokenEvidence: revision.tokenEvidence
                 )
                 storage.nextWorkID &+= 1
             }

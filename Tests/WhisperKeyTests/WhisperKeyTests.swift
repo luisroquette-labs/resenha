@@ -3592,6 +3592,115 @@ final class WhisperKeyTests: XCTestCase {
         }
     }
 
+    func testTextOnlyInferenceProducesEmptyEvidenceAndCompatibilityText() async throws {
+        let first = try temporaryWhisperRecording()
+        let second = try temporaryWhisperRecording()
+        defer {
+            try? FileManager.default.removeItem(at: first.directory)
+            try? FileManager.default.removeItem(at: second.directory)
+        }
+        let transcriber = WhisperTranscriber(infer: { _, _, _, _ in "Texto compatível." })
+
+        let enriched = try await transcriber.transcribeWithEvidence(audioURL: first.audio, glossaryText: "")
+        let textOnly = try await transcriber.transcribe(audioURL: second.audio, glossaryText: "")
+
+        XCTAssertEqual(enriched, WhisperTranscription(text: "Texto compatível.", tokenEvidence: []))
+        XCTAssertEqual(textOnly, enriched.text)
+    }
+
+    func testRollingHypothesisCarriesBoundedEvidenceIntoRevisionAndWork() {
+        let evidence = [WhisperTokenEvidence(
+            tokenID: 20,
+            text: " rosto",
+            probability: 0.42,
+            alternatives: [.init(tokenID: 90, text: " Hostel", logit: 7.2)]
+        )]
+        let session = ContinuousContextSession(now: { 1 })
+        let attemptID = UUID()
+        XCTAssertTrue(session.start(attemptID: attemptID, language: "pt"))
+
+        let revision = session.ingest(RollingWhisperHypothesis(
+            snapshotID: 1,
+            sampleRange: 0..<16_000,
+            capturedAt: 0,
+            candidateAt: 0.5,
+            text: "Reservei uma cama no rosto.",
+            tokenEvidence: evidence
+        ))
+
+        XCTAssertEqual(revision?.tokenEvidence, evidence)
+        XCTAssertEqual(session.takeNextWork()?.tokenEvidence, evidence)
+    }
+
+    func testWhisperLogitCollectorAlignsAlternativesWithoutChangingChosenTokens() {
+        let hostel = WhisperAlternativeToken(tokenID: 90, text: " Hostel", logit: 7.2)
+        let rosto = WhisperAlternativeToken(tokenID: 20, text: " rosto", logit: 6.8)
+        let collector = WhisperLogitCollector(snapshots: [
+            .init(prefixSuffix: [2, 10], alternatives: [
+                .init(tokenID: 91, text: " decoy", logit: 9.9)
+            ]),
+            .init(prefixSuffix: [1, 10], alternatives: [hostel, rosto]),
+            .init(prefixSuffix: [1, 10, 20], alternatives: [
+                .init(tokenID: 30, text: " perto", logit: 8.1)
+            ])
+        ])
+
+        let evidence = collector.align(
+            tokenIDs: [1, 10, 20, 30],
+            tokenTexts: ["<|start|>", " Eu", " rosto", " perto"],
+            probabilities: [1, 0.99, 0.42, 0.96],
+            endOfText: 100
+        )
+
+        XCTAssertEqual(evidence.map(\.tokenID), [10, 20, 30])
+        XCTAssertEqual(evidence.map(\.text), [" Eu", " rosto", " perto"])
+        XCTAssertEqual(evidence[1].alternatives, [hostel, rosto])
+        XCTAssertEqual(evidence[2].alternatives.map(\.text), [" perto"])
+    }
+
+    func testWhisperLogitCollectorRejectsUnmatchedPrefixesAndBoundsSelectedEvidence() {
+        let decoy = WhisperAlternativeToken(tokenID: 90, text: " Hostel", logit: 7.2)
+        let collector = WhisperLogitCollector(snapshots: [
+            .init(prefixSuffix: [999, 10], alternatives: [decoy])
+        ])
+        let unmatched = collector.align(
+            tokenIDs: [1, 10, 20],
+            tokenTexts: ["<|start|>", " Eu", " rosto"],
+            probabilities: [1, 0.99, 0.42],
+            endOfText: 1_000
+        )
+        XCTAssertEqual(unmatched.last?.alternatives, [])
+
+        let ids = Array(1...140).map(Int32.init)
+        let bounded = WhisperLogitCollector().align(
+            tokenIDs: ids,
+            tokenTexts: Array(repeating: " a", count: ids.count),
+            probabilities: Array(repeating: 0.5, count: ids.count),
+            endOfText: 1_000
+        )
+        XCTAssertEqual(bounded.count, 128)
+        XCTAssertEqual(bounded.first?.tokenID, 13)
+        XCTAssertTrue(bounded.allSatisfy { $0.probability.isFinite && (0...1).contains($0.probability) })
+    }
+
+    func testCTopLogitsReturnsDescendingFiniteCandidatesWithoutMutatingInput() {
+        let original: [Float] = [1, .nan, 9, 3, .infinity, 7, 5]
+        var logits = original
+        var output = Array(repeating: ResenhaLogitCandidate(token_id: -1, logit: 0), count: 4)
+        let count = logits.withUnsafeMutableBufferPointer { values in
+            output.withUnsafeMutableBufferPointer { candidates in
+                resenha_top_logits(values.baseAddress, Int32(values.count), 4, candidates.baseAddress)
+            }
+        }
+
+        XCTAssertEqual(count, 4)
+        XCTAssertEqual(output.map(\.token_id), [2, 5, 6, 3])
+        XCTAssertEqual(logits[0], original[0])
+        XCTAssertTrue(logits[1].isNaN)
+        XCTAssertTrue(logits[4].isInfinite)
+        XCTAssertEqual(Array(logits[5...]), Array(original[5...]))
+    }
+
     func testEmbeddedWhisperTranscribesOfficialFixtureWhenLocalModelIsAvailable() async throws {
         let home = FileManager.default.homeDirectoryForCurrentUser
         let model = home.appendingPathComponent(
@@ -3604,15 +3713,78 @@ final class WhisperKeyTests: XCTestCase {
         let recording = try temporaryWhisperRecording()
         defer { try? FileManager.default.removeItem(at: recording.directory) }
 
-        let transcript = try await WhisperTranscriber().transcribe(
+        let result = try await WhisperTranscriber().transcribeWithEvidence(
             audioURL: recording.audio,
             language: .english,
             glossaryText: ""
-        ).lowercased()
+        )
+        let transcript = result.text.lowercased()
 
         XCTAssertTrue(transcript.contains("fellow americans"), transcript)
         XCTAssertTrue(transcript.contains("country"), transcript)
+        XCTAssertFalse(result.tokenEvidence.isEmpty)
+        XCTAssertTrue(result.tokenEvidence.contains { !$0.alternatives.isEmpty })
+        XCTAssertLessThanOrEqual(result.tokenEvidence.count, 128)
+        XCTAssertTrue(result.tokenEvidence.allSatisfy {
+            $0.probability.isFinite && (0...1).contains($0.probability) && $0.alternatives.count <= 4
+        })
         XCTAssertFalse(FileManager.default.fileExists(atPath: recording.audio.path))
+    }
+
+    func testRealWhisperEvidenceCollectionP95OverheadStaysBelowFifteenPercent() async throws {
+        let model = WhisperPaths.modelDirectory.appendingPathComponent("ggml-small-q5_1.bin")
+        guard FileManager.default.fileExists(atPath: model.path) else {
+            throw XCTSkip("Local Whisper benchmark model is not installed")
+        }
+        let baselineEngine = EmbeddedWhisperEngine(collectsTokenEvidence: false)
+        let evidenceEngine = EmbeddedWhisperEngine()
+
+        func measure(_ engine: EmbeddedWhisperEngine) async throws -> (TimeInterval, WhisperTranscription) {
+            let recording = try temporaryWhisperRecording()
+            defer { try? FileManager.default.removeItem(at: recording.directory) }
+            let transcriber = WhisperTranscriber(resultInference: { samples, language, prompt, control in
+                try engine.transcribeWithEvidence(
+                    samples: samples,
+                    model: model,
+                    language: language,
+                    prompt: prompt,
+                    control: control
+                )
+            })
+            let started = ProcessInfo.processInfo.systemUptime
+            let result = try await transcriber.transcribeWithEvidence(
+                audioURL: recording.audio,
+                language: .english,
+                glossaryText: ""
+            )
+            return (ProcessInfo.processInfo.systemUptime - started, result)
+        }
+
+        _ = try await measure(baselineEngine)
+        _ = try await measure(evidenceEngine)
+        var baseline: [TimeInterval] = []
+        var evidence: [TimeInterval] = []
+        for iteration in 0..<20 {
+            if iteration.isMultiple(of: 2) {
+                baseline.append(try await measure(baselineEngine).0)
+                let measured = try await measure(evidenceEngine)
+                evidence.append(measured.0)
+                XCTAssertFalse(measured.1.tokenEvidence.isEmpty)
+            } else {
+                let measured = try await measure(evidenceEngine)
+                evidence.append(measured.0)
+                XCTAssertFalse(measured.1.tokenEvidence.isEmpty)
+                baseline.append(try await measure(baselineEngine).0)
+            }
+        }
+        func p95(_ values: [TimeInterval]) -> TimeInterval {
+            let sorted = values.sorted()
+            return sorted[max(0, Int(ceil(Double(sorted.count) * 0.95)) - 1)]
+        }
+        let baselineP95 = p95(baseline)
+        let evidenceP95 = p95(evidence)
+        print("WHISPER_EVIDENCE_BENCHMARK baseline_ms=\(baseline.map { Int($0 * 1_000) }) evidence_ms=\(evidence.map { Int($0 * 1_000) }) p95_baseline_ms=\(Int(baselineP95 * 1_000)) p95_evidence_ms=\(Int(evidenceP95 * 1_000))")
+        XCTAssertLessThanOrEqual(evidenceP95, baselineP95 * 1.15)
     }
 
     func testWhisperRuntimePolicyHasAnExactBound() {
