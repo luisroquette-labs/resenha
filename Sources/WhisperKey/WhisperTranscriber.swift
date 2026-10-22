@@ -101,15 +101,29 @@ final class WhisperExecutionControl: @unchecked Sendable {
 }
 
 struct WhisperTranscriber: Sendable {
+    typealias Inference = @Sendable ([Float], String, String, WhisperExecutionControl) throws -> String
     static let maximumRuntime: TimeInterval = 10 * 60
     private static let engine = EmbeddedWhisperEngine()
-    var infer: @Sendable ([Float], String, String, WhisperExecutionControl) throws -> String = { samples, language, prompt, control in
+    private static let defaultInference: Inference = { samples, language, prompt, control in
         try WhisperTranscriber.engine.transcribe(samples: samples, model: WhisperPaths.resolve().model,
             language: language, prompt: prompt, control: control)
     }
-    var removeAudio: @Sendable (URL) throws -> Void = { url in
-        do { try FileManager.default.removeItem(at: url) }
-        catch let error as CocoaError where error.code == .fileNoSuchFile { }
+
+    private let infer: Inference
+    private let removeAudio: @Sendable (URL) throws -> Void
+    private let supportsRollingInference: Bool
+
+    init(
+        infer: @escaping Inference = WhisperTranscriber.defaultInference,
+        removeAudio: @escaping @Sendable (URL) throws -> Void = { url in
+            do { try FileManager.default.removeItem(at: url) }
+            catch let error as CocoaError where error.code == .fileNoSuchFile { }
+        },
+        supportsRollingInference: Bool = true
+    ) {
+        self.infer = infer
+        self.removeAudio = removeAudio
+        self.supportsRollingInference = supportsRollingInference
     }
 
     // Consumes the captured WAV; callers that need a reusable fixture must pass a copy.
@@ -122,6 +136,24 @@ struct WhisperTranscriber: Sendable {
         try await withTaskCancellationHandler {
             try consumeRecording(audioURL: audioURL, language: language, glossaryText: glossaryText, control: control)
         } onCancel: { control.cancel() }
+    }
+
+    func makeRollingRecognizer(
+        language: TranscriptionLanguage = .portuguese,
+        glossaryText: String = TranscriptionGlossary.defaultText,
+        maximumRuntime: TimeInterval = WhisperTranscriber.maximumRuntime,
+        clock: @escaping @Sendable () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
+        onHypothesis: @escaping @Sendable (RollingWhisperHypothesis) -> Void
+    ) -> RollingWhisperRecognizer? {
+        guard supportsRollingInference else { return nil }
+        return RollingWhisperRecognizer(
+            infer: infer,
+            language: language.rawValue,
+            prompt: TranscriptionGlossary(text: glossaryText).prompt,
+            maximumRuntime: maximumRuntime,
+            clock: clock,
+            onHypothesis: onHypothesis
+        )
     }
 
     private func consumeRecording(audioURL: URL, language: TranscriptionLanguage,
@@ -157,6 +189,147 @@ struct WhisperTranscriber: Sendable {
         try file.read(into: buffer)
         guard let channel = buffer.floatChannelData?.pointee else { throw WhisperError.invalidAudio }
         return Array(UnsafeBufferPointer(start: channel, count: Int(buffer.frameLength)))
+    }
+}
+
+struct RollingWhisperHypothesis: Equatable, Sendable {
+    let snapshotID: UInt64
+    let sampleRange: Range<Int64>
+    let capturedAt: TimeInterval
+    let candidateAt: TimeInterval
+    let text: String
+    let isStale: Bool
+
+    var isProvisional: Bool { true }
+}
+
+final class RollingWhisperRecognizer: @unchecked Sendable {
+    private struct Work: Sendable {
+        let snapshot: AudioSampleSnapshot
+        let generation: UInt64
+    }
+
+    private struct Active {
+        let work: Work
+        let control: WhisperExecutionControl
+    }
+
+    private let lock = NSLock()
+    private let infer: WhisperTranscriber.Inference
+    private let language: String
+    private let prompt: String
+    private let maximumRuntime: TimeInterval
+    private let clock: @Sendable () -> TimeInterval
+    private let onHypothesis: @Sendable (RollingWhisperHypothesis) -> Void
+    private var generation: UInt64 = 0
+    private var active: Active?
+    private var pending: Work?
+    private var lastDeliveredText: String?
+    private var isCancelled = false
+
+    init(
+        infer: @escaping WhisperTranscriber.Inference,
+        language: String,
+        prompt: String,
+        maximumRuntime: TimeInterval,
+        clock: @escaping @Sendable () -> TimeInterval,
+        onHypothesis: @escaping @Sendable (RollingWhisperHypothesis) -> Void
+    ) {
+        self.infer = infer
+        self.language = language
+        self.prompt = prompt
+        self.maximumRuntime = maximumRuntime
+        self.clock = clock
+        self.onHypothesis = onHypothesis
+    }
+
+    func submit(_ snapshot: AudioSampleSnapshot) {
+        let activeToStart: Active? = lock.withLock {
+            guard !isCancelled else { return nil }
+            if active?.work.snapshot.samples == snapshot.samples,
+               active?.work.snapshot.sampleRange == snapshot.sampleRange { return nil }
+            if pending?.snapshot.samples == snapshot.samples,
+               pending?.snapshot.sampleRange == snapshot.sampleRange { return nil }
+            let work = Work(snapshot: snapshot, generation: generation)
+            guard active == nil else {
+                pending = work
+                return nil
+            }
+            let newActive = Active(
+                work: work,
+                control: WhisperExecutionControl(maximumRuntime: maximumRuntime, clock: clock)
+            )
+            active = newActive
+            return newActive
+        }
+        if let activeToStart { run(activeToStart) }
+    }
+
+    func cancel() {
+        let control: WhisperExecutionControl? = lock.withLock {
+            guard !isCancelled else { return nil }
+            isCancelled = true
+            generation &+= 1
+            pending = nil
+            return active?.control
+        }
+        control?.cancel()
+    }
+
+    var queuedInferenceCount: Int {
+        lock.withLock { (active == nil ? 0 : 1) + (pending == nil ? 0 : 1) }
+    }
+
+    private func run(_ item: Active) {
+        Task.detached(priority: .userInitiated) { [weak self] in
+            guard let self else { return }
+            let result = Result {
+                try item.control.check()
+                let raw = try self.infer(
+                    item.work.snapshot.samples,
+                    self.language,
+                    self.prompt,
+                    item.control
+                )
+                return TranscriptNormalizer.normalize(raw)
+            }
+            self.finish(item, result: result)
+        }
+    }
+
+    private func finish(_ completed: Active, result: Result<String, Error>) {
+        var hypothesis: RollingWhisperHypothesis?
+        var next: Active?
+        lock.withLock {
+            let stale = isCancelled
+                || completed.work.generation != generation
+                || active?.work.snapshot.id != completed.work.snapshot.id
+            if case .success(let text) = result, !text.isEmpty,
+               (stale || lastDeliveredText != text) {
+                hypothesis = RollingWhisperHypothesis(
+                    snapshotID: completed.work.snapshot.id,
+                    sampleRange: completed.work.snapshot.sampleRange,
+                    capturedAt: completed.work.snapshot.capturedAt,
+                    candidateAt: clock(),
+                    text: text,
+                    isStale: stale
+                )
+                if !stale { lastDeliveredText = text }
+            }
+            guard active?.work.snapshot.id == completed.work.snapshot.id else { return }
+            active = nil
+            if !isCancelled, let pending {
+                self.pending = nil
+                let nextActive = Active(
+                    work: pending,
+                    control: WhisperExecutionControl(maximumRuntime: maximumRuntime, clock: clock)
+                )
+                active = nextActive
+                next = nextActive
+            }
+        }
+        if let hypothesis { onHypothesis(hypothesis) }
+        if let next { run(next) }
     }
 }
 

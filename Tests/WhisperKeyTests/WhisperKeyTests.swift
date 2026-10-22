@@ -2238,6 +2238,112 @@ final class WhisperKeyTests: XCTestCase {
         return (directory, audio)
     }
 
+    func testRollingAudioAccumulatorKeepsOwnedBoundedSamplesAndMonotonicRanges() throws {
+        let accumulator = BoundedAudioSampleAccumulator(configuration: .init(
+            maximumRetainedSamples: 5,
+            snapshotStrideSamples: 2
+        ))
+        let source = [Float](repeating: 1, count: 4)
+        XCTAssertNil(accumulator.append([source[0]], capturedAt: 10))
+        let first = try XCTUnwrap(accumulator.append(Array(source[1...2]), capturedAt: 11))
+        XCTAssertEqual(first.id, 1)
+        XCTAssertEqual(first.samples, [1, 1, 1])
+        XCTAssertEqual(first.sampleRange, 0..<3)
+        XCTAssertEqual(first.capturedAt, 11)
+
+        for value in 2...10_000 {
+            _ = accumulator.append([Float(value)], capturedAt: TimeInterval(value))
+            XCTAssertLessThanOrEqual(accumulator.retainedSampleCount, 5)
+        }
+        let final = try XCTUnwrap(accumulator.append([10_001, 10_002], capturedAt: 10_002))
+        XCTAssertEqual(final.samples, [9_998, 9_999, 10_000, 10_001, 10_002])
+        XCTAssertEqual(final.sampleRange.count, final.samples.count)
+        XCTAssertEqual(final.sampleRange.upperBound, 10_004)
+
+        accumulator.reset()
+        XCTAssertEqual(accumulator.retainedSampleCount, 0)
+        let reset = try XCTUnwrap(accumulator.append([7, 8], capturedAt: 30))
+        XCTAssertEqual(reset.id, 1)
+        XCTAssertEqual(reset.sampleRange, 0..<2)
+    }
+
+    func testRollingWhisperKeepsOneActiveAndLatestPendingThenCoalescesEqualText() async throws {
+        let firstStarted = expectation(description: "First rolling inference started")
+        let secondStarted = expectation(description: "Latest pending inference started")
+        let results = expectation(description: "Only distinct current hypothesis delivered")
+        results.expectedFulfillmentCount = 2
+        let releaseFirst = DispatchSemaphore(value: 0)
+        let probe = WhisperExecutionProbe()
+        let transcriber = WhisperTranscriber(infer: { samples, _, _, _ in
+            let call = probe.record("infer")
+            if call == 1 {
+                firstStarted.fulfill()
+                _ = releaseFirst.wait(timeout: .now() + 2)
+                return "primeira"
+            }
+            secondStarted.fulfill()
+            return samples.last == 3 ? "mais recente" : "obsoleta"
+        })
+        let recognizer = try XCTUnwrap(transcriber.makeRollingRecognizer(glossaryText: "") { hypothesis in
+            _ = probe.record("result-\(hypothesis.snapshotID)-\(hypothesis.text)")
+            results.fulfill()
+        })
+        func snapshot(_ id: UInt64, _ value: Float) -> AudioSampleSnapshot {
+            .init(id: id, samples: [value], sampleRange: Int64(id - 1)..<Int64(id), capturedAt: Double(id))
+        }
+
+        recognizer.submit(snapshot(1, 1))
+        await fulfillment(of: [firstStarted], timeout: 1)
+        recognizer.submit(snapshot(2, 2))
+        recognizer.submit(snapshot(3, 3))
+        recognizer.submit(snapshot(3, 3))
+        XCTAssertEqual(recognizer.queuedInferenceCount, 2)
+        releaseFirst.signal()
+
+        await fulfillment(of: [secondStarted, results], timeout: 2)
+        XCTAssertEqual(probe.events.filter { $0 == "infer" }.count, 2)
+        XCTAssertTrue(probe.events.contains("result-1-primeira"))
+        XCTAssertTrue(probe.events.contains("result-3-mais recente"))
+        XCTAssertFalse(probe.events.contains { $0.contains("result-2-") })
+        XCTAssertEqual(recognizer.queuedInferenceCount, 0)
+    }
+
+    func testRollingWhisperCancellationTagsNoncooperativeLateResultAsStale() async throws {
+        let started = expectation(description: "Rolling inference started")
+        let staleResult = expectation(description: "Late result tagged stale")
+        let release = DispatchSemaphore(value: 0)
+        let transcriber = WhisperTranscriber(infer: { _, _, _, _ in
+            started.fulfill()
+            _ = release.wait(timeout: .now() + 2)
+            return "resultado tardio"
+        })
+        let recognizer = try XCTUnwrap(transcriber.makeRollingRecognizer(glossaryText: "") { hypothesis in
+            XCTAssertTrue(hypothesis.isStale)
+            XCTAssertTrue(hypothesis.isProvisional)
+            staleResult.fulfill()
+        })
+        recognizer.submit(.init(id: 9, samples: [1], sampleRange: 0..<1, capturedAt: 1))
+        await fulfillment(of: [started], timeout: 1)
+        recognizer.cancel()
+        release.signal()
+        await fulfillment(of: [staleResult], timeout: 1)
+        XCTAssertEqual(recognizer.queuedInferenceCount, 0)
+    }
+
+    func testUnsupportedRollingRecognitionLeavesCompletedWAVFallbackAuthoritative() async throws {
+        let recording = try temporaryWhisperRecording()
+        defer { try? FileManager.default.removeItem(at: recording.directory) }
+        let transcriber = WhisperTranscriber(
+            infer: { _, _, _, _ in "Transcrição final." },
+            supportsRollingInference: false
+        )
+        XCTAssertNil(transcriber.makeRollingRecognizer { _ in XCTFail("Unsupported rolling path must stay closed") })
+
+        let final = try await transcriber.transcribe(audioURL: recording.audio, glossaryText: "")
+        XCTAssertEqual(final, "Transcrição final.")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: recording.audio.path))
+    }
+
     func testEmbeddedWhisperTranscribesOfficialFixtureWhenLocalModelIsAvailable() async throws {
         let home = FileManager.default.homeDirectoryForCurrentUser
         let model = home.appendingPathComponent(
