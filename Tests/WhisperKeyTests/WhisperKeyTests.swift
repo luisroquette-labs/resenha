@@ -2568,6 +2568,354 @@ final class WhisperKeyTests: XCTestCase {
         var isStale = false
     }
 
+    private actor RevisionLoopProvider: ContextualDecisionProvider {
+        enum Mode: Sendable {
+            case immediate(ContextualDecisionReceipt)
+            case failure(OpenRouterDecisionsError)
+            case suspended
+        }
+
+        private let mode: Mode
+        private var continuation: CheckedContinuation<ContextualDecisionReceipt, Error>?
+        private var startWaiters: [CheckedContinuation<Void, Never>] = []
+        private(set) var requestCount = 0
+
+        init(_ mode: Mode) { self.mode = mode }
+
+        func decide(
+            sentence: String,
+            language: String,
+            occurrences: [ContextualCorrectionOccurrence],
+            deadline: ContextualInstant
+        ) async throws -> ContextualDecisionReceipt {
+            requestCount += 1
+            let waiters = startWaiters
+            startWaiters.removeAll()
+            waiters.forEach { $0.resume() }
+            switch mode {
+            case .immediate(let receipt): return receipt
+            case .failure(let error): throw error
+            case .suspended:
+                return try await withCheckedThrowingContinuation { continuation = $0 }
+            }
+        }
+
+        func waitUntilStarted() async {
+            if requestCount > 0 { return }
+            await withCheckedContinuation { startWaiters.append($0) }
+        }
+
+        func resume(_ receipt: ContextualDecisionReceipt) {
+            continuation?.resume(returning: receipt)
+            continuation = nil
+        }
+    }
+
+    private final class RevisionUptime: @unchecked Sendable {
+        private let lock = NSLock()
+        private var value = 0.0
+        func now() -> TimeInterval { lock.withLock { value } }
+        func set(milliseconds: Int) { lock.withLock { value = Double(milliseconds) / 1_000 } }
+    }
+
+    private final class RevisionGeneration: @unchecked Sendable {
+        private let lock = NSLock()
+        private var value: UInt64
+        init(_ value: UInt64) { self.value = value }
+        func read() -> UInt64 { lock.withLock { value } }
+        func set(_ value: UInt64) { lock.withLock { self.value = value } }
+    }
+
+    @MainActor
+    private final class RevisionSnapshotBox {
+        var value: ContextualCorrectionStoreSnapshot
+        init(_ value: ContextualCorrectionStoreSnapshot) { self.value = value }
+    }
+
+    private func revisionReceipt(
+        choice: ContextualDecisionChoice = .replace,
+        confidence: Double = 0.99,
+        probability: Double = 0.99
+    ) -> ContextualDecisionReceipt {
+        .init(
+            decisions: [.init(
+                questionID: "o1",
+                choice: choice,
+                confidence: confidence,
+                chosenProbability: probability,
+                runnerUpProbability: 1 - probability
+            )],
+            resolvedModel: "fixture/deterministic",
+            inputTokens: nil,
+            outputTokens: nil,
+            costUSD: nil
+        )
+    }
+
+    private var revisionExample: ContextualCorrectionExample {
+        .init(
+            id: UUID(uuidString: "60000000-0000-0000-0000-000000000001")!,
+            language: "pt",
+            heard: "rosto",
+            canonical: "Hostel",
+            sentence: "Reservei um rosto.",
+            occurrenceOrdinal: 1
+        )
+    }
+
+    func testContinuousContextAdmissionHonors499500501MillisecondsAndLatestWins() throws {
+        for boundary in [499, 500, 501] {
+            let uptime = RevisionUptime()
+            let session = ContinuousContextSession(now: { uptime.now() })
+            XCTAssertTrue(session.start(attemptID: UUID(), language: "pt"))
+            _ = session.ingest(SessionEvent(
+                snapshotID: 1, sampleRange: 0..<100, capturedAt: 0,
+                candidateAt: 0, text: "Reservei um rosto."
+            ))
+            let active = try XCTUnwrap(session.takeNextWork())
+            uptime.set(milliseconds: 100)
+            _ = session.ingest(SessionEvent(
+                snapshotID: 2, sampleRange: 0..<200, capturedAt: 0.05,
+                candidateAt: 0.1, text: "Reservei outro rosto."
+            ))
+            _ = session.ingest(SessionEvent(
+                snapshotID: 3, sampleRange: 0..<300, capturedAt: 0.08,
+                candidateAt: 0.1, text: "Reservei o último rosto."
+            ))
+            XCTAssertEqual(session.scheduledWorkCount, 2)
+            XCTAssertFalse(session.completeWork(active))
+            uptime.set(milliseconds: boundary)
+            let next = session.takeNextWork()
+            XCTAssertEqual(next != nil, boundary >= 500, "boundary-\(boundary)")
+            if let next { XCTAssertEqual(next.revision, 3, "boundary-\(boundary)") }
+        }
+    }
+
+    @MainActor
+    func testRevisionBoundLoopAccepts199AndRejects200And201Milliseconds() async throws {
+        for boundary in [199, 200, 201] {
+            let uptime = RevisionUptime()
+            let time = ManualContextualTime()
+            let provider = RevisionLoopProvider(.suspended)
+            let session = ContinuousContextSession(now: { uptime.now() })
+            XCTAssertTrue(session.start(attemptID: UUID(), language: "pt"))
+            _ = session.ingest(SessionEvent(
+                snapshotID: 1, sampleRange: 0..<100, capturedAt: 0,
+                candidateAt: 0, text: "Reservei um rosto."
+            ))
+            let snapshot = ContextualCorrectionStoreSnapshot(
+                examples: [revisionExample], generation: 7, health: .healthy
+            )
+            let loop = RevisionBoundJevLoop(
+                session: session,
+                provider: provider,
+                time: time,
+                storeSnapshot: { snapshot },
+                policyGeneration: { 11 }
+            )
+            let task = Task { await loop.evaluateNext(scope: .testDouble) }
+            await provider.waitUntilStarted()
+            uptime.set(milliseconds: boundary)
+            time.advance(milliseconds: Int64(boundary))
+            await provider.resume(revisionReceipt())
+            let result = await task.value
+            XCTAssertEqual(
+                result?.text,
+                boundary == 199 ? "Reservei um Hostel." : "Reservei um rosto.",
+                "boundary-\(boundary)"
+            )
+            XCTAssertEqual(
+                session.contextualPreviewText,
+                boundary == 199 ? "Reservei um Hostel." : nil,
+                "boundary-\(boundary)"
+            )
+        }
+    }
+
+    @MainActor
+    func testRevisionBoundLoopFailsOpenForProviderErrorsInvalidOutputAndChangedAuthority() async throws {
+        for error in [
+            OpenRouterDecisionsError.invalidStatus(401),
+            .invalidStatus(429),
+            .invalidStatus(500),
+            .transportUnavailable
+        ] {
+            let session = ContinuousContextSession(now: { 0 })
+            XCTAssertTrue(session.start(attemptID: UUID(), language: "pt"))
+            _ = session.ingest(SessionEvent(
+                snapshotID: 1, sampleRange: 0..<100, capturedAt: 0,
+                candidateAt: 0, text: "Reservei um rosto."
+            ))
+            let snapshot = ContextualCorrectionStoreSnapshot(
+                examples: [revisionExample], generation: 1, health: .healthy
+            )
+            let loop = RevisionBoundJevLoop(
+                session: session,
+                provider: RevisionLoopProvider(.failure(error)),
+                time: ManualContextualTime(),
+                storeSnapshot: { snapshot },
+                policyGeneration: { 1 }
+            )
+            let output = await loop.evaluateNext(scope: .testDouble)
+            XCTAssertEqual(output?.text, "Reservei um rosto.")
+            XCTAssertEqual(session.contextualPreviewText, "Reservei um rosto.")
+        }
+
+        let invalid = revisionReceipt(confidence: 0.89, probability: 0.89)
+        let invalidSession = ContinuousContextSession(now: { 0 })
+        XCTAssertTrue(invalidSession.start(attemptID: UUID(), language: "pt"))
+        _ = invalidSession.ingest(SessionEvent(
+            snapshotID: 1, sampleRange: 0..<100, capturedAt: 0,
+            candidateAt: 0, text: "Reservei um rosto."
+        ))
+        let healthy = ContextualCorrectionStoreSnapshot(
+            examples: [revisionExample], generation: 1, health: .healthy
+        )
+        let invalidLoop = RevisionBoundJevLoop(
+            session: invalidSession,
+            provider: RevisionLoopProvider(.immediate(invalid)),
+            time: ManualContextualTime(),
+            storeSnapshot: { healthy },
+            policyGeneration: { 3 }
+        )
+        let invalidResult = await invalidLoop.evaluateNext(scope: .testDouble)
+        XCTAssertEqual(invalidResult?.text, "Reservei um rosto.")
+
+        let session = ContinuousContextSession(now: { 0 })
+        XCTAssertTrue(session.start(attemptID: UUID(), language: "pt"))
+        _ = session.ingest(SessionEvent(
+            snapshotID: 1, sampleRange: 0..<100, capturedAt: 0,
+            candidateAt: 0, text: "Reservei um rosto."
+        ))
+        let policyGeneration = RevisionGeneration(3)
+        let provider = RevisionLoopProvider(.suspended)
+        let snapshot = ContextualCorrectionStoreSnapshot(
+            examples: [revisionExample], generation: 1, health: .healthy
+        )
+        let loop = RevisionBoundJevLoop(
+            session: session,
+            provider: provider,
+            time: ManualContextualTime(),
+            storeSnapshot: { snapshot },
+            policyGeneration: { policyGeneration.read() }
+        )
+        let task = Task { await loop.evaluateNext(scope: .testDouble) }
+        await provider.waitUntilStarted()
+        policyGeneration.set(4)
+        await provider.resume(invalid)
+        let changedAuthority = await task.value
+        XCTAssertEqual(changedAuthority?.text, "Reservei um rosto.")
+        XCTAssertEqual(session.contextualPreviewText, "Reservei um rosto.")
+    }
+
+    @MainActor
+    func testRevisionBoundLoopBindsStoreGenerationAndRepeatedOccurrenceIdentity() async throws {
+        let repeatedReceipt = ContextualDecisionReceipt(
+            decisions: [
+                .init(
+                    questionID: "o1", choice: .keepOriginal, confidence: 0.99,
+                    chosenProbability: 0.99, runnerUpProbability: 0.01
+                ),
+                .init(
+                    questionID: "o2", choice: .replace, confidence: 0.99,
+                    chosenProbability: 0.99, runnerUpProbability: 0.01
+                )
+            ],
+            resolvedModel: "fixture/deterministic",
+            inputTokens: nil,
+            outputTokens: nil,
+            costUSD: nil
+        )
+        let session = ContinuousContextSession(now: { 0 })
+        let attemptID = UUID()
+        XCTAssertTrue(session.start(attemptID: attemptID, language: "pt"))
+        _ = session.ingest(SessionEvent(
+            snapshotID: 9, sampleRange: 100..<900, capturedAt: 0,
+            candidateAt: 0, text: "Lavei o rosto e reservei um rosto."
+        ))
+        let snapshot = ContextualCorrectionStoreSnapshot(
+            examples: [revisionExample], generation: 17, health: .healthy
+        )
+        let loop = RevisionBoundJevLoop(
+            session: session,
+            provider: RevisionLoopProvider(.immediate(repeatedReceipt)),
+            time: ManualContextualTime(),
+            storeSnapshot: { snapshot },
+            policyGeneration: { 23 }
+        )
+        let evaluated = await loop.evaluateNext(scope: .testDouble)
+        let result = try XCTUnwrap(evaluated)
+        XCTAssertEqual(result.text, "Lavei o rosto e reservei um Hostel.")
+        XCTAssertEqual(result.identity.attemptID, attemptID)
+        XCTAssertEqual(result.identity.revision, 1)
+        XCTAssertEqual(result.identity.snapshotID, 9)
+        XCTAssertEqual(result.identity.sampleRange, 100..<900)
+        XCTAssertEqual(result.identity.storeGeneration, 17)
+        XCTAssertEqual(result.identity.policyGeneration, 23)
+
+        let staleSession = ContinuousContextSession(now: { 0 })
+        XCTAssertTrue(staleSession.start(attemptID: UUID(), language: "pt"))
+        _ = staleSession.ingest(SessionEvent(
+            snapshotID: 1, sampleRange: 0..<100, capturedAt: 0,
+            candidateAt: 0, text: "Reservei um rosto."
+        ))
+        let provider = RevisionLoopProvider(.suspended)
+        let box = RevisionSnapshotBox(snapshot)
+        let staleLoop = RevisionBoundJevLoop(
+            session: staleSession,
+            provider: provider,
+            time: ManualContextualTime(),
+            storeSnapshot: { box.value },
+            policyGeneration: { 23 }
+        )
+        let task = Task { await staleLoop.evaluateNext(scope: .testDouble) }
+        await provider.waitUntilStarted()
+        box.value = .init(examples: [], generation: 18, health: .healthy)
+        await provider.resume(revisionReceipt())
+        let stale = await task.value
+        XCTAssertEqual(stale?.text, "Reservei um rosto.")
+        XCTAssertEqual(staleSession.contextualPreviewText, "Reservei um rosto.")
+    }
+
+    @MainActor
+    func testRevisionBoundLoopRejectsStaleCallbackAndPersonalScopeWithoutTransport() async throws {
+        let uptime = RevisionUptime()
+        let provider = RevisionLoopProvider(.suspended)
+        let session = ContinuousContextSession(now: { uptime.now() })
+        XCTAssertTrue(session.start(attemptID: UUID(), language: "pt"))
+        _ = session.ingest(SessionEvent(
+            snapshotID: 1, sampleRange: 0..<100, capturedAt: 0,
+            candidateAt: 0, text: "Reservei um rosto."
+        ))
+        let snapshot = ContextualCorrectionStoreSnapshot(
+            examples: [revisionExample], generation: 1, health: .healthy
+        )
+        let loop = RevisionBoundJevLoop(
+            session: session,
+            provider: provider,
+            time: ManualContextualTime(),
+            storeSnapshot: { snapshot },
+            policyGeneration: { 1 }
+        )
+        let task = Task { await loop.evaluateNext(scope: .testDouble) }
+        await provider.waitUntilStarted()
+        uptime.set(milliseconds: 100)
+        _ = session.ingest(SessionEvent(
+            snapshotID: 2, sampleRange: 0..<200, capturedAt: 0.05,
+            candidateAt: 0.1, text: "Reservei outro rosto."
+        ))
+        await provider.resume(revisionReceipt())
+        let stale = await task.value
+        XCTAssertEqual(stale?.text, "Reservei um rosto.")
+        XCTAssertNil(session.contextualPreviewText)
+
+        uptime.set(milliseconds: 500)
+        let blocked = await loop.evaluateNext(scope: .personalDictation)
+        XCTAssertEqual(blocked?.text, "Reservei outro rosto.")
+        let requestCount = await provider.requestCount
+        XCTAssertEqual(requestCount, 1)
+    }
+
     func testContinuousContextSessionReconcilesImmutableUnicodeSnapshotsAndRejectsOldWork() throws {
         var uptime: TimeInterval = 20
         let attemptID = UUID()
@@ -4085,6 +4433,72 @@ final class ContextualTransportCorpusTests: XCTestCase {
         XCTAssertEqual(receipt.inputTokens, 357)
         XCTAssertEqual(receipt.outputTokens, 38)
         XCTAssertEqual(receipt.costUSD, Decimal(string: "0.000014994"))
+    }
+
+    func testDecisionsRequestPayloadAccepts4095And4096BytesAndRejects4097() throws {
+        let baseSentence = "rosto"
+        let base = try OpenRouterDecisionsClient.requestBody(
+            sentence: baseSentence,
+            language: "pt",
+            occurrences: [occurrence(in: baseSentence)]
+        ).count
+        for target in [4_095, 4_096] {
+            let sentence = baseSentence + String(repeating: "a", count: target - base)
+            let body = try OpenRouterDecisionsClient.requestBody(
+                sentence: sentence,
+                language: "pt",
+                occurrences: [occurrence(in: sentence)]
+            )
+            XCTAssertEqual(body.count, target)
+        }
+        let rejected = baseSentence + String(repeating: "a", count: 4_097 - base)
+        XCTAssertThrowsError(try OpenRouterDecisionsClient.requestBody(
+            sentence: rejected,
+            language: "pt",
+            occurrences: [occurrence(in: rejected)]
+        )) { error in
+            XCTAssertEqual(error as? OpenRouterDecisionsError, .requestTooLarge)
+        }
+    }
+
+    func testTransportRegistryIsolatesCancelledOldAndNewRequestsWithSameTaskIdentifier() {
+        let oldSession = NSObject()
+        let newSession = NSObject()
+        let oldCancellations = LockedInteger()
+        let newCancellations = LockedInteger()
+        let old = DecisionsDelegateState(maximumResponseBytes: 8) { oldCancellations.increment() }
+        let new = DecisionsDelegateState(maximumResponseBytes: 8) { newCancellations.increment() }
+        let registry = DecisionsTransportContextRegistry<DecisionsDelegateState>()
+
+        registry.insert(old, session: oldSession, taskIdentifier: 1)
+        registry.insert(new, session: newSession, taskIdentifier: 1)
+        XCTAssertTrue(registry.remove(session: oldSession, taskIdentifier: 1) === old)
+        old.cancel()
+        registry.lookup(session: newSession, taskIdentifier: 1)?.receive(Data([1, 2, 3]))
+        XCTAssertNil(registry.lookup(session: oldSession, taskIdentifier: 1))
+        XCTAssertTrue(registry.lookup(session: newSession, taskIdentifier: 1) === new)
+        XCTAssertEqual(old.snapshot(), .init(acceptedBytes: 0, queuedChunkCount: 0, cancelCount: 1))
+        XCTAssertEqual(new.snapshot(), .init(acceptedBytes: 3, queuedChunkCount: 1, cancelCount: 0))
+        XCTAssertEqual(oldCancellations.read(), 1)
+        XCTAssertEqual(newCancellations.read(), 0)
+    }
+
+    func testRevisionCandidateValidationProtectsNumbersNegationsAndIdentifiers() {
+        func example(_ heard: String, _ canonical: String) -> ContextualCorrectionExample {
+            .init(
+                id: UUID(), language: "pt", heard: heard, canonical: canonical,
+                sentence: "Confirme \(heard).", occurrenceOrdinal: 1
+            )
+        }
+        XCTAssertNil(ContextualCorrectionResolver.validatedDecisionInput(
+            examples: [example("10", "100")], text: "Confirme 10.", language: "pt"
+        ))
+        XCTAssertNil(ContextualCorrectionResolver.validatedDecisionInput(
+            examples: [example("não", "agora")], text: "Confirme não.", language: "pt"
+        ))
+        XCTAssertNil(ContextualCorrectionResolver.validatedDecisionInput(
+            examples: [example("a/b", "ab")], text: "Confirme a/b.", language: "pt"
+        ))
     }
 
     func testURLSessionDelegateStateCancelsBeforeQueueingByte65537() async throws {

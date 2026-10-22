@@ -67,10 +67,14 @@ struct ContinuousContextWork: Equatable, Sendable {
     let attemptID: UUID
     let revision: UInt64
     let snapshotID: UInt64
+    let sampleRange: Range<Int64>
     let sourceText: String
+    let language: String
     let mutableSuffix: String
     let stablePrefixCharacterCount: Int
+    let mutableSourceCharacterRange: Range<Int>
     let generationIDs: ContinuousContextGenerationIDs
+    let eligibleAt: TimeInterval
     let expiresAt: TimeInterval
 }
 
@@ -89,21 +93,25 @@ final class ContinuousContextSession: @unchecked Sendable {
         let maximumContextAge: TimeInterval
         let maximumContextCharacters: Int
         let maximumWorkAge: TimeInterval
+        let minimumWorkInterval: TimeInterval
         let sampleRate: Int
 
         init(
             maximumContextAge: TimeInterval = 30,
             maximumContextCharacters: Int = 600,
             maximumWorkAge: TimeInterval = 0.2,
+            minimumWorkInterval: TimeInterval = 0.5,
             sampleRate: Int = 16_000
         ) {
             precondition(maximumContextAge > 0 && maximumContextAge <= 30)
             precondition(maximumContextCharacters > 0 && maximumContextCharacters <= 600)
             precondition(maximumWorkAge > 0 && maximumWorkAge <= 0.2)
+            precondition(minimumWorkInterval >= 0.5)
             precondition(sampleRate > 0)
             self.maximumContextAge = maximumContextAge
             self.maximumContextCharacters = maximumContextCharacters
             self.maximumWorkAge = maximumWorkAge
+            self.minimumWorkInterval = minimumWorkInterval
             self.sampleRate = sampleRate
         }
 
@@ -130,6 +138,8 @@ final class ContinuousContextSession: @unchecked Sendable {
         var retainedAudioRange: Range<Int64>?
         var activeWork: ContinuousContextWork?
         var pendingWork: ContinuousContextWork?
+        var lastWorkDispatchedAt: TimeInterval?
+        var contextualPreviewText: String?
         var finalCandidate: ContinuousContextFinalCandidate?
     }
 
@@ -227,6 +237,7 @@ final class ContinuousContextSession: @unchecked Sendable {
             storage.nextRevision &+= 1
             storage.lastSourceText = event.text
             storage.latestRevision = revision
+            storage.contextualPreviewText = nil
             storage.retainedContext = String(event.text.suffix(configuration.maximumContextCharacters))
 
             if kind == .final {
@@ -241,16 +252,24 @@ final class ContinuousContextSession: @unchecked Sendable {
                 )
                 invalidateWorkAndBuffers(keepingFinalCandidate: true)
             } else {
+                let eligibleAt = max(
+                    revision.emittedAt,
+                    (storage.lastWorkDispatchedAt ?? -Double.infinity) + configuration.minimumWorkInterval
+                )
                 storage.pendingWork = ContinuousContextWork(
                     id: storage.nextWorkID,
                     attemptID: attemptID,
                     revision: revision.revision,
                     snapshotID: revision.snapshotID,
+                    sampleRange: revision.sampleRange,
                     sourceText: revision.sourceText,
+                    language: revision.language,
                     mutableSuffix: revision.mutableSuffix,
                     stablePrefixCharacterCount: revision.stablePrefixCharacterCount,
+                    mutableSourceCharacterRange: revision.mutableSourceCharacterRange,
                     generationIDs: generations,
-                    expiresAt: revision.emittedAt + configuration.maximumWorkAge
+                    eligibleAt: eligibleAt,
+                    expiresAt: eligibleAt + configuration.maximumWorkAge
                 )
                 storage.nextWorkID &+= 1
             }
@@ -273,9 +292,17 @@ final class ContinuousContextSession: @unchecked Sendable {
 
     func takeNextWork() -> ContinuousContextWork? {
         lock.withLock {
-            guard storage.state == .capturing, storage.activeWork == nil else { return nil }
+            guard storage.state == .capturing,
+                  storage.activeWork == nil,
+                  let pending = storage.pendingWork else { return nil }
+            guard now() < pending.expiresAt else {
+                storage.pendingWork = nil
+                return nil
+            }
+            guard now() >= pending.eligibleAt else { return nil }
             storage.activeWork = storage.pendingWork
             storage.pendingWork = nil
+            storage.lastWorkDispatchedAt = now()
             return storage.activeWork
         }
     }
@@ -290,6 +317,27 @@ final class ContinuousContextSession: @unchecked Sendable {
                 && work.generationIDs.session == storage.sessionGeneration
                 && work.revision == storage.latestRevision?.revision
                 && now() < work.expiresAt
+        }
+    }
+
+    @discardableResult
+    func applyContextualResult(_ result: RevisionBoundContextualResult, for work: ContinuousContextWork) -> Bool {
+        lock.withLock {
+            guard storage.state == .capturing,
+                  storage.activeWork?.id == work.id,
+                  work.identity(
+                    policyGeneration: result.identity.policyGeneration,
+                    storeGeneration: result.identity.storeGeneration
+                  ) == result.identity else { return false }
+            storage.activeWork = nil
+            guard work.attemptID == storage.attemptID,
+                  work.generationIDs.session == storage.sessionGeneration,
+                  work.revision == storage.latestRevision?.revision,
+                  work.sourceText == storage.latestRevision?.sourceText,
+                  now() < work.expiresAt,
+                  result.originalText == work.sourceText else { return false }
+            storage.contextualPreviewText = result.text
+            return true
         }
     }
 
@@ -314,6 +362,7 @@ final class ContinuousContextSession: @unchecked Sendable {
     var state: ContinuousContextSessionState { lock.withLock { storage.state } }
     var latestRevision: ContinuousContextRevision? { lock.withLock { storage.latestRevision } }
     var finalCandidate: ContinuousContextFinalCandidate? { lock.withLock { storage.finalCandidate } }
+    var contextualPreviewText: String? { lock.withLock { storage.contextualPreviewText } }
     var retainedContext: String { lock.withLock { storage.retainedContext } }
     var retainedContextCharacterCount: Int { lock.withLock { storage.retainedContext.count } }
     var retainedAudioSampleCount: Int { lock.withLock { storage.retainedAudio.count } }
@@ -336,6 +385,7 @@ final class ContinuousContextSession: @unchecked Sendable {
         storage.retainedAudio.removeAll(keepingCapacity: false)
         storage.retainedAudioRange = nil
         storage.retainedContext = ""
+        storage.contextualPreviewText = nil
         if !keepingFinalCandidate { storage.finalCandidate = nil }
     }
 
@@ -354,5 +404,176 @@ final class ContinuousContextSession: @unchecked Sendable {
     private static func suffix(_ value: String, droppingCharacters count: Int) -> String {
         let index = value.index(value.startIndex, offsetBy: min(count, value.count))
         return String(value[index...])
+    }
+}
+
+extension ContinuousContextWork {
+    func identity(policyGeneration: UInt64, storeGeneration: UInt64) -> ContextualRevisionWindowIdentity {
+        .init(
+            attemptID: attemptID,
+            revision: revision,
+            snapshotID: snapshotID,
+            sampleRange: sampleRange,
+            mutableSourceCharacterRange: mutableSourceCharacterRange,
+            generationIDs: generationIDs,
+            policyGeneration: policyGeneration,
+            storeGeneration: storeGeneration
+        )
+    }
+}
+
+private actor RevisionBoundDecisionRace {
+    typealias Output = Result<ContextualDecisionReceipt, Error>
+    private var continuation: CheckedContinuation<Output?, Never>?
+    private var pending: Output??
+    private var finished = false
+
+    func install(_ continuation: CheckedContinuation<Output?, Never>) {
+        if let pending {
+            self.pending = nil
+            continuation.resume(returning: pending)
+        } else {
+            self.continuation = continuation
+        }
+    }
+
+    func finish(_ output: Output?) {
+        guard !finished else { return }
+        finished = true
+        if let continuation {
+            self.continuation = nil
+            continuation.resume(returning: output)
+        } else {
+            pending = output
+        }
+    }
+}
+
+@MainActor
+final class RevisionBoundJevLoop {
+    private let session: ContinuousContextSession
+    private let provider: any ContextualDecisionProvider
+    private let time: any ContextualMonotonicTime
+    private let storeSnapshot: @MainActor @Sendable () -> ContextualCorrectionStoreSnapshot
+    private let policyGeneration: @MainActor @Sendable () -> UInt64
+    private let validator = ContextualDecisionValidator()
+
+    init(
+        session: ContinuousContextSession,
+        provider: any ContextualDecisionProvider,
+        time: any ContextualMonotonicTime,
+        storeSnapshot: @escaping @MainActor @Sendable () -> ContextualCorrectionStoreSnapshot,
+        policyGeneration: @escaping @MainActor @Sendable () -> UInt64
+    ) {
+        self.session = session
+        self.provider = provider
+        self.time = time
+        self.storeSnapshot = storeSnapshot
+        self.policyGeneration = policyGeneration
+    }
+
+    @discardableResult
+    func evaluateNext(scope: ContextualTransportScope) async -> RevisionBoundContextualResult? {
+        guard let work = session.takeNextWork() else { return nil }
+        let snapshot = storeSnapshot()
+        let policyAtStart = policyGeneration()
+        let identity = work.identity(
+            policyGeneration: policyAtStart,
+            storeGeneration: snapshot.generation
+        )
+        let abstained = RevisionBoundContextualResult(
+            identity: identity,
+            originalText: work.sourceText,
+            text: work.sourceText,
+            outcome: .init(category: .abstained, decisions: [])
+        )
+
+        guard scope == .testDouble,
+              snapshot.health == .healthy,
+              let input = ContextualCorrectionResolver.validatedDecisionInput(
+                examples: snapshot.examples,
+                text: work.sourceText,
+                language: work.language
+              ),
+              (try? OpenRouterDecisionsClient.requestBody(
+                sentence: input.sentence,
+                language: work.language,
+                occurrences: input.occurrences
+              )) != nil else {
+            _ = session.applyContextualResult(abstained, for: work)
+            return abstained
+        }
+
+        let request = RevisionBoundContextualRequest(
+            identity: identity,
+            originalText: work.sourceText,
+            sentence: input.sentence,
+            language: work.language,
+            occurrences: input.occurrences,
+            deadline: .init(offset: time.now().offset + .milliseconds(200))
+        )
+        let race = RevisionBoundDecisionRace()
+        let provider = provider
+        let providerTask = Task {
+            do {
+                let receipt = try await provider.decide(
+                    sentence: request.sentence,
+                    language: request.language,
+                    occurrences: request.occurrences,
+                    deadline: request.deadline
+                )
+                await race.finish(.success(receipt))
+            } catch {
+                await race.finish(.failure(error))
+            }
+        }
+        let timeoutTask = Task { [time] in
+            do {
+                try await time.sleep(until: request.deadline)
+                await race.finish(nil)
+            } catch { }
+        }
+        let raced = await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                Task { await race.install(continuation) }
+            }
+        } onCancel: {
+            providerTask.cancel()
+            timeoutTask.cancel()
+            Task { await race.finish(nil) }
+        }
+        timeoutTask.cancel()
+
+        guard let raced,
+              case .success(let receipt) = raced,
+              time.now() < request.deadline,
+              policyGeneration() == policyAtStart else {
+            providerTask.cancel()
+            _ = session.applyContextualResult(abstained, for: work)
+            return abstained
+        }
+        let currentSnapshot = storeSnapshot()
+        guard currentSnapshot.health == .healthy,
+              currentSnapshot.generation == snapshot.generation else {
+            _ = session.applyContextualResult(abstained, for: work)
+            return abstained
+        }
+        let outcome = validator.validate(receipt: receipt, occurrences: request.occurrences)
+        guard outcome.category != .abstained,
+              let resolved = ContextualCorrectionResolver.applying(
+                receipt: receipt,
+                occurrences: request.occurrences,
+                to: request.originalText
+              ) else {
+            _ = session.applyContextualResult(abstained, for: work)
+            return abstained
+        }
+        let result = RevisionBoundContextualResult(
+            identity: identity,
+            originalText: request.originalText,
+            text: resolved,
+            outcome: outcome
+        )
+        return session.applyContextualResult(result, for: work) ? result : abstained
     }
 }
