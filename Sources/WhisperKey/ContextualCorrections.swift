@@ -1931,22 +1931,73 @@ protocol PersonalRemoteOptInStore: AnyObject {
     func persistPersonalRemoteEnabled(_ enabled: Bool) throws
 }
 
+@MainActor
+protocol PersonalRemoteAuthorizationStateStore: AnyObject {
+    func loadAuthorizedEpoch() throws -> UUID?
+    func persistAuthorizedEpoch(_ epoch: UUID) throws
+    func persistRevoked() throws
+}
+
+@MainActor
+final class UserDefaultsPersonalRemoteAuthorizationStateStore:
+    PersonalRemoteAuthorizationStateStore
+{
+    private static let key = "resenha.personalRemoteAuthorizationState"
+    private static let revoked = "revoked"
+    private let defaults: UserDefaults
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+    }
+
+    func loadAuthorizedEpoch() throws -> UUID? {
+        guard let value = defaults.object(forKey: Self.key) else { return nil }
+        guard let value = value as? String else {
+            throw PersonalRemoteAuthorizationError.durableStateUnavailable
+        }
+        if value == Self.revoked { return nil }
+        guard value.hasPrefix("authorized:"),
+              let epoch = UUID(uuidString: String(value.dropFirst("authorized:".count))) else {
+            throw PersonalRemoteAuthorizationError.durableStateUnavailable
+        }
+        return epoch
+    }
+
+    func persistAuthorizedEpoch(_ epoch: UUID) throws {
+        try persistAndVerify("authorized:\(epoch.uuidString)")
+    }
+
+    func persistRevoked() throws {
+        try persistAndVerify(Self.revoked)
+    }
+
+    private func persistAndVerify(_ value: String) throws {
+        defaults.set(value, forKey: Self.key)
+        guard defaults.object(forKey: Self.key) as? String == value else {
+            throw PersonalRemoteAuthorizationError.durableStateUnavailable
+        }
+    }
+}
+
 struct PersonalRemoteAuthorizationHealth: Equatable, Sendable {
     let releaseDecision: PersonalRemoteReleaseDecision
     let enabled: Bool
     let credentialPresent: Bool
     let locallyEligible: Bool
+    let durablyAuthorized: Bool
     let revokedInProcess: Bool
 
     var canDispatch: Bool {
         releaseDecision == .personalRemoteAvailable
-            && enabled && credentialPresent && locallyEligible && !revokedInProcess
+            && enabled && credentialPresent && locallyEligible && durablyAuthorized
+            && !revokedInProcess
     }
 }
 
 enum PersonalRemoteAuthorizationError: Error, Equatable, Sendable {
     case consentRequired
     case credentialUnverified
+    case durableStateUnavailable
     case locallyIneligible
     case releaseUnavailable
 }
@@ -1962,6 +2013,7 @@ protocol PersonalRemoteAuthorizationManaging: AnyObject {
 final class PersonalRemoteAuthorizationOwner: PersonalRemoteAuthorizationManaging {
     private let optInStore: any PersonalRemoteOptInStore
     private let credentialStore: any ContextualCredentialStore
+    private let authorizationStateStore: any PersonalRemoteAuthorizationStateStore
     private let policy: ContextualCorrectionPolicy
     private let storeSnapshot: @MainActor @Sendable () -> ContextualCorrectionStoreSnapshot
     private var revokedInProcess = false
@@ -1969,11 +2021,13 @@ final class PersonalRemoteAuthorizationOwner: PersonalRemoteAuthorizationManagin
     init(
         optInStore: any PersonalRemoteOptInStore,
         credentialStore: any ContextualCredentialStore,
+        authorizationStateStore: any PersonalRemoteAuthorizationStateStore,
         policy: ContextualCorrectionPolicy,
         storeSnapshot: @escaping @MainActor @Sendable () -> ContextualCorrectionStoreSnapshot
     ) {
         self.optInStore = optInStore
         self.credentialStore = credentialStore
+        self.authorizationStateStore = authorizationStateStore
         self.policy = policy
         self.storeSnapshot = storeSnapshot
     }
@@ -1984,7 +2038,10 @@ final class PersonalRemoteAuthorizationOwner: PersonalRemoteAuthorizationManagin
         }
         guard explicitConsent else { throw PersonalRemoteAuthorizationError.consentRequired }
         guard isLocallyEligible else { throw PersonalRemoteAuthorizationError.locallyIneligible }
+        revokedInProcess = true
+        policy.invalidate(.authorityChanged)
         do {
+            try authorizationStateStore.persistRevoked()
             try credentialStore.save(credential)
             guard try credentialStore.load() == credential else {
                 throw PersonalRemoteAuthorizationError.credentialUnverified
@@ -1993,10 +2050,16 @@ final class PersonalRemoteAuthorizationOwner: PersonalRemoteAuthorizationManagin
             guard optInStore.personalRemoteEnabled else {
                 throw PersonalRemoteAuthorizationError.credentialUnverified
             }
+            let epoch = UUID()
+            try authorizationStateStore.persistAuthorizedEpoch(epoch)
+            guard try authorizationStateStore.loadAuthorizedEpoch() == epoch else {
+                throw PersonalRemoteAuthorizationError.durableStateUnavailable
+            }
             revokedInProcess = false
             policy.invalidate(.authorityChanged)
         } catch {
             revokedInProcess = true
+            try? authorizationStateStore.persistRevoked()
             try? optInStore.persistPersonalRemoteEnabled(false)
             try? credentialStore.delete()
             policy.invalidate(.authorityChanged)
@@ -2006,10 +2069,12 @@ final class PersonalRemoteAuthorizationOwner: PersonalRemoteAuthorizationManagin
 
     func revokePersonalRemote() throws {
         revokedInProcess = true
-        var firstError: Error?
-        do { try optInStore.persistPersonalRemoteEnabled(false) }
-        catch { firstError = error }
         policy.invalidate(.authorityChanged)
+        var firstError: Error?
+        do { try authorizationStateStore.persistRevoked() }
+        catch { firstError = error }
+        do { try optInStore.persistPersonalRemoteEnabled(false) }
+        catch { if firstError == nil { firstError = error } }
         do { try credentialStore.delete() }
         catch { if firstError == nil { firstError = error } }
         let credentialStillPresent: Bool
@@ -2018,18 +2083,29 @@ final class PersonalRemoteAuthorizationOwner: PersonalRemoteAuthorizationManagin
             credentialStillPresent = true
             if firstError == nil { firstError = error }
         }
-        guard !optInStore.personalRemoteEnabled, !credentialStillPresent, firstError == nil else {
+        let durableStillAuthorized: Bool
+        do { durableStillAuthorized = try authorizationStateStore.loadAuthorizedEpoch() != nil }
+        catch {
+            durableStillAuthorized = true
+            if firstError == nil { firstError = error }
+        }
+        guard !optInStore.personalRemoteEnabled, !credentialStillPresent,
+              !durableStillAuthorized, firstError == nil else {
             throw firstError ?? PersonalRemoteAuthorizationError.credentialUnverified
         }
     }
 
     func personalRemoteHealth() -> PersonalRemoteAuthorizationHealth {
         let credential = (try? credentialStore.load()) ?? nil
+        let durablyAuthorized: Bool
+        do { durablyAuthorized = try authorizationStateStore.loadAuthorizedEpoch() != nil }
+        catch { durablyAuthorized = false }
         return .init(
             releaseDecision: .current,
             enabled: optInStore.personalRemoteEnabled,
             credentialPresent: credential?.isEmpty == false,
             locallyEligible: isLocallyEligible,
+            durablyAuthorized: durablyAuthorized,
             revokedInProcess: revokedInProcess
         )
     }

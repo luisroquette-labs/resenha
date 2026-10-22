@@ -5950,12 +5950,16 @@ final class ContextualCoordinatorTests: XCTestCase {
         let policy = ContextualCorrectionPolicy()
         let optIn = PersonalRemoteOptInStoreStub()
         let credential = InMemoryCredentialStore()
+        let authorizationState = InMemoryPersonalRemoteAuthorizationStateStore(
+            backing: PersonalRemoteAuthorizationStateBacking()
+        )
         let file = FileManager.default.temporaryDirectory
             .appendingPathComponent("ResenhaTests/\(UUID().uuidString)/contextual.json")
         let store = ContextualCorrectionStore(fileURL: file)
         let owner = PersonalRemoteAuthorizationOwner(
             optInStore: optIn,
             credentialStore: credential,
+            authorizationStateStore: authorizationState,
             policy: policy,
             storeSnapshot: { store.snapshot }
         )
@@ -5987,9 +5991,14 @@ final class ContextualCoordinatorTests: XCTestCase {
 
         let failingOptIn = PersonalRemoteOptInStoreStub()
         let failingCredential = InMemoryCredentialStore()
+        let durableBacking = PersonalRemoteAuthorizationStateBacking()
+        let failingAuthorizationState = InMemoryPersonalRemoteAuthorizationStateStore(
+            backing: durableBacking
+        )
         let failingOwner = PersonalRemoteAuthorizationOwner(
             optInStore: failingOptIn,
             credentialStore: failingCredential,
+            authorizationStateStore: failingAuthorizationState,
             policy: ContextualCorrectionPolicy(),
             storeSnapshot: { store.snapshot }
         )
@@ -6002,12 +6011,24 @@ final class ContextualCoordinatorTests: XCTestCase {
         XCTAssertTrue(failingOwner.personalRemoteHealth().revokedInProcess)
         XCTAssertFalse(failingOwner.personalRemoteHealth().canDispatch)
         XCTAssertEqual(failingOwner.issueToken().scope, .disabled)
+        let reconstructedAuthorizationState = InMemoryPersonalRemoteAuthorizationStateStore(
+            backing: durableBacking
+        )
+        let reconstructedOwner = PersonalRemoteAuthorizationOwner(
+            optInStore: failingOptIn,
+            credentialStore: failingCredential,
+            authorizationStateStore: reconstructedAuthorizationState,
+            policy: ContextualCorrectionPolicy(),
+            storeSnapshot: { store.snapshot }
+        )
+        XCTAssertFalse(reconstructedOwner.personalRemoteHealth().canDispatch)
+        XCTAssertEqual(reconstructedOwner.issueToken().scope, .disabled)
         let blockedTransport = DecisionsStreamingTransportStub(chunks: [])
         let blockedClient = OpenRouterDecisionsClient(
             transport: blockedTransport,
             credential: { "retained-key" },
             beforeTransportOpen: {
-                await failingOwner.personalRemoteHealth().canDispatch
+                await reconstructedOwner.personalRemoteHealth().canDispatch
             }
         )
         let blockedSentence = "Reservei um rosto."
@@ -6030,26 +6051,76 @@ final class ContextualCoordinatorTests: XCTestCase {
 
         failingOptIn.failOnDisable = false
         failingCredential.setDeleteFailure(false)
-        XCTAssertEqual(failingOwner.issueToken().scope, .disabled)
-        try failingOwner.authorizePersonalRemote(explicitConsent: true, credential: "new-explicit-key")
-        XCTAssertFalse(failingOwner.personalRemoteHealth().revokedInProcess)
-        XCTAssertEqual(failingOwner.issueToken().scope, .personalDictation)
+        XCTAssertEqual(reconstructedOwner.issueToken().scope, .disabled)
+        try reconstructedOwner.authorizePersonalRemote(explicitConsent: true, credential: "new-explicit-key")
+        XCTAssertFalse(reconstructedOwner.personalRemoteHealth().revokedInProcess)
+        XCTAssertEqual(reconstructedOwner.issueToken().scope, .personalDictation)
 
         for (index, status) in [401, 402, 403, 429].enumerated() {
             failingOptIn.failOnDisable = true
             failingCredential.setDeleteFailure(true)
-            failingOwner.handleProviderError(OpenRouterDecisionsError.invalidStatus(status))
-            XCTAssertTrue(failingOwner.personalRemoteHealth().revokedInProcess)
-            XCTAssertFalse(failingOwner.personalRemoteHealth().canDispatch)
-            XCTAssertEqual(failingOwner.issueToken().scope, .disabled)
+            reconstructedOwner.handleProviderError(OpenRouterDecisionsError.invalidStatus(status))
+            XCTAssertTrue(reconstructedOwner.personalRemoteHealth().revokedInProcess)
+            XCTAssertFalse(reconstructedOwner.personalRemoteHealth().canDispatch)
+            XCTAssertEqual(reconstructedOwner.issueToken().scope, .disabled)
             guard index < 3 else { continue }
             failingOptIn.failOnDisable = false
             failingCredential.setDeleteFailure(false)
-            try failingOwner.authorizePersonalRemote(
+            try reconstructedOwner.authorizePersonalRemote(
                 explicitConsent: true,
                 credential: "explicit-key-\(status)"
             )
         }
+
+        reconstructedAuthorizationState.readFails = true
+        XCTAssertFalse(reconstructedOwner.personalRemoteHealth().canDispatch)
+        XCTAssertEqual(reconstructedOwner.issueToken().scope, .disabled)
+        reconstructedAuthorizationState.readFails = false
+        failingOptIn.failOnDisable = false
+        failingCredential.setDeleteFailure(false)
+        try reconstructedOwner.authorizePersonalRemote(explicitConsent: true, credential: "write-test-key")
+        reconstructedAuthorizationState.writeFails = true
+        XCTAssertThrowsError(try reconstructedOwner.revokePersonalRemote())
+        XCTAssertFalse(failingOptIn.personalRemoteEnabled)
+        XCTAssertNil(try failingCredential.load())
+        XCTAssertFalse(reconstructedOwner.personalRemoteHealth().canDispatch)
+        XCTAssertEqual(reconstructedOwner.issueToken().scope, .disabled)
+        let writeFailureReconstructedOwner = PersonalRemoteAuthorizationOwner(
+            optInStore: failingOptIn,
+            credentialStore: failingCredential,
+            authorizationStateStore: InMemoryPersonalRemoteAuthorizationStateStore(
+                backing: durableBacking
+            ),
+            policy: ContextualCorrectionPolicy(),
+            storeSnapshot: { store.snapshot }
+        )
+        XCTAssertFalse(writeFailureReconstructedOwner.personalRemoteHealth().canDispatch)
+        XCTAssertEqual(writeFailureReconstructedOwner.issueToken().scope, .disabled)
+    }
+
+    func testPersonalRemoteDurableStatePersistsAcrossStoreReconstructionAndRejectsCorruption() throws {
+        let suite = "ResenhaTests.PersonalRemoteState.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let epoch = UUID()
+
+        try UserDefaultsPersonalRemoteAuthorizationStateStore(defaults: defaults)
+            .persistAuthorizedEpoch(epoch)
+        XCTAssertEqual(
+            try UserDefaultsPersonalRemoteAuthorizationStateStore(defaults: defaults)
+                .loadAuthorizedEpoch(),
+            epoch
+        )
+        try UserDefaultsPersonalRemoteAuthorizationStateStore(defaults: defaults).persistRevoked()
+        XCTAssertNil(
+            try UserDefaultsPersonalRemoteAuthorizationStateStore(defaults: defaults)
+                .loadAuthorizedEpoch()
+        )
+        defaults.set(7, forKey: "resenha.personalRemoteAuthorizationState")
+        XCTAssertThrowsError(
+            try UserDefaultsPersonalRemoteAuthorizationStateStore(defaults: defaults)
+                .loadAuthorizedEpoch()
+        )
     }
 
     func testCoordinatorTestTokenSourceUsesTestDoubleScope() async throws {
@@ -6672,6 +6743,39 @@ private final class InMemoryCredentialStore: ContextualCredentialStore, @uncheck
     }
     func setDeleteFailure(_ enabled: Bool) { lock.withLock { deleteFails = enabled } }
     func snapshotCalls() -> [String] { lock.withLock { calls } }
+}
+
+@MainActor
+private final class PersonalRemoteAuthorizationStateBacking {
+    var epoch: UUID?
+}
+
+@MainActor
+private final class InMemoryPersonalRemoteAuthorizationStateStore:
+    PersonalRemoteAuthorizationStateStore
+{
+    private let backing: PersonalRemoteAuthorizationStateBacking
+    var readFails = false
+    var writeFails = false
+
+    init(backing: PersonalRemoteAuthorizationStateBacking) {
+        self.backing = backing
+    }
+
+    func loadAuthorizedEpoch() throws -> UUID? {
+        if readFails { throw PersonalRemoteAuthorizationError.durableStateUnavailable }
+        return backing.epoch
+    }
+
+    func persistAuthorizedEpoch(_ epoch: UUID) throws {
+        if writeFails { throw PersonalRemoteAuthorizationError.durableStateUnavailable }
+        backing.epoch = epoch
+    }
+
+    func persistRevoked() throws {
+        if writeFails { throw PersonalRemoteAuthorizationError.durableStateUnavailable }
+        backing.epoch = nil
+    }
 }
 
 @MainActor

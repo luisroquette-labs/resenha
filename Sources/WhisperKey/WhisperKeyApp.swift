@@ -32,6 +32,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let personalCredentialStore = KeychainContextualCredentialStore(
         account: KeychainContextualCredentialConstants.personalAccount
     )
+    private let personalAuthorizationStateStore = UserDefaultsPersonalRemoteAuthorizationStateStore()
     private lazy var contextualTimeComposition: ContextualTimeComposition = {
         do {
             return try ContextualTimeComposition(
@@ -64,6 +65,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private lazy var personalAuthorization = PersonalRemoteAuthorizationOwner(
         optInStore: preferences,
         credentialStore: personalCredentialStore,
+        authorizationStateStore: personalAuthorizationStateStore,
         policy: contextualPolicy,
         storeSnapshot: { [contextualStore] in contextualStore.snapshot }
     )
