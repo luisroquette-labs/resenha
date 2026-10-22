@@ -2344,6 +2344,194 @@ final class WhisperKeyTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: recording.audio.path))
     }
 
+    private struct SessionEvent: ContinuousContextRollingEvent {
+        let snapshotID: UInt64
+        let sampleRange: Range<Int64>
+        let capturedAt: TimeInterval
+        let candidateAt: TimeInterval
+        let text: String
+        var isStale = false
+        var isFinal = false
+    }
+
+    func testContinuousContextSessionReconcilesImmutableUnicodeSnapshotsAndRejectsOldWork() throws {
+        var uptime: TimeInterval = 20
+        let attemptID = UUID()
+        let session = ContinuousContextSession(now: { uptime })
+        XCTAssertTrue(session.start(attemptID: attemptID, language: "pt"))
+
+        func event(_ id: UInt64, _ text: String, final: Bool = false) -> SessionEvent {
+            SessionEvent(
+                snapshotID: id,
+                sampleRange: 0..<Int64(id * 100),
+                capturedAt: uptime - 0.1,
+                candidateAt: uptime,
+                text: text,
+                isFinal: final
+            )
+        }
+
+        let first = try XCTUnwrap(session.ingest(event(1, "A COE")))
+        XCTAssertEqual(first.revision, 1)
+        XCTAssertEqual(first.stablePrefixCharacterCount, 0)
+        XCTAssertEqual(first.mutableSuffix, "A COE")
+        let firstWork = try XCTUnwrap(session.takeNextWork())
+
+        uptime = 21
+        let splitWord = try XCTUnwrap(session.ingest(event(2, "A COESA chegou 👩🏽‍💻")))
+        XCTAssertEqual(splitWord.stablePrefixCharacterCount, 5)
+        XCTAssertEqual(splitWord.mutableSourceCharacterRange, 5..<splitWord.sourceText.count)
+        XCTAssertEqual(splitWord.mutableSuffix, "SA chegou 👩🏽‍💻")
+        uptime = 22
+        let retracted = try XCTUnwrap(session.ingest(event(3, "A coisa mudou")))
+        XCTAssertEqual(retracted.stablePrefixCharacterCount, 2)
+        XCTAssertEqual(retracted.mutableSuffix, "coisa mudou")
+        XCTAssertEqual(session.scheduledWorkCount, 2)
+
+        XCTAssertFalse(session.completeWork(firstWork))
+        let latestWork = try XCTUnwrap(session.takeNextWork())
+        XCTAssertEqual(latestWork.revision, retracted.revision)
+        XCTAssertTrue(session.completeWork(latestWork))
+        XCTAssertNil(session.ingest(event(3, "callback reordenado")))
+        XCTAssertNil(session.ingest(event(4, "A coisa mudou")))
+        XCTAssertEqual(session.latestRevision?.revision, 3)
+    }
+
+    func testContinuousContextSessionBoundsAudioTextAndLatestWinsUnderLongStream() throws {
+        let configuration = ContinuousContextSession.Configuration(
+            maximumContextAge: 0.01,
+            maximumContextCharacters: 12,
+            maximumWorkAge: 0.2,
+            sampleRate: 1_000
+        )
+        let session = ContinuousContextSession(configuration: configuration, now: { 50 })
+        XCTAssertTrue(session.start(attemptID: UUID(), language: "pt"))
+
+        for id in 1...10_000 {
+            let upper = Int64(id * 20)
+            session.retainAudio(.init(
+                id: UInt64(id),
+                samples: (0..<20).map(Float.init),
+                sampleRange: (upper - 20)..<upper,
+                capturedAt: Double(id)
+            ))
+            _ = session.ingest(SessionEvent(
+                snapshotID: UInt64(id),
+                sampleRange: 0..<upper,
+                capturedAt: 49,
+                candidateAt: 50,
+                text: "prefixo-\(id)-abcdefghijklmnop"
+            ))
+            if id == 1 { XCTAssertNotNil(session.takeNextWork()) }
+            XCTAssertLessThanOrEqual(session.retainedAudioSampleCount, 10)
+            XCTAssertLessThanOrEqual(session.retainedContextCharacterCount, 12)
+            XCTAssertLessThanOrEqual(session.scheduledWorkCount, 2)
+        }
+
+        XCTAssertEqual(session.retainedContext, "efghijklmnop")
+        XCTAssertEqual(session.retainedAudioSampleCount, 10)
+    }
+
+    func testContinuousContextSessionFinalizationIsFrozenExactlyOnceAndReleasesState() throws {
+        let attemptID = UUID()
+        let session = ContinuousContextSession(now: { 9 })
+        XCTAssertTrue(session.start(attemptID: attemptID, language: "pt"))
+        _ = session.ingest(SessionEvent(
+            snapshotID: 1,
+            sampleRange: 0..<100,
+            capturedAt: 8,
+            candidateAt: 9,
+            text: "texto parcial"
+        ))
+        let lateWork = try XCTUnwrap(session.takeNextWork())
+        session.retainAudio(.init(id: 1, samples: [1, 2], sampleRange: 0..<2, capturedAt: 8))
+
+        let final = try XCTUnwrap(session.ingest(SessionEvent(
+            snapshotID: 2,
+            sampleRange: 0..<200,
+            capturedAt: 8.5,
+            candidateAt: 9,
+            text: "texto final",
+            isFinal: true
+        )))
+        XCTAssertEqual(final.kind, .final)
+        XCTAssertEqual(session.state, .finalizing)
+        XCTAssertEqual(session.finalCandidate?.sourceText, "texto final")
+        XCTAssertFalse(session.completeWork(lateWork))
+        XCTAssertNil(session.ingest(SessionEvent(
+            snapshotID: 3,
+            sampleRange: 0..<300,
+            capturedAt: 8.8,
+            candidateAt: 9,
+            text: "texto tardio"
+        )))
+
+        let committed = try XCTUnwrap(session.commitFinalCandidate())
+        XCTAssertEqual(committed.sourceText, "texto final")
+        XCTAssertEqual(committed.attemptID, attemptID)
+        XCTAssertEqual(session.state, .committed)
+        XCTAssertNil(session.commitFinalCandidate())
+        XCTAssertNil(session.latestRevision)
+        XCTAssertNil(session.finalCandidate)
+        XCTAssertEqual(session.retainedAudioSampleCount, 0)
+        XCTAssertEqual(session.retainedContextCharacterCount, 0)
+        XCTAssertEqual(session.scheduledWorkCount, 0)
+    }
+
+    func testContinuousContextSessionFinalizesAnUnchangedLastHypothesisAndExpiresWork() throws {
+        var uptime: TimeInterval = 4
+        let session = ContinuousContextSession(now: { uptime })
+        XCTAssertTrue(session.start(attemptID: UUID(), language: "pt"))
+        let partial = SessionEvent(
+            snapshotID: 1,
+            sampleRange: 0..<100,
+            capturedAt: 3,
+            candidateAt: 4,
+            text: "mesmo texto"
+        )
+        _ = session.ingest(partial)
+        let expiring = try XCTUnwrap(session.takeNextWork())
+        uptime = 4.201
+        XCTAssertFalse(session.completeWork(expiring))
+
+        let final = try XCTUnwrap(session.ingest(SessionEvent(
+            snapshotID: 2,
+            sampleRange: 0..<200,
+            capturedAt: 3.5,
+            candidateAt: 4.2,
+            text: "mesmo texto",
+            isFinal: true
+        )))
+        XCTAssertEqual(final.mutableSourceCharacterRange, final.sourceText.count..<final.sourceText.count)
+        XCTAssertEqual(session.finalCandidate?.sourceText, "mesmo texto")
+    }
+
+    func testContinuousContextSessionCancelAndFailureReleaseAllSensitiveState() {
+        for terminal in [ContinuousContextSessionState.cancelled, .failed] {
+            weak var weakSession: ContinuousContextSession?
+            autoreleasepool {
+                let session = ContinuousContextSession(now: { 3 })
+                weakSession = session
+                XCTAssertTrue(session.start(attemptID: UUID(), language: "pt"))
+                _ = session.ingest(SessionEvent(
+                    snapshotID: 1,
+                    sampleRange: 0..<2,
+                    capturedAt: 2,
+                    candidateAt: 3,
+                    text: "conteúdo privado"
+                ))
+                session.retainAudio(.init(id: 1, samples: [1, 2], sampleRange: 0..<2, capturedAt: 2))
+                terminal == .cancelled ? session.cancel() : session.fail()
+                XCTAssertEqual(session.state, terminal)
+                XCTAssertNil(session.latestRevision)
+                XCTAssertEqual(session.retainedAudioSampleCount, 0)
+                XCTAssertEqual(session.retainedContextCharacterCount, 0)
+                XCTAssertEqual(session.scheduledWorkCount, 0)
+            }
+            XCTAssertNil(weakSession)
+        }
+    }
+
     func testEmbeddedWhisperTranscribesOfficialFixtureWhenLocalModelIsAvailable() async throws {
         let home = FileManager.default.homeDirectoryForCurrentUser
         let model = home.appendingPathComponent(
