@@ -129,9 +129,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 self?.recordTranscript(text)
             },
             onFailure: { _ in },
-            continuousContextEnabled: { false },
+            continuousContextEnabled: { [weak preferences] in preferences?.localPreviewEnabled ?? false },
             continuousContextSessionFactory: { ContinuousContextSession() },
-            onContinuousPreview: { _ in },
+            onContinuousPreview: { [weak self] revision in
+                guard let self else { return }
+                if revision == nil || self.preferences.showsHUD {
+                    self.panel.updateContinuousPreview(revision)
+                }
+            },
             outputSink: TextInjector(),
             contextualResolver: contextualResolver,
             contextualTokenSource: DictationCoordinator.productionContextualTokenSource(
@@ -164,6 +169,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         panel.configureFeedback(preferences: preferences, store: contextualStore)
         panel.onFeedbackChange = { [weak self] in self?.updateFeedbackMenu() }
         preferences.onHUDChange = { [weak self] visible in if !visible { self?.panel.hide() } }
+        preferences.onLocalPreviewChange = { [weak self] enabled in
+            self?.coordinator?.continuousContextModeChanged()
+            if !enabled { self?.panel.clearContinuousPreview() }
+        }
     }
 
     func configureHotkeyRouting() {

@@ -231,6 +231,8 @@ final class DictationCoordinator {
         }
 
         do {
+            let requestedContinuousPreview = continuousContextEnabled()
+            var startedContinuousPreview = false
             if beginContinuousContextForActiveAttempt() {
                 do {
                     try recorder.start(
@@ -239,6 +241,7 @@ final class DictationCoordinator {
                             Task { @MainActor in self?.receiveContinuousSnapshot(snapshot) }
                         }
                     )
+                    startedContinuousPreview = true
                 } catch {
                     invalidateContinuousContext()
                     try recorder.start()
@@ -248,7 +251,12 @@ final class DictationCoordinator {
             }
             transition(to: .recording)
             if soundsEnabled() { cuePlayer.play(.started) }
-            if showsHUD() { panel.show(.listening, target: panelTarget) }
+            if showsHUD() {
+                panel.show(.listening, target: panelTarget)
+                if requestedContinuousPreview && !startedContinuousPreview {
+                    panel.showLocalPreviewFallback(attemptID: attemptID)
+                }
+            }
         } catch {
             fail(DictationErrorPresentation(error: error))
         }

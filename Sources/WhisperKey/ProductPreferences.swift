@@ -105,15 +105,23 @@ final class ProductPreferences: ObservableObject {
         static let transcriptionGlossary = "resenha.transcriptionGlossary"
         static let readySoundID = "resenha.readySoundID"
         static let contextualCorrectionsEnabled = "resenha.contextualCorrectionsEnabled"
+        static let localPreviewEnabled = "resenha.localPreviewEnabled"
     }
     private let defaults: UserDefaults
     private var updatesGlossaryMemoryOnly = false
     @Published private(set) var canSaveTranscriptionCorrection = true
     @Published private(set) var contextualCorrectionsEnabled: Bool
+    @Published var localPreviewEnabled: Bool {
+        didSet {
+            defaults.set(localPreviewEnabled, forKey: Key.localPreviewEnabled)
+            if oldValue != localPreviewEnabled { onLocalPreviewChange?(localPreviewEnabled) }
+        }
+    }
     var onShortcutChange: ((HotkeyShortcut) -> Void)?
     var onHUDChange: ((Bool) -> Void)?
     var onHistoryChange: ((Bool) -> Void)?
     var onLanguageChange: ((TranscriptionLanguage) -> Void)?
+    var onLocalPreviewChange: ((Bool) -> Void)?
 
     @Published var shortcut: HotkeyShortcut {
         didSet {
@@ -255,6 +263,7 @@ final class ProductPreferences: ObservableObject {
         soundsEnabled = defaults.object(forKey: Key.soundsEnabled) as? Bool ?? true
         keepsHistory = defaults.object(forKey: Key.keepsHistory) as? Bool ?? true
         contextualCorrectionsEnabled = defaults.object(forKey: Key.contextualCorrectionsEnabled) as? Bool ?? false
+        localPreviewEnabled = defaults.object(forKey: Key.localPreviewEnabled) as? Bool ?? false
         transcriptionLanguage = TranscriptionLanguage(
             rawValue: defaults.string(forKey: Key.transcriptionLanguage) ?? ""
         ) ?? .portuguese
@@ -628,6 +637,14 @@ private struct TranscriptionSettingsPane: View {
                 }
                 ResenhaRuleSection("Modelo local") {
                     modelStatus
+                }
+                ResenhaRuleSection("Prévia local") {
+                    Text("Mostra no HUD uma hipótese provisória enquanto você fala. O texto fica neste Mac e só é inserido depois que você solta o atalho.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                    Toggle("Mostrar prévia local durante o ditado", isOn: $preferences.localPreviewEnabled)
+                        .accessibilityLabel("Mostrar prévia local durante o ditado")
+                        .accessibilityHint("Ativa somente a prévia processada neste Mac. Não autoriza avaliação remota.")
                 }
                 ResenhaRuleSection("Vocabulário pessoal") {
                 TextEditor(text: $preferences.transcriptionGlossary)

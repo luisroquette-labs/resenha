@@ -120,6 +120,29 @@ private extension DictationCoordinator {
 }
 
 final class WhisperKeyTests: XCTestCase {
+    private func previewRevision(
+        attemptID: UUID,
+        revision: UInt64,
+        text: String
+    ) -> ContinuousContextRevision {
+        ContinuousContextRevision(
+            attemptID: attemptID,
+            revision: revision,
+            snapshotID: revision,
+            sampleRange: 0..<8_000,
+            sourceText: text,
+            language: "pt",
+            kind: .provisional,
+            generationIDs: .init(session: 1, work: revision),
+            capturedAt: 1,
+            candidateAt: 1.1,
+            emittedAt: 1.1,
+            stablePrefixCharacterCount: 0,
+            mutableSourceCharacterRange: 0..<text.count,
+            mutableSuffix: text
+        )
+    }
+
     func testApprovedBrandAssetsLoadAndMenuBarImageIsTemplateSized() throws {
         XCTAssertNotNil(NSImage(named: "ResenhaMark"))
         XCTAssertNotNil(NSImage(named: "ResenhaLockup"))
@@ -158,25 +181,31 @@ final class WhisperKeyTests: XCTestCase {
         XCTAssertTrue(preferences.showsHUD)
         XCTAssertTrue(preferences.soundsEnabled)
         XCTAssertTrue(preferences.keepsHistory)
+        XCTAssertFalse(preferences.localPreviewEnabled)
         XCTAssertEqual(preferences.transcriptionLanguage, .portuguese)
         XCTAssertTrue(preferences.transcriptionGlossary.contains("Resenha"))
         XCTAssertEqual(preferences.readySoundID, 60)
         var changed: HotkeyShortcut?
+        var localPreviewChanges: [Bool] = []
         preferences.onShortcutChange = { changed = $0 }
+        preferences.onLocalPreviewChange = { localPreviewChanges.append($0) }
         let customShortcut = HotkeyShortcut(keyCode: 40, flags: [.maskControl, .maskShift], keyLabel: "K")
         preferences.shortcut = customShortcut
         preferences.showsHUD = false
         preferences.soundsEnabled = false
         preferences.keepsHistory = false
+        preferences.localPreviewEnabled = true
         preferences.transcriptionLanguage = .spanish
         preferences.transcriptionGlossary = "coisa = COESA"
         preferences.readySoundID = 3
         XCTAssertEqual(changed, customShortcut)
+        XCTAssertEqual(localPreviewChanges, [true])
         let restored = ProductPreferences(defaults: defaults)
         XCTAssertEqual(restored.shortcut, customShortcut)
         XCTAssertFalse(restored.showsHUD)
         XCTAssertFalse(restored.soundsEnabled)
         XCTAssertFalse(restored.keepsHistory)
+        XCTAssertTrue(restored.localPreviewEnabled)
         XCTAssertEqual(restored.transcriptionLanguage, .spanish)
         XCTAssertEqual(restored.transcriptionGlossary, "coisa = COESA")
         XCTAssertEqual(restored.readySoundID, 3)
@@ -1966,6 +1995,91 @@ final class WhisperKeyTests: XCTestCase {
             XCTAssertEqual(notice.symbol, "info.circle")
             XCTAssertFalse(notice.isFailure)
         }
+    }
+
+    @MainActor
+    func testLocalPreviewModelBoundsUnicodeRejectsStaleSessionsAndClearsExplicitly() {
+        let model = FloatingPanelModel()
+        let attempt = UUID()
+        let otherAttempt = UUID()
+        model.show(.listening, now: 0)
+        let longUnicode = String(repeating: "🧑🏽‍💻", count: 300)
+
+        XCTAssertTrue(model.showPreview(previewRevision(attemptID: attempt, revision: 1, text: longUnicode)))
+        XCTAssertEqual(model.preview?.text.count, FloatingPreview.maximumCharacters)
+        XCTAssertTrue(model.preview?.text.hasSuffix("…") == true)
+        XCTAssertEqual(model.preview?.phase, .provisional)
+        XCTAssertFalse(model.showPreview(previewRevision(attemptID: attempt, revision: 1, text: "stale")))
+        XCTAssertFalse(model.showPreview(previewRevision(attemptID: otherAttempt, revision: 2, text: "other")))
+        XCTAssertTrue(model.showPreview(previewRevision(attemptID: attempt, revision: 2, text: "Olá, COESA 👋🏽")))
+
+        model.show(.transcribing, now: 1)
+        XCTAssertEqual(model.preview?.phase, .finalizing)
+        XCTAssertTrue(model.preview?.accessibilityLabel.contains("FINALIZANDO") == true)
+        model.clearPreview(attemptID: otherAttempt)
+        XCTAssertNotNil(model.preview)
+        model.clearPreview(attemptID: attempt)
+        XCTAssertNil(model.preview)
+
+        model.show(.listening, now: 2)
+        model.showLocalFallback(attemptID: attempt)
+        XCTAssertEqual(model.preview?.phase, .localFallback)
+        XCTAssertEqual(model.preview?.text, FloatingPreview.fallbackText)
+        XCTAssertNotEqual(FloatingPreviewPhase.provisional.symbol, FloatingPreviewPhase.localFallback.symbol)
+    }
+
+    @MainActor
+    func testLocalPreviewPanelCoalescesRapidRevisionsPreservesFocusContractAndCleansUp() async throws {
+        var now: TimeInterval = 10
+        let panel = FloatingPanelController(clock: { now }, previewCoalescingInterval: 0.08)
+        let attempt = UUID()
+        panel.show(.listening, target: .standalone(nil))
+        XCTAssertTrue(panel.ignoresMouseEvents)
+
+        panel.updateContinuousPreview(previewRevision(attemptID: attempt, revision: 1, text: "um"))
+        panel.updateContinuousPreview(previewRevision(attemptID: attempt, revision: 2, text: "um teste"))
+        panel.updateContinuousPreview(previewRevision(attemptID: attempt, revision: 3, text: "um teste local"))
+        XCTAssertEqual(panel.preview?.revision, 1)
+        now += 0.08
+        try await Task.sleep(for: .milliseconds(100))
+        XCTAssertEqual(panel.preview?.revision, 3)
+        XCTAssertEqual(panel.preview?.text, "um teste local")
+
+        panel.show(.transcribing, target: .standalone(nil))
+        XCTAssertEqual(panel.preview?.phase, .finalizing)
+        panel.hide()
+        XCTAssertNil(panel.preview)
+        XCTAssertFalse(panel.isVisible)
+    }
+
+    @MainActor
+    func testLocalPreviewViewFitsSmallScreenContrastAndReducedMotion() {
+        let model = FloatingPanelModel()
+        let attempt = UUID()
+        model.show(.listening, now: 0)
+        XCTAssertTrue(model.showPreview(previewRevision(
+            attemptID: attempt,
+            revision: 1,
+            text: "Uma frase longa com acentos, emoji 👩🏾‍💻 e nome COESA Energia"
+        )))
+        let smallScreen = CGSize(width: 320, height: 180)
+        let size = FloatingStatusView.panelSize(for: .listening, available: smallScreen, hasPreview: true)
+        XCTAssertLessThanOrEqual(size.width, smallScreen.width - 24)
+        XCTAssertLessThanOrEqual(size.height, smallScreen.height - 24)
+        let view = FloatingStatusView(
+            model: model,
+            fixtureContrast: .increased,
+            fixtureReduceTransparency: true,
+            fixtureReduceMotion: true
+        )
+        XCTAssertEqual(view.fixtureContrast, .increased)
+        XCTAssertEqual(view.fixtureReduceTransparency, true)
+        XCTAssertEqual(view.fixtureReduceMotion, true)
+        let host = NSHostingView(rootView: view)
+        host.frame = CGRect(origin: .zero, size: size)
+        host.layoutSubtreeIfNeeded()
+        XCTAssertEqual(host.frame.size, size)
+        XCTAssertTrue(model.preview?.accessibilityLabel.contains("PRÉVIA LOCAL") == true)
     }
 
     @MainActor
