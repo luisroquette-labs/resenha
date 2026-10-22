@@ -1,4 +1,5 @@
 import AppKit
+import AVFoundation
 import CryptoKit
 import XCTest
 import SwiftUI
@@ -2221,12 +2222,55 @@ final class WhisperKeyTests: XCTestCase {
         private let lock = NSLock()
         private var entries: [String] = []
         private var uptime: TimeInterval = 100
+        private var activeInferenceCount = 0
+        private var peakInferenceCount = 0
         func record(_ event: String) -> Int {
             lock.withLock { entries.append(event); return entries.filter { $0 == event }.count }
         }
         var events: [String] { lock.withLock { entries } }
         var now: TimeInterval { lock.withLock { uptime } }
         func advance(to value: TimeInterval) { lock.withLock { uptime = value } }
+        func beginInference() -> Int {
+            lock.withLock {
+                activeInferenceCount += 1
+                peakInferenceCount = max(peakInferenceCount, activeInferenceCount)
+                entries.append("infer")
+                return entries.filter { $0 == "infer" }.count
+            }
+        }
+        func endInference() { lock.withLock { activeInferenceCount -= 1 } }
+        var peakInferences: Int { lock.withLock { peakInferenceCount } }
+    }
+
+    private final class FakeAudioRecordingBackend: AudioRecordingBackend {
+        var isMeteringEnabled = false
+        private(set) var isRecording = false
+        private(set) var stopCount = 0
+        func prepareToRecord() -> Bool { true }
+        func record() -> Bool { isRecording = true; return true }
+        func stop() { stopCount += 1; isRecording = false }
+        func updateMeters() {}
+        func averagePower(forChannel channelNumber: Int) -> Float { -30 }
+    }
+
+    private final class FakeRollingAudioCapture: RollingAudioCapture, @unchecked Sendable {
+        private let onSnapshot: @Sendable (AudioSampleSnapshot) -> Void
+        private let onInterruption: @Sendable () -> Void
+        private(set) var startCount = 0
+        private(set) var stopCount = 0
+
+        init(
+            onSnapshot: @escaping @Sendable (AudioSampleSnapshot) -> Void,
+            onInterruption: @escaping @Sendable () -> Void = {}
+        ) {
+            self.onSnapshot = onSnapshot
+            self.onInterruption = onInterruption
+        }
+
+        func start() throws { startCount += 1 }
+        func stop() { stopCount += 1 }
+        func emit(_ snapshot: AudioSampleSnapshot) { onSnapshot(snapshot) }
+        func interrupt() { onInterruption() }
     }
 
     private func temporaryWhisperRecording() throws -> (directory: URL, audio: URL) {
@@ -2250,6 +2294,7 @@ final class WhisperKeyTests: XCTestCase {
         XCTAssertEqual(first.samples, [1, 1, 1])
         XCTAssertEqual(first.sampleRange, 0..<3)
         XCTAssertEqual(first.capturedAt, 11)
+        XCTAssertEqual(first.enqueuedAt, 11)
 
         for value in 2...10_000 {
             _ = accumulator.append([Float(value)], capturedAt: TimeInterval(value))
@@ -2265,6 +2310,131 @@ final class WhisperKeyTests: XCTestCase {
         let reset = try XCTUnwrap(accumulator.append([7, 8], capturedAt: 30))
         XCTAssertEqual(reset.id, 1)
         XCTAssertEqual(reset.sampleRange, 0..<2)
+    }
+
+    func testAudioCaptureTimestampUsesTapHostTimeForFinalFrameAndKeepsPublicationSeparate() throws {
+        let startSeconds = 1_000.0
+        let start = AVAudioTime(hostTime: AVAudioTime.hostTime(forSeconds: startSeconds))
+        let capturedAt = AudioCaptureTimestamp.finalFrame(
+            startingAt: start,
+            frameCount: 800,
+            sampleRate: 16_000,
+            fallback: 9_999
+        )
+        XCTAssertEqual(capturedAt, startSeconds + 799.0 / 16_000.0, accuracy: 0.000_001)
+
+        let accumulator = BoundedAudioSampleAccumulator(configuration: .init(
+            maximumRetainedSamples: 800,
+            snapshotStrideSamples: 800
+        ))
+        let snapshot = try XCTUnwrap(accumulator.append(
+            [Float](repeating: 0, count: 800),
+            capturedAt: capturedAt,
+            enqueuedAt: capturedAt + 0.2
+        ))
+        XCTAssertEqual(snapshot.capturedAt, capturedAt)
+        XCTAssertEqual(snapshot.enqueuedAt, capturedAt + 0.2)
+    }
+
+    @MainActor
+    func testAudioRecorderRollingLifecycleStopsOnceAndRejectsLateCallbacks() async throws {
+        let firstBackend = FakeAudioRecordingBackend()
+        var firstCapture: FakeRollingAudioCapture?
+        let recorder = AudioRecorder(
+            recorderFactory: { url, _ in
+                FileManager.default.createFile(atPath: url.path, contents: Data())
+                return firstBackend
+            },
+            rollingCaptureFactory: { _, callback, interruption in
+                let capture = FakeRollingAudioCapture(
+                    onSnapshot: callback,
+                    onInterruption: interruption
+                )
+                firstCapture = capture
+                return capture
+            }
+        )
+        let unexpected = expectation(description: "No snapshots after terminal stop")
+        unexpected.isInverted = true
+        try recorder.start(
+            rolling: .init(maximumRetainedSamples: 100, snapshotStrideSamples: 10),
+            onSnapshot: { _ in unexpected.fulfill() }
+        )
+        XCTAssertThrowsError(try recorder.start()) { error in
+            guard case AudioRecorderError.alreadyRecording = error else {
+                return XCTFail("Expected alreadyRecording, got \(error)")
+            }
+        }
+        XCTAssertEqual(firstCapture?.startCount, 1)
+        let output = try recorder.stop()
+        defer { try? FileManager.default.removeItem(at: output) }
+        XCTAssertEqual(firstBackend.stopCount, 1)
+        XCTAssertEqual(firstCapture?.stopCount, 1)
+        firstCapture?.emit(.init(id: 1, samples: [1], sampleRange: 0..<1, capturedAt: 1))
+        await fulfillment(of: [unexpected], timeout: 0.15)
+
+        let secondBackend = FakeAudioRecordingBackend()
+        var secondCapture: FakeRollingAudioCapture?
+        var cancelledURL: URL?
+        let unexpectedAfterCancel = expectation(description: "No snapshots after cancellation")
+        unexpectedAfterCancel.isInverted = true
+        let cancelledRecorder = AudioRecorder(
+            recorderFactory: { url, _ in
+                cancelledURL = url
+                FileManager.default.createFile(atPath: url.path, contents: Data())
+                return secondBackend
+            },
+            rollingCaptureFactory: { _, callback, interruption in
+                let capture = FakeRollingAudioCapture(
+                    onSnapshot: callback,
+                    onInterruption: interruption
+                )
+                secondCapture = capture
+                return capture
+            }
+        )
+        try cancelledRecorder.start(
+            rolling: .init(maximumRetainedSamples: 100, snapshotStrideSamples: 10),
+            onSnapshot: { _ in unexpectedAfterCancel.fulfill() }
+        )
+        cancelledRecorder.cancel()
+        cancelledRecorder.cancel()
+        secondCapture?.emit(.init(id: 2, samples: [2], sampleRange: 1..<2, capturedAt: 2))
+        await fulfillment(of: [unexpectedAfterCancel], timeout: 0.15)
+        XCTAssertEqual(secondBackend.stopCount, 1)
+        XCTAssertEqual(secondCapture?.stopCount, 1)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: try XCTUnwrap(cancelledURL).path))
+
+        let interruptedBackend = FakeAudioRecordingBackend()
+        var interruptedCapture: FakeRollingAudioCapture?
+        let unexpectedAfterInterruption = expectation(description: "No snapshots after interruption")
+        unexpectedAfterInterruption.isInverted = true
+        let interruptedRecorder = AudioRecorder(
+            recorderFactory: { url, _ in
+                FileManager.default.createFile(atPath: url.path, contents: Data())
+                return interruptedBackend
+            },
+            rollingCaptureFactory: { _, callback, interruption in
+                let capture = FakeRollingAudioCapture(
+                    onSnapshot: callback,
+                    onInterruption: interruption
+                )
+                interruptedCapture = capture
+                return capture
+            }
+        )
+        try interruptedRecorder.start(
+            rolling: .init(maximumRetainedSamples: 100, snapshotStrideSamples: 10),
+            onSnapshot: { _ in unexpectedAfterInterruption.fulfill() }
+        )
+        interruptedCapture?.interrupt()
+        await Task.yield()
+        interruptedCapture?.emit(.init(id: 3, samples: [3], sampleRange: 2..<3, capturedAt: 3))
+        await fulfillment(of: [unexpectedAfterInterruption], timeout: 0.15)
+        let interruptedOutput = try interruptedRecorder.stop()
+        defer { try? FileManager.default.removeItem(at: interruptedOutput) }
+        XCTAssertEqual(interruptedCapture?.stopCount, 1)
+        XCTAssertEqual(interruptedBackend.stopCount, 1)
     }
 
     func testRollingWhisperKeepsOneActiveAndLatestPendingThenCoalescesEqualText() async throws {
@@ -2328,6 +2498,51 @@ final class WhisperKeyTests: XCTestCase {
         release.signal()
         await fulfillment(of: [staleResult], timeout: 1)
         XCTAssertEqual(recognizer.queuedInferenceCount, 0)
+    }
+
+    func testRollingWhisperSharesBackpressureAcrossAttemptsWhileOldWorkIgnoresCancellation() async throws {
+        let oldStarted = expectation(description: "Old attempt started")
+        let newStarted = expectation(description: "New attempt started")
+        let hypotheses = expectation(description: "Old stale and new current hypotheses")
+        hypotheses.expectedFulfillmentCount = 2
+        let releaseOld = DispatchSemaphore(value: 0)
+        let probe = WhisperExecutionProbe()
+        let transcriber = WhisperTranscriber(infer: { samples, _, _, _ in
+            let call = probe.beginInference()
+            defer { probe.endInference() }
+            if call == 1 {
+                oldStarted.fulfill()
+                _ = releaseOld.wait(timeout: .now() + 2)
+                return "antiga"
+            }
+            newStarted.fulfill()
+            return samples.last == 2 ? "nova" : "inesperada"
+        })
+        let old = try XCTUnwrap(transcriber.makeRollingRecognizer(glossaryText: "") { hypothesis in
+            XCTAssertTrue(hypothesis.isStale)
+            _ = probe.record("old-\(hypothesis.text)")
+            hypotheses.fulfill()
+        })
+        let new = try XCTUnwrap(transcriber.makeRollingRecognizer(glossaryText: "") { hypothesis in
+            XCTAssertFalse(hypothesis.isStale)
+            _ = probe.record("new-\(hypothesis.text)")
+            hypotheses.fulfill()
+        })
+
+        old.submit(.init(id: 1, samples: [1], sampleRange: 0..<1, capturedAt: 1))
+        await fulfillment(of: [oldStarted], timeout: 1)
+        old.cancel()
+        new.submit(.init(id: 2, samples: [2], sampleRange: 0..<1, capturedAt: 2))
+        XCTAssertEqual(new.queuedInferenceCount, 2)
+        XCTAssertEqual(probe.peakInferences, 1)
+        releaseOld.signal()
+
+        await fulfillment(of: [newStarted, hypotheses], timeout: 2)
+        XCTAssertEqual(probe.peakInferences, 1)
+        XCTAssertEqual(probe.events.filter { $0 == "infer" }.count, 2)
+        XCTAssertTrue(probe.events.contains("old-antiga"))
+        XCTAssertTrue(probe.events.contains("new-nova"))
+        XCTAssertEqual(new.queuedInferenceCount, 0)
     }
 
     func testUnsupportedRollingRecognitionLeavesCompletedWAVFallbackAuthoritative() async throws {

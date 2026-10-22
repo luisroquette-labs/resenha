@@ -5,6 +5,21 @@ struct AudioSampleSnapshot: Equatable, Sendable {
     let samples: [Float]
     let sampleRange: Range<Int64>
     let capturedAt: TimeInterval
+    let enqueuedAt: TimeInterval
+
+    init(
+        id: UInt64,
+        samples: [Float],
+        sampleRange: Range<Int64>,
+        capturedAt: TimeInterval,
+        enqueuedAt: TimeInterval? = nil
+    ) {
+        self.id = id
+        self.samples = samples
+        self.sampleRange = sampleRange
+        self.capturedAt = capturedAt
+        self.enqueuedAt = enqueuedAt ?? capturedAt
+    }
 }
 
 struct RollingAudioConfiguration: Equatable, Sendable {
@@ -34,7 +49,11 @@ final class BoundedAudioSampleAccumulator: @unchecked Sendable {
         storage = [Float](repeating: 0, count: configuration.maximumRetainedSamples)
     }
 
-    func append(_ samples: [Float], capturedAt: TimeInterval) -> AudioSampleSnapshot? {
+    func append(
+        _ samples: [Float],
+        capturedAt: TimeInterval,
+        enqueuedAt: TimeInterval? = nil
+    ) -> AudioSampleSnapshot? {
         guard !samples.isEmpty else { return nil }
         return lock.withLock {
             for sample in samples {
@@ -52,7 +71,8 @@ final class BoundedAudioSampleAccumulator: @unchecked Sendable {
                 id: nextSnapshotID,
                 samples: samples,
                 sampleRange: start..<totalSampleCount,
-                capturedAt: capturedAt
+                capturedAt: capturedAt,
+                enqueuedAt: enqueuedAt ?? capturedAt
             )
             nextSnapshotID &+= 1
             return snapshot
@@ -80,6 +100,7 @@ private final class LatestAudioSnapshotDelivery: @unchecked Sendable {
     private var isDelivering = false
     private var pending: AudioSampleSnapshot?
     private var generation: UInt64 = 0
+    private var isCancelled = false
 
     init(onSnapshot: @escaping @Sendable (AudioSampleSnapshot) -> Void) {
         self.onSnapshot = onSnapshot
@@ -87,6 +108,7 @@ private final class LatestAudioSnapshotDelivery: @unchecked Sendable {
 
     func submit(_ snapshot: AudioSampleSnapshot) {
         let work: (AudioSampleSnapshot, UInt64)? = lock.withLock {
+            guard !isCancelled else { return nil }
             guard !isDelivering else {
                 pending = snapshot
                 return nil
@@ -99,6 +121,8 @@ private final class LatestAudioSnapshotDelivery: @unchecked Sendable {
 
     func cancel() {
         lock.withLock {
+            guard !isCancelled else { return }
+            isCancelled = true
             generation &+= 1
             pending = nil
         }
@@ -107,9 +131,11 @@ private final class LatestAudioSnapshotDelivery: @unchecked Sendable {
     private func enqueue(_ snapshot: AudioSampleSnapshot, generation: UInt64) {
         queue.async { [weak self] in
             guard let self else { return }
-            if self.lock.withLock({ self.generation == generation }) { self.onSnapshot(snapshot) }
+            if self.lock.withLock({ !self.isCancelled && self.generation == generation }) {
+                self.onSnapshot(snapshot)
+            }
             let next: AudioSampleSnapshot? = self.lock.withLock {
-                guard self.generation == generation else {
+                guard !self.isCancelled, self.generation == generation else {
                     self.isDelivering = false
                     return nil
                 }
@@ -122,6 +148,139 @@ private final class LatestAudioSnapshotDelivery: @unchecked Sendable {
             }
             if let next { self.enqueue(next, generation: generation) }
         }
+    }
+}
+
+enum AudioCaptureTimestamp {
+    static func finalFrame(
+        startingAt time: AVAudioTime,
+        frameCount: AVAudioFrameCount,
+        sampleRate: Double,
+        fallback: TimeInterval
+    ) -> TimeInterval {
+        guard time.isHostTimeValid, frameCount > 0, sampleRate > 0 else { return fallback }
+        return AVAudioTime.seconds(forHostTime: time.hostTime)
+            + Double(frameCount - 1) / sampleRate
+    }
+}
+
+protocol AudioRecordingBackend: AnyObject {
+    var isMeteringEnabled: Bool { get set }
+    var isRecording: Bool { get }
+    func prepareToRecord() -> Bool
+    func record() -> Bool
+    func stop()
+    func updateMeters()
+    func averagePower(forChannel channelNumber: Int) -> Float
+}
+
+extension AVAudioRecorder: AudioRecordingBackend {}
+
+protocol RollingAudioCapture: AnyObject {
+    func start() throws
+    func stop()
+}
+
+private final class AVAudioEngineRollingCapture: RollingAudioCapture {
+    private let engine = AVAudioEngine()
+    private let configuration: RollingAudioConfiguration
+    private let onSnapshot: @Sendable (AudioSampleSnapshot) -> Void
+    private let onInterruption: @Sendable () -> Void
+    private var accumulator: BoundedAudioSampleAccumulator?
+    private var tapInstalled = false
+    private var interruptionObserver: NSObjectProtocol?
+
+    init(
+        configuration: RollingAudioConfiguration,
+        onSnapshot: @escaping @Sendable (AudioSampleSnapshot) -> Void,
+        onInterruption: @escaping @Sendable () -> Void
+    ) {
+        self.configuration = configuration
+        self.onSnapshot = onSnapshot
+        self.onInterruption = onInterruption
+    }
+
+    func start() throws {
+        guard !tapInstalled else { throw AudioRecorderError.alreadyRecording }
+        let input = engine.inputNode
+        let inputFormat = input.outputFormat(forBus: 0)
+        guard inputFormat.sampleRate > 0,
+              inputFormat.channelCount > 0,
+              let outputFormat = AVAudioFormat(
+                  commonFormat: .pcmFormatFloat32,
+                  sampleRate: 16_000,
+                  channels: 1,
+                  interleaved: false
+              ),
+              let converter = AVAudioConverter(from: inputFormat, to: outputFormat) else {
+            throw AudioRecorderError.failedToStart
+        }
+        let accumulator = BoundedAudioSampleAccumulator(configuration: configuration)
+        input.installTap(onBus: 0, bufferSize: 2_048, format: inputFormat) { [onSnapshot] buffer, when in
+            let fallbackCaptureTime = ProcessInfo.processInfo.systemUptime
+            let capturedAt = AudioCaptureTimestamp.finalFrame(
+                startingAt: when,
+                frameCount: buffer.frameLength,
+                sampleRate: inputFormat.sampleRate,
+                fallback: fallbackCaptureTime
+            )
+            let capacity = AVAudioFrameCount(
+                ceil(Double(buffer.frameLength) * outputFormat.sampleRate / inputFormat.sampleRate)
+            )
+            guard capacity > 0,
+                  let converted = AVAudioPCMBuffer(pcmFormat: outputFormat, frameCapacity: capacity) else { return }
+            var supplied = false
+            var conversionError: NSError?
+            let status = converter.convert(to: converted, error: &conversionError) { _, inputStatus in
+                guard !supplied else {
+                    inputStatus.pointee = .noDataNow
+                    return nil
+                }
+                supplied = true
+                inputStatus.pointee = .haveData
+                return buffer
+            }
+            guard conversionError == nil,
+                  status != .error,
+                  let channel = converted.floatChannelData?.pointee else { return }
+            let samples = Array(UnsafeBufferPointer(start: channel, count: Int(converted.frameLength)))
+            let enqueuedAt = ProcessInfo.processInfo.systemUptime
+            if let snapshot = accumulator.append(
+                samples,
+                capturedAt: capturedAt,
+                enqueuedAt: enqueuedAt
+            ) {
+                onSnapshot(snapshot)
+            }
+        }
+        tapInstalled = true
+        do {
+            engine.prepare()
+            try engine.start()
+            self.accumulator = accumulator
+            interruptionObserver = NotificationCenter.default.addObserver(
+                forName: .AVAudioEngineConfigurationChange,
+                object: engine,
+                queue: nil
+            ) { [weak self] _ in
+                self?.onInterruption()
+            }
+        } catch {
+            input.removeTap(onBus: 0)
+            tapInstalled = false
+            throw error
+        }
+    }
+
+    func stop() {
+        guard tapInstalled else { return }
+        tapInstalled = false
+        if let interruptionObserver { NotificationCenter.default.removeObserver(interruptionObserver) }
+        interruptionObserver = nil
+        engine.inputNode.removeTap(onBus: 0)
+        engine.stop()
+        accumulator?.reset()
+        accumulator = nil
     }
 }
 
@@ -141,14 +300,32 @@ enum AudioRecorderError: LocalizedError {
 
 @MainActor
 final class AudioRecorder {
+    typealias RecorderFactory = (URL, [String: Any]) throws -> any AudioRecordingBackend
+    typealias RollingCaptureFactory = (
+        RollingAudioConfiguration,
+        @escaping @Sendable (AudioSampleSnapshot) -> Void,
+        @escaping @Sendable () -> Void
+    ) throws -> any RollingAudioCapture
+
     nonisolated static let staleRecordingAge: TimeInterval = 24 * 60 * 60
-    private var recorder: AVAudioRecorder?
+    private let recorderFactory: RecorderFactory
+    private let rollingCaptureFactory: RollingCaptureFactory
+    private var recorder: (any AudioRecordingBackend)?
     private var outputURL: URL?
     private var meterTimer: Timer?
-    private var rollingEngine: AVAudioEngine?
-    private var rollingAccumulator: BoundedAudioSampleAccumulator?
+    private var rollingCapture: (any RollingAudioCapture)?
     private var rollingDelivery: LatestAudioSnapshotDelivery?
     var onLevel: (@MainActor (Float) -> Void)?
+
+    init(
+        recorderFactory: @escaping RecorderFactory = { try AVAudioRecorder(url: $0, settings: $1) },
+        rollingCaptureFactory: @escaping RollingCaptureFactory = {
+            try AVAudioEngineRollingCapture(configuration: $0, onSnapshot: $1, onInterruption: $2)
+        }
+    ) {
+        self.recorderFactory = recorderFactory
+        self.rollingCaptureFactory = rollingCaptureFactory
+    }
 
     func start(
         rolling configuration: RollingAudioConfiguration? = nil,
@@ -167,9 +344,9 @@ final class AudioRecorder {
             AVLinearPCMIsFloatKey: false,
             AVLinearPCMIsBigEndianKey: false
         ]
-        let recorder: AVAudioRecorder
+        let recorder: any AudioRecordingBackend
         do {
-            recorder = try AVAudioRecorder(url: outputURL, settings: settings)
+            recorder = try recorderFactory(outputURL, settings)
             recorder.isMeteringEnabled = true
             recorder.prepareToRecord()
             try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: outputURL.path)
@@ -232,67 +409,25 @@ final class AudioRecorder {
         configuration: RollingAudioConfiguration,
         onSnapshot: @escaping @Sendable (AudioSampleSnapshot) -> Void
     ) throws {
-        let engine = AVAudioEngine()
-        let input = engine.inputNode
-        let inputFormat = input.outputFormat(forBus: 0)
-        guard inputFormat.sampleRate > 0,
-              inputFormat.channelCount > 0,
-              let outputFormat = AVAudioFormat(
-                  commonFormat: .pcmFormatFloat32,
-                  sampleRate: 16_000,
-                  channels: 1,
-                  interleaved: false
-              ),
-              let converter = AVAudioConverter(from: inputFormat, to: outputFormat) else {
-            throw AudioRecorderError.failedToStart
-        }
-        let accumulator = BoundedAudioSampleAccumulator(configuration: configuration)
         let delivery = LatestAudioSnapshotDelivery(onSnapshot: onSnapshot)
-        input.installTap(onBus: 0, bufferSize: 2_048, format: inputFormat) { buffer, _ in
-            let capacity = AVAudioFrameCount(
-                ceil(Double(buffer.frameLength) * outputFormat.sampleRate / inputFormat.sampleRate)
-            )
-            guard capacity > 0,
-                  let converted = AVAudioPCMBuffer(pcmFormat: outputFormat, frameCapacity: capacity) else { return }
-            var supplied = false
-            var conversionError: NSError?
-            let status = converter.convert(to: converted, error: &conversionError) { _, inputStatus in
-                guard !supplied else {
-                    inputStatus.pointee = .noDataNow
-                    return nil
-                }
-                supplied = true
-                inputStatus.pointee = .haveData
-                return buffer
+        let capture = try rollingCaptureFactory(
+            configuration,
+            { snapshot in delivery.submit(snapshot) },
+            { [weak self] in
+                Task { @MainActor in self?.stopRollingCapture() }
             }
-            guard conversionError == nil,
-                  status != .error,
-                  let channel = converted.floatChannelData?.pointee else { return }
-            let samples = Array(UnsafeBufferPointer(start: channel, count: Int(converted.frameLength)))
-            if let snapshot = accumulator.append(samples, capturedAt: ProcessInfo.processInfo.systemUptime) {
-                delivery.submit(snapshot)
-            }
-        }
-        do {
-            engine.prepare()
-            try engine.start()
-        } catch {
-            input.removeTap(onBus: 0)
-            throw error
-        }
-        rollingAccumulator = accumulator
+        )
+        try capture.start()
         rollingDelivery = delivery
-        rollingEngine = engine
+        rollingCapture = capture
     }
 
     private func stopRollingCapture() {
         rollingDelivery?.cancel()
-        rollingEngine?.inputNode.removeTap(onBus: 0)
-        rollingEngine?.stop()
-        rollingAccumulator?.reset()
+        let capture = rollingCapture
         rollingDelivery = nil
-        rollingAccumulator = nil
-        rollingEngine = nil
+        rollingCapture = nil
+        capture?.stop()
     }
 
     nonisolated static func cleanupStaleRecordings(
