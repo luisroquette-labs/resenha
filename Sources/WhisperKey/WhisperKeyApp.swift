@@ -28,6 +28,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let contextualTime = ContinuousContextualTime()
     private let contextualPolicy = ContextualCorrectionPolicy()
     private let contextualStore = ContextualCorrectionStore()
+    private let contextualAttemptStore = ContextualAttemptStore()
     private let syntheticCredentialStore = KeychainContextualCredentialStore()
     private let personalCredentialStore = KeychainContextualCredentialStore(
         account: KeychainContextualCredentialConstants.personalAccount
@@ -84,6 +85,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             },
             onFailure: { error in
                 await authorization.handleProviderError(error)
+            },
+            onAttempt: { [contextualAttemptStore] event in
+                await contextualAttemptStore.consume(event)
             }
         )
     }()
@@ -92,7 +96,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         policy: contextualPolicy,
         provider: personalClient,
         storeGeneration: { [contextualStore] in contextualStore.generation },
-        time: contextualTimeComposition.shared
+        time: contextualTimeComposition.shared,
+        onAttemptDisposition: { [contextualAttemptStore] id, disposition in
+            Task { @MainActor in
+                contextualAttemptStore.consume(.resolved(id: id, disposition: disposition))
+            }
+        }
     )
     private lazy var contextualDiagnosticController = SyntheticDiagnosticController(
         policy: contextualPolicy,
@@ -113,7 +122,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         contextualStore: contextualStore,
         authorization: contextualAuthorization,
         diagnostic: contextualDiagnosticController,
-        personalAuthorization: personalAuthorization
+        personalAuthorization: personalAuthorization,
+        contextualAttemptStore: contextualAttemptStore
     )
 
     var productSettingsView: ProductSettingsView {
@@ -122,7 +132,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             contextualStore: contextualStore,
             authorization: contextualAuthorization,
             diagnostic: contextualDiagnosticController,
-            personalAuthorization: personalAuthorization
+            personalAuthorization: personalAuthorization,
+            contextualAttemptStore: contextualAttemptStore
         )
     }
 
@@ -177,7 +188,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     time: self.contextualTimeComposition.shared,
                     storeSnapshot: { [contextualStore] in contextualStore.snapshot },
                     policyGeneration: { [contextualPolicy] in contextualPolicy.generation },
-                    policy: self.contextualPolicy
+                    policy: self.contextualPolicy,
+                    onAttemptDisposition: { [contextualAttemptStore] id, disposition in
+                        Task { @MainActor in
+                            contextualAttemptStore.consume(.resolved(id: id, disposition: disposition))
+                        }
+                    }
                 )
             },
             onContinuousContextualPreview: { [weak self] attemptID, revision, text in

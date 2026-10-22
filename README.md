@@ -36,6 +36,9 @@ entre alternativas permitidas e ligadas ao texto já
 reconhecido. Ele não recebe áudio, não prevê palavras ainda não ditas e não gera
 texto livre. Sem opt-in, credencial e exemplos elegíveis, a prévia e a
 finalização permanecem locais e fazem zero requisições.
+Os Ajustes mostram a última prova técnica recebida do JEV — modelo, decisão,
+latência, custo e identificador — sem guardar o texto ditado. Até 20 registros
+locais podem ser apagados pelo usuário.
 Metas de latência não são apresentadas como desempenho medido sem prova física.
 
 ## Rodar o projeto

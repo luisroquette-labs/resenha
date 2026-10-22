@@ -33,6 +33,7 @@
 		A117C517B23C28101A3AD434 /* contextual-corrections.json in Resources */ = {isa = PBXBuildFile; fileRef = B37F99010A42725CC6F7CAEE /* contextual-corrections.json */; };
 		A43F5E47CFC6FC2CDEC601A4 /* DictationCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E0F01DAE4C30ED2DC6B9DBC /* DictationCoordinator.swift */; };
 		B35865AFF46A73E125E89E8F /* WhisperKeyApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FFCCC5A27F52BFFEE1004E2 /* WhisperKeyApp.swift */; };
+		BF06EDD26311167BD86ABC77 /* ContextualAttemptAudit.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6EC93DC04E730228FA51917 /* ContextualAttemptAudit.swift */; };
 		C2AE8F8BDE3F2909C47F5A3E /* jfk.wav in Resources */ = {isa = PBXBuildFile; fileRef = EA7FF21487DD1F97FC4D871F /* jfk.wav */; };
 		C4A5F5D768D1319B58EE2118 /* ResenhaDesign.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD98C7E641E041C3A2E5E855 /* ResenhaDesign.swift */; };
 		D7739963D1B010F882D8BCA0 /* WhisperTranscriber.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAC1740D72EC6212C4303041 /* WhisperTranscriber.swift */; };
@@ -85,6 +86,7 @@
 		CD98C7E641E041C3A2E5E855 /* ResenhaDesign.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ResenhaDesign.swift; sourceTree = "<group>"; };
 		D37823F6AEBFF7A451345AD9 /* ShortcutCaptureController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutCaptureController.swift; sourceTree = "<group>"; };
 		D4A8FD7C33E4604E0E2BE7C1 /* RecordingWaveformView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingWaveformView.swift; sourceTree = "<group>"; };
+		D6EC93DC04E730228FA51917 /* ContextualAttemptAudit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContextualAttemptAudit.swift; sourceTree = "<group>"; };
 		DC280A6E884D7AF1EBD71925 /* WhisperKeyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhisperKeyTests.swift; sourceTree = "<group>"; };
 		EA7FF21487DD1F97FC4D871F /* jfk.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = jfk.wav; sourceTree = "<group>"; };
 		F6D551801267264DB250896E /* PanelPlacement.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PanelPlacement.swift; sourceTree = "<group>"; };
@@ -181,6 +183,7 @@
 			children = (
 				00EE951794E83B89436ADF66 /* Assets.xcassets */,
 				AA553ED088000409A1534B10 /* AudioRecorder.swift */,
+				D6EC93DC04E730228FA51917 /* ContextualAttemptAudit.swift */,
 				95005FE135F7FC2ECCFC4182 /* ContextualCorrections.swift */,
 				02DFABC055D13DE01C25E2F0 /* ContinuousContextSession.swift */,
 				6E0F01DAE4C30ED2DC6B9DBC /* DictationCoordinator.swift */,
@@ -326,6 +329,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				86DFF8F34B535D75107AB91C /* AudioRecorder.swift in Sources */,
+				BF06EDD26311167BD86ABC77 /* ContextualAttemptAudit.swift in Sources */,
 				6DC19E1366479BEA93600203 /* ContextualCorrections.swift in Sources */,
 				7F9F3C3D5F62A5C2C00065D1 /* ContinuousContextSession.swift in Sources */,
 				A43F5E47CFC6FC2CDEC601A4 /* DictationCoordinator.swift in Sources */,
