@@ -140,8 +140,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             outputSink: TextInjector(),
             contextualResolver: contextualResolver,
             contextualTokenSource: DictationCoordinator.productionContextualTokenSource(
-                policy: contextualPolicy,
-                isEnabled: { [preferences] in preferences.contextualCorrectionsEnabled }
+                policy: contextualPolicy
             ),
             contextualStoreGeneration: { [weak contextualStore] in contextualStore?.generation ?? 0 }
         ))

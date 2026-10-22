@@ -424,6 +424,12 @@ enum ContextualTransportScope: Equatable, Sendable {
     case syntheticDiagnostic
 }
 
+enum PersonalRemoteReleaseDecision: String, CaseIterable, Equatable, Sendable {
+    case personalRemoteUnavailable
+
+    static let current = PersonalRemoteReleaseDecision.personalRemoteUnavailable
+}
+
 enum ContextualPolicyInvalidationReason: Sendable {
     case optedOut
     case credentialDeleted

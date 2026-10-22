@@ -5339,16 +5339,16 @@ final class ContextualCoordinatorTests: XCTestCase {
         _ = URLSessionDecisionsStreamingTransport(time: composition.shared)
     }
 
-    func testCoordinatorProductionTokenSourceUsesOnlyDisabledOrPersonalScope() {
+    func testPersonalRemoteReleaseDecisionIsUnavailableAndProductionCannotAuthorizeIt() {
+        XCTAssertEqual(PersonalRemoteReleaseDecision.current, .personalRemoteUnavailable)
+        XCTAssertEqual(PersonalRemoteReleaseDecision.allCases, [.personalRemoteUnavailable])
         let policy = ContextualCorrectionPolicy()
-        let optIn = ContextualOptInStoreStub(enabled: false)
         let source = DictationCoordinator.productionContextualTokenSource(
-            policy: policy,
-            isEnabled: { optIn.contextualCorrectionsEnabled }
+            policy: policy
         )
         XCTAssertEqual(source(UUID()).scope, .disabled)
-        try? optIn.persistContextualCorrectionsEnabled(true)
-        XCTAssertEqual(source(UUID()).scope, .personalDictation)
+        policy.invalidate(.credentialDeleted)
+        XCTAssertEqual(source(UUID()).scope, .disabled)
     }
 
     func testCoordinatorTestTokenSourceUsesTestDoubleScope() async throws {

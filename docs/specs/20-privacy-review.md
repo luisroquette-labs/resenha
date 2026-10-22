@@ -8,6 +8,12 @@
 - Privacy policy explains microphone, Input Monitoring, clipboard recovery, local storage and model delivery.
 - A valid `PrivacyInfo.xcprivacy` ships in `Contents/Resources`; required-reason APIs are audited on the archived binary.
 
+### Continuous context release decision (2026-10-22)
+
+- Release decision: `personalRemoteUnavailable`. Recurring personal-text transmission and its cost are not authorized; local eligibility and provider ZDR are not verified.
+- Production dictation issues only the disabled transport scope. The local preview and confirmed examples remain on-device; the separately authorized one-shot synthetic diagnostic cannot authorize personal text.
+- `Config/PrivacyInfo.xcprivacy` remains unchanged: this release adds no collected-data category, tracking domain or new required-reason API. Existing local-only public claims remain accurate.
+
 ## Review package
 
 - Review notes explain the hold-to-talk flow, exact shortcut, permission sequence, model availability and offline test.

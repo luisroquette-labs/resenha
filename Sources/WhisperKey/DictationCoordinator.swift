@@ -132,10 +132,12 @@ final class DictationCoordinator {
     )
 
     static func productionContextualTokenSource(
-        policy: ContextualCorrectionPolicy,
-        isEnabled: @escaping @MainActor @Sendable () -> Bool
+        policy: ContextualCorrectionPolicy
     ) -> ContextualPolicyTokenSource {
-        { _ in policy.issueToken(scope: isEnabled() ? .personalDictation : .disabled) }
+        let scope: ContextualTransportScope = switch PersonalRemoteReleaseDecision.current {
+        case .personalRemoteUnavailable: .disabled
+        }
+        return { _ in policy.issueToken(scope: scope) }
     }
 
     private let permissions: PermissionService
