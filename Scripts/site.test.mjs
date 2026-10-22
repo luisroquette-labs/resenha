@@ -264,6 +264,14 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
         const privacy = await get(preview.origin, prefix + 'privacy/');
         assert.equal(privacy.status, 200);
         assert.match(privacy.body, /Sua voz fica no seu Mac/u);
+        assert.match(privacy.body, /não envia áudio/u);
+        assert.match(privacy.body, /OpenRouter\/TypeSafe \(JEV\)/u);
+        assert.match(privacy.body, /4096 bytes/u);
+        assert.match(privacy.body, /intervalo mínimo de 500 ms/u);
+        assert.match(privacy.body, /avalia durante o ditado/u);
+        assert.match(privacy.body, /vincular o texto à conta/u);
+        assert.match(privacy.body, /não estima o custo total/u);
+        assert.match(privacy.body, /Revogar cancela o trabalho pendente/u);
         assert.match(privacy.body, /Acessibilidade devolve o foco/u);
         assert.match(privacy.body, /não lê o conteúdo de outros apps/u);
         assert.match(privacy.body, /Consent Mode v2/u);

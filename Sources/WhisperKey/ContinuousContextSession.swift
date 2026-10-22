@@ -400,6 +400,13 @@ final class ContinuousContextSession: @unchecked Sendable {
         lock.withLock { (storage.activeWork == nil ? 0 : 1) + (storage.pendingWork == nil ? 0 : 1) }
     }
 
+    func nextWorkDelay() -> TimeInterval? {
+        lock.withLock {
+            guard storage.state == .capturing, let pending = storage.pendingWork else { return nil }
+            return max(0, pending.eligibleAt - now())
+        }
+    }
+
     private func terminate(as terminal: ContinuousContextSessionState) {
         var cancellation: (@Sendable () -> Void)?
         lock.withLock {
@@ -526,7 +533,7 @@ final class RevisionBoundJevLoop {
             outcome: .init(category: .abstained, decisions: [])
         )
 
-        guard scope == .testDouble,
+        guard (scope == .testDouble || scope == .personalDictation),
               snapshot.health == .healthy,
               let input = ContextualCorrectionResolver.validatedDecisionInput(
                 examples: snapshot.examples,

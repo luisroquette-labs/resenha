@@ -182,6 +182,7 @@ final class WhisperKeyTests: XCTestCase {
         XCTAssertTrue(preferences.soundsEnabled)
         XCTAssertTrue(preferences.keepsHistory)
         XCTAssertFalse(preferences.localPreviewEnabled)
+        XCTAssertFalse(preferences.personalRemoteEnabled)
         XCTAssertEqual(preferences.transcriptionLanguage, .portuguese)
         XCTAssertTrue(preferences.transcriptionGlossary.contains("Resenha"))
         XCTAssertEqual(preferences.readySoundID, 60)
@@ -210,6 +211,23 @@ final class WhisperKeyTests: XCTestCase {
         XCTAssertEqual(restored.transcriptionGlossary, "coisa = COESA")
         XCTAssertEqual(restored.readySoundID, 3)
         XCTAssertEqual(restored.readySound.name, "Pum seco")
+    }
+
+    @MainActor
+    func testPersonalRemoteStartsContinuousContextWhenLocalPreviewIsOff() throws {
+        let suite = "ResenhaRemoteContinuous.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let preferences = ProductPreferences(defaults: defaults)
+
+        XCTAssertFalse(preferences.localPreviewEnabled)
+        XCTAssertFalse(preferences.personalRemoteEnabled)
+        XCTAssertFalse(preferences.continuousContextEnabled)
+        try preferences.persistPersonalRemoteEnabled(true)
+        XCTAssertFalse(preferences.localPreviewEnabled)
+        XCTAssertTrue(preferences.continuousContextEnabled)
+        try preferences.persistPersonalRemoteEnabled(false)
+        XCTAssertFalse(preferences.continuousContextEnabled)
     }
 
     func testGlossaryBuildsPromptAndReplacesOnlyWholeTerms() {
@@ -2012,6 +2030,10 @@ final class WhisperKeyTests: XCTestCase {
         XCTAssertFalse(model.showPreview(previewRevision(attemptID: attempt, revision: 1, text: "stale")))
         XCTAssertFalse(model.showPreview(previewRevision(attemptID: otherAttempt, revision: 2, text: "other")))
         XCTAssertTrue(model.showPreview(previewRevision(attemptID: attempt, revision: 2, text: "Olá, COESA 👋🏽")))
+        XCTAssertFalse(model.applyContextualPreview(attemptID: otherAttempt, revision: 2, text: "ignorado"))
+        XCTAssertFalse(model.applyContextualPreview(attemptID: attempt, revision: 1, text: "atrasado"))
+        XCTAssertTrue(model.applyContextualPreview(attemptID: attempt, revision: 2, text: "Olá, COESA Energia 👋🏽"))
+        XCTAssertEqual(model.preview?.text, "Olá, COESA Energia 👋🏽")
 
         model.show(.transcribing, now: 1)
         XCTAssertEqual(model.preview?.phase, .finalizing)
@@ -2085,16 +2107,12 @@ final class WhisperKeyTests: XCTestCase {
     }
 
     @MainActor
-    func testContinuousContextShippingLabelsAndRemoteDisabledSmoke() {
+    func testContinuousContextShippingLabelsAndRemoteAuthorityAvailableSmoke() {
         XCTAssertEqual(FloatingPreviewPhase.provisional.title, "PRÉVIA LOCAL")
         XCTAssertEqual(FloatingPreviewPhase.finalizing.title, "FINALIZANDO")
         XCTAssertEqual(FloatingPreviewPhase.localFallback.title, "MODO LOCAL")
         XCTAssertEqual(FloatingPreview.fallbackText, "O ditado continua sem prévia ao vivo.")
-        XCTAssertEqual(PersonalRemoteReleaseDecision.current, .personalRemoteUnavailable)
-
-        let policy = ContextualCorrectionPolicy()
-        let token = DictationCoordinator.productionContextualTokenSource(policy: policy)(UUID())
-        XCTAssertEqual(token.scope, .disabled)
+        XCTAssertEqual(PersonalRemoteReleaseDecision.current, .personalRemoteAvailable)
     }
 
     @MainActor
@@ -3179,7 +3197,7 @@ final class WhisperKeyTests: XCTestCase {
     }
 
     @MainActor
-    func testRevisionBoundLoopRejectsStaleCallbackAndPersonalScopeWithoutTransport() async throws {
+    func testRevisionBoundLoopRejectsStaleCallbackAndDisabledScopeWithoutTransport() async throws {
         let uptime = RevisionUptime()
         let provider = RevisionLoopProvider(.suspended)
         let session = ContinuousContextSession(now: { uptime.now() })
@@ -3211,7 +3229,7 @@ final class WhisperKeyTests: XCTestCase {
         XCTAssertNil(session.contextualPreviewText)
 
         uptime.set(milliseconds: 500)
-        let blocked = await loop.evaluateNext(scope: .personalDictation)
+        let blocked = await loop.evaluateNext(scope: .disabled)
         XCTAssertEqual(blocked?.text, "Reservei outro rosto.")
         let requestCount = await provider.requestCount
         XCTAssertEqual(requestCount, 1)
@@ -4423,16 +4441,16 @@ final class ContextualResolverTests: XCTestCase {
         XCTAssertEqual(output, #"Reservei um Hostel $1 \\ Centro."#)
     }
 
-    func testResolverRejectsDisabledAndPersonalScopesBeforeProvider() async {
+    func testResolverRejectsDisabledScopeAndAllowsAuthorizedPersonalScope() async {
         let provider = ResolverDecisionProviderStub([decision("o1", .replace)])
         let item = fixture(provider: provider)
-        for scope in [ContextualTransportScope.disabled, .personalDictation] {
-            let input = "Reservei um rosto."
-            let output = await item.0.resolve(request(input, store: item.1, policy: item.2, scope: scope))
-            XCTAssertEqual(output, input)
-        }
+        let input = "Reservei um rosto."
+        let disabled = await item.0.resolve(request(input, store: item.1, policy: item.2, scope: .disabled))
+        XCTAssertEqual(disabled, input)
+        let personal = await item.0.resolve(request(input, store: item.1, policy: item.2, scope: .personalDictation))
+        XCTAssertEqual(personal, "Reservei um Hostel.")
         let requestCount = await provider.requestCount
-        XCTAssertEqual(requestCount, 0)
+        XCTAssertEqual(requestCount, 1)
     }
 
     func testResolverRejectsUnhealthyStoreBeforeMatchingOrProvider() async throws {
@@ -5676,7 +5694,9 @@ final class ContextualCoordinatorTests: XCTestCase {
         store: ContextualCorrectionStore? = nil,
         policy: ContextualCorrectionPolicy? = nil,
         scope: ContextualTransportScope = .testDouble,
-        continuousEnabled: Bool = false
+        continuousEnabled: Bool = false,
+        personalRemoteEnabled: Bool = false,
+        wiresContinuousRemote: Bool = false
     ) -> Harness {
         let actualPolicy = policy ?? ContextualCorrectionPolicy()
         let actualStore = store ?? ContextualCorrectionStore(
@@ -5692,7 +5712,8 @@ final class ContextualCoordinatorTests: XCTestCase {
         actualStore.onMutation = { actualPolicy.invalidate(.storeMutated) }
         let probe = CoordinatorPipelineProbe()
         let provider = ControlledCoordinatorProvider(mode: providerMode, probe: probe)
-        let continuousSession = continuousEnabled ? ContinuousContextSession() : nil
+        let continuousMode = continuousEnabled || personalRemoteEnabled
+        let continuousSession = continuousMode ? ContinuousContextSession() : nil
         let time = ContinuousContextualTime()
         let resolver = ContextualCorrectionResolver(
             store: actualStore,
@@ -5708,10 +5729,23 @@ final class ContextualCoordinatorTests: XCTestCase {
             soundsEnabled: { false },
             language: { .portuguese },
             onTranscript: { probe.events.append(.history($0)) },
-            continuousContextEnabled: { continuousEnabled },
+            continuousContextEnabled: { continuousMode },
             continuousContextSessionFactory: { continuousSession ?? ContinuousContextSession() },
             onContinuousPreview: {
-                if continuousEnabled { probe.events.append(.preview($0?.sourceText)) }
+                if continuousMode { probe.events.append(.preview($0?.sourceText)) }
+            },
+            continuousContextLoopFactory: { session in
+                guard wiresContinuousRemote else { return nil }
+                return RevisionBoundJevLoop(
+                    session: session,
+                    provider: provider,
+                    time: time,
+                    storeSnapshot: { actualStore.snapshot },
+                    policyGeneration: { actualPolicy.generation }
+                )
+            },
+            onContinuousContextualPreview: { _, _, text in
+                probe.events.append(.preview(text))
             },
             outputSink: probe,
             contextualResolver: resolver,
@@ -5781,6 +5815,36 @@ final class ContextualCoordinatorTests: XCTestCase {
             .completed("A COESA Energia chegou")
         ])
         XCTAssertEqual(harness.continuousSession?.state, .committed)
+    }
+
+    func testContinuousCoordinatorDispatchesAuthorizedPersonalRevisionWithLocalPreviewToggleOff() async {
+        let harness = makeHarness(
+            providerMode: .replace,
+            scope: .personalDictation,
+            continuousEnabled: false,
+            personalRemoteEnabled: true,
+            wiresContinuousRemote: true
+        )
+        let attempt = beginContinuous(harness)
+        emitPartial("Reservei um rosto.", to: harness, attemptID: attempt)
+        await harness.provider.waitUntilStarted()
+        for _ in 0..<20 where harness.probe.events.last != .preview("Reservei um Hostel.") {
+            await Task.yield()
+        }
+
+        XCTAssertEqual(Array(harness.probe.events.prefix(2)), [
+            .preview("Reservei um rosto."),
+            .providerInput("Reservei um rosto.")
+        ])
+        XCTAssertEqual(harness.probe.events.last, .preview("Reservei um Hostel."))
+        let callsBeforeRevocation = await harness.provider.calls
+        XCTAssertEqual(callsBeforeRevocation, 1)
+
+        harness.coordinator.continuousContextModeChanged()
+        emitPartial("Reservei outro rosto.", to: harness, attemptID: attempt, snapshotID: 2)
+        await Task.yield()
+        let callsAfterRevocation = await harness.provider.calls
+        XCTAssertEqual(callsAfterRevocation, 1)
     }
 
     func testContinuousCoordinatorRejectsDuplicateFinalAndLatePreview() async throws {
@@ -5875,16 +5939,46 @@ final class ContextualCoordinatorTests: XCTestCase {
         _ = URLSessionDecisionsStreamingTransport(time: composition.shared)
     }
 
-    func testPersonalRemoteReleaseDecisionIsUnavailableAndProductionCannotAuthorizeIt() {
-        XCTAssertEqual(PersonalRemoteReleaseDecision.current, .personalRemoteUnavailable)
-        XCTAssertEqual(PersonalRemoteReleaseDecision.allCases, [.personalRemoteUnavailable])
+    func testPersonalRemoteRequiresDistinctConsentCredentialAndLocalEligibility() throws {
+        XCTAssertEqual(PersonalRemoteReleaseDecision.current, .personalRemoteAvailable)
+        XCTAssertEqual(PersonalRemoteReleaseDecision.allCases, [.personalRemoteAvailable])
         let policy = ContextualCorrectionPolicy()
+        let optIn = PersonalRemoteOptInStoreStub()
+        let credential = InMemoryCredentialStore()
+        let file = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ResenhaTests/\(UUID().uuidString)/contextual.json")
+        let store = ContextualCorrectionStore(fileURL: file)
+        let owner = PersonalRemoteAuthorizationOwner(
+            optInStore: optIn,
+            credentialStore: credential,
+            policy: policy,
+            storeSnapshot: { store.snapshot }
+        )
         let source = DictationCoordinator.productionContextualTokenSource(
-            policy: policy
+            authorization: owner
         )
         XCTAssertEqual(source(UUID()).scope, .disabled)
-        policy.invalidate(.credentialDeleted)
+        XCTAssertThrowsError(try owner.authorizePersonalRemote(explicitConsent: true, credential: "personal-key")) {
+            XCTAssertEqual($0 as? PersonalRemoteAuthorizationError, .locallyIneligible)
+        }
+        XCTAssertTrue(store.save(.init(
+            id: UUID(), language: "pt", heard: "rosto", canonical: "Hostel",
+            sentence: "Reservei um rosto.", occurrenceOrdinal: 1
+        )).isSuccess)
+        XCTAssertThrowsError(try owner.authorizePersonalRemote(explicitConsent: false, credential: "personal-key")) {
+            XCTAssertEqual($0 as? PersonalRemoteAuthorizationError, .consentRequired)
+        }
+        try owner.authorizePersonalRemote(explicitConsent: true, credential: "personal-key")
+        XCTAssertEqual(source(UUID()).scope, .personalDictation)
+        try owner.revokePersonalRemote()
         XCTAssertEqual(source(UUID()).scope, .disabled)
+        XCTAssertFalse(optIn.personalRemoteEnabled)
+        XCTAssertNil(try credential.load())
+        try owner.authorizePersonalRemote(explicitConsent: true, credential: "personal-key-2")
+        owner.handleProviderError(OpenRouterDecisionsError.invalidStatus(402))
+        XCTAssertEqual(source(UUID()).scope, .disabled)
+        XCTAssertFalse(optIn.personalRemoteEnabled)
+        XCTAssertNil(try credential.load())
     }
 
     func testCoordinatorTestTokenSourceUsesTestDoubleScope() async throws {
@@ -5996,7 +6090,8 @@ final class ContextualCoordinatorTests: XCTestCase {
             ContextualPolicyInvalidationReason.optedOut,
             .credentialDeleted,
             .storeMutated,
-            .appTerminated
+            .appTerminated,
+            .authorityChanged
         ] {
             let policy = ContextualCorrectionPolicy()
             let resolver = policy.issueToken(scope: .testDouble)
@@ -6387,7 +6482,7 @@ final class ContextualFeedbackSettingsTests: XCTestCase {
         XCTAssertEqual(ContextualSettingsModel.disclosureLines, [
             "Correções contextuais (beta)",
             "Beta local, desligado por padrão: salva e organiza exemplos confirmados neste Mac.",
-            "Neste beta, esses exemplos ainda não aplicam correções automáticas ao ditado pessoal.",
+            "Avaliação remota pessoal é separada e começa desligada.",
             "Diagnóstico de infraestrutura: envia somente a frase sintética identificada ao OpenRouter/TypeSafe, uma única vez.",
             "O diagnóstico não recebe nem corrige seu ditado pessoal."
         ])
@@ -6401,6 +6496,16 @@ final class ContextualFeedbackSettingsTests: XCTestCase {
         await model.setLocalBetaEnabled(false)
         let requestCount = await provider.requestCount()
         XCTAssertEqual(requestCount, 0)
+        XCTAssertFalse(fixture.preferences.personalRemoteEnabled)
+        XCTAssertNotEqual(
+            KeychainContextualCredentialConstants.syntheticAccount,
+            KeychainContextualCredentialConstants.personalAccount
+        )
+        XCTAssertTrue(ContextualSettingsModel.personalDisclosure.contains("somente a frase transcrita"))
+        XCTAssertTrue(ContextualSettingsModel.personalDisclosure.contains("Nunca envia áudio"))
+        XCTAssertTrue(ContextualSettingsModel.personalDisclosure.contains("500 ms"))
+        XCTAssertTrue(ContextualSettingsModel.personalDisclosure.contains("4096 bytes"))
+        XCTAssertFalse(ContextualSettingsModel.personalDisclosure.localizedCaseInsensitiveContains("ZDR"))
     }
 
     func testContextualControlsHaveExactAccessibilityLabelsAndRestoreFocus() throws {
@@ -6408,6 +6513,8 @@ final class ContextualFeedbackSettingsTests: XCTestCase {
         XCTAssertEqual(ContextualSettingsModel.deleteExampleAccessibilityLabel, "Apagar exemplo contextual")
         XCTAssertEqual(ContextualSettingsModel.deleteAllAccessibilityLabel, "Apagar todos os exemplos contextuais")
         XCTAssertEqual(ContextualSettingsModel.removeCredentialAccessibilityLabel, "Remover chave do diagnóstico")
+        XCTAssertEqual(ContextualSettingsModel.authorizePersonalAccessibilityLabel, "Ativar avaliação remota pessoal")
+        XCTAssertEqual(ContextualSettingsModel.revokePersonalAccessibilityLabel, "Desativar avaliação remota e remover chave")
         let fixture = try SettingsFixture.make()
         defer { fixture.defaults.removePersistentDomain(forName: fixture.suiteName) }
         let storage = makeStore()
@@ -6496,6 +6603,18 @@ private final class ContextualOptInStoreStub: ContextualOptInStore {
     func persistContextualCorrectionsEnabled(_ enabled: Bool) throws {
         writes.append(enabled)
         contextualCorrectionsEnabled = enabled
+    }
+}
+
+@MainActor
+private final class PersonalRemoteOptInStoreStub: PersonalRemoteOptInStore {
+    var contextualCorrectionsEnabled = true
+    private(set) var personalRemoteEnabled = false
+    private(set) var writes: [Bool] = []
+
+    func persistPersonalRemoteEnabled(_ enabled: Bool) throws {
+        writes.append(enabled)
+        personalRemoteEnabled = enabled
     }
 }
 

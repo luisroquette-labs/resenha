@@ -33,6 +33,8 @@ typealias ContextualPolicyTokenSource = @MainActor @Sendable (UUID) -> Contextua
 typealias ContextualStoreGenerationSource = @MainActor @Sendable () -> UInt64
 typealias ContinuousContextSessionFactory = @MainActor @Sendable () -> ContinuousContextSession
 typealias ContinuousContextPreview = @MainActor @Sendable (ContinuousContextRevision?) -> Void
+typealias ContinuousContextualPreview = @MainActor @Sendable (UUID, UInt64, String) -> Void
+typealias ContinuousContextLoopFactory = @MainActor @Sendable (ContinuousContextSession) -> RevisionBoundJevLoop?
 
 @MainActor
 protocol DictationOutputSink {
@@ -132,12 +134,9 @@ final class DictationCoordinator {
     )
 
     static func productionContextualTokenSource(
-        policy: ContextualCorrectionPolicy
+        authorization: PersonalRemoteAuthorizationOwner
     ) -> ContextualPolicyTokenSource {
-        let scope: ContextualTransportScope = switch PersonalRemoteReleaseDecision.current {
-        case .personalRemoteUnavailable: .disabled
-        }
-        return { _ in policy.issueToken(scope: scope) }
+        { _ in authorization.issueToken() }
     }
 
     private let permissions: PermissionService
@@ -151,6 +150,8 @@ final class DictationCoordinator {
     private let continuousContextEnabled: @MainActor @Sendable () -> Bool
     private let continuousContextSessionFactory: ContinuousContextSessionFactory
     private let onContinuousPreview: ContinuousContextPreview
+    private let continuousContextLoopFactory: ContinuousContextLoopFactory
+    private let onContinuousContextualPreview: ContinuousContextualPreview
     private let cuePlayer = DictationCuePlayer()
     private(set) var phase = DictationPhase.idle {
         didSet { if oldValue != phase { onPhaseChange?(phase) } }
@@ -162,6 +163,8 @@ final class DictationCoordinator {
     private var task: Task<Void, Never>?
     private var executionControl: WhisperExecutionControl?
     private var continuousSession: ContinuousContextSession?
+    private var continuousJevLoop: RevisionBoundJevLoop?
+    private var continuousJevTask: Task<Void, Never>?
     private var rollingRecognizer: RollingWhisperRecognizer?
     private var finalOutputAttemptID: UUID?
     private(set) var attemptID = UUID()
@@ -189,6 +192,8 @@ final class DictationCoordinator {
         continuousContextEnabled: @escaping @MainActor @Sendable () -> Bool = { false },
         continuousContextSessionFactory: @escaping ContinuousContextSessionFactory = { ContinuousContextSession() },
         onContinuousPreview: @escaping ContinuousContextPreview = { _ in },
+        continuousContextLoopFactory: @escaping ContinuousContextLoopFactory = { _ in nil },
+        onContinuousContextualPreview: @escaping ContinuousContextualPreview = { _, _, _ in },
         outputSink: any DictationOutputSink,
         contextualResolver: any ContextualResolving,
         contextualTokenSource: @escaping ContextualPolicyTokenSource,
@@ -207,6 +212,8 @@ final class DictationCoordinator {
         self.continuousContextEnabled = continuousContextEnabled
         self.continuousContextSessionFactory = continuousContextSessionFactory
         self.onContinuousPreview = onContinuousPreview
+        self.continuousContextLoopFactory = continuousContextLoopFactory
+        self.onContinuousContextualPreview = onContinuousContextualPreview
         self.outputSink = outputSink
         self.contextualResolver = contextualResolver
         self.contextualTokenSource = contextualTokenSource
@@ -418,6 +425,7 @@ final class DictationCoordinator {
             return false
         }
         continuousSession = session
+        continuousJevLoop = continuousContextLoopFactory(session)
         rollingRecognizer = recognizer
         return true
     }
@@ -434,6 +442,7 @@ final class DictationCoordinator {
               phase == .recording,
               let revision = session.ingest(hypothesis) else { return }
         onContinuousPreview(revision)
+        scheduleContinuousContextEvaluation(for: session)
     }
 
     func continuousContextModeChanged() {
@@ -509,6 +518,9 @@ final class DictationCoordinator {
     }
 
     private func failContinuousContext() {
+        continuousJevTask?.cancel()
+        continuousJevTask = nil
+        continuousJevLoop = nil
         rollingRecognizer?.cancel()
         rollingRecognizer = nil
         continuousSession?.fail()
@@ -517,10 +529,56 @@ final class DictationCoordinator {
     }
 
     private func invalidateContinuousContext() {
+        continuousJevTask?.cancel()
+        continuousJevTask = nil
+        continuousJevLoop = nil
         rollingRecognizer?.cancel()
         rollingRecognizer = nil
         continuousSession?.cancel()
         continuousSession = nil
         onContinuousPreview(nil)
+    }
+
+    private func scheduleContinuousContextEvaluation(for session: ContinuousContextSession) {
+        guard continuousJevTask == nil,
+              session === continuousSession,
+              let loop = continuousJevLoop else { return }
+        let scheduledAttemptID = attemptID
+        continuousJevTask = Task { [weak self, weak session] in
+            guard let self, let session else { return }
+            defer {
+                self.continuousJevTask = nil
+                if session === self.continuousSession,
+                   session.nextWorkDelay() != nil,
+                   self.attemptID == scheduledAttemptID {
+                    self.scheduleContinuousContextEvaluation(for: session)
+                }
+            }
+            while !Task.isCancelled,
+                  session === self.continuousSession,
+                  self.attemptID == scheduledAttemptID,
+                  self.phase == .recording {
+                let token = self.contextualTokenSource(scheduledAttemptID)
+                guard token.scope == .personalDictation,
+                      let delay = session.nextWorkDelay() else { return }
+                if delay > 0 {
+                    do { try await Task.sleep(for: .seconds(delay), clock: .continuous) }
+                    catch { return }
+                }
+                guard !Task.isCancelled,
+                      session === self.continuousSession,
+                      self.attemptID == scheduledAttemptID,
+                      self.phase == .recording else { return }
+                if let result = await loop.evaluateNext(scope: token.scope),
+                   result.outcome.category != .abstained,
+                   session.contextualPreviewText == result.text {
+                    self.onContinuousContextualPreview(
+                        result.identity.attemptID,
+                        result.identity.revision,
+                        result.text
+                    )
+                }
+            }
+        }
     }
 }

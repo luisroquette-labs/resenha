@@ -28,7 +28,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let contextualTime = ContinuousContextualTime()
     private let contextualPolicy = ContextualCorrectionPolicy()
     private let contextualStore = ContextualCorrectionStore()
-    private let contextualCredentialStore = KeychainContextualCredentialStore()
+    private let syntheticCredentialStore = KeychainContextualCredentialStore()
+    private let personalCredentialStore = KeychainContextualCredentialStore(
+        account: KeychainContextualCredentialConstants.personalAccount
+    )
     private lazy var contextualTimeComposition: ContextualTimeComposition = {
         do {
             return try ContextualTimeComposition(
@@ -43,10 +46,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private lazy var contextualTransport = URLSessionDecisionsStreamingTransport(
         time: contextualTimeComposition.shared
     )
-    private lazy var contextualClient = OpenRouterDecisionsClient(
+    private lazy var syntheticClient = OpenRouterDecisionsClient(
         transport: contextualTransport,
-        credential: { [contextualCredentialStore] in
-            guard let value = try contextualCredentialStore.load() else {
+        credential: { [syntheticCredentialStore] in
+            guard let value = try syntheticCredentialStore.load() else {
                 throw OpenRouterDecisionsError.missingCredential
             }
             return value
@@ -54,21 +57,45 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     )
     private lazy var contextualAuthorization = SyntheticDiagnosticAuthorizationOwner(
         optInStore: preferences,
-        credentialStore: contextualCredentialStore,
+        credentialStore: syntheticCredentialStore,
         guardStore: SyntheticDiagnosticGuard(),
         policy: contextualPolicy
     )
+    private lazy var personalAuthorization = PersonalRemoteAuthorizationOwner(
+        optInStore: preferences,
+        credentialStore: personalCredentialStore,
+        policy: contextualPolicy,
+        storeSnapshot: { [contextualStore] in contextualStore.snapshot }
+    )
+    private lazy var personalClient: OpenRouterDecisionsClient = {
+        let authorization = personalAuthorization
+        return OpenRouterDecisionsClient(
+            transport: contextualTransport,
+            credential: { [personalCredentialStore] in
+                guard let value = try personalCredentialStore.load() else {
+                    throw OpenRouterDecisionsError.missingCredential
+                }
+                return value
+            },
+            beforeTransportOpen: {
+                await authorization.personalRemoteHealth().canDispatch
+            },
+            onFailure: { error in
+                await authorization.handleProviderError(error)
+            }
+        )
+    }()
     private lazy var contextualResolver = ContextualCorrectionResolver(
         store: contextualStore,
         policy: contextualPolicy,
-        provider: contextualClient,
+        provider: personalClient,
         storeGeneration: { [contextualStore] in contextualStore.generation },
         time: contextualTimeComposition.shared
     )
     private lazy var contextualDiagnosticController = SyntheticDiagnosticController(
         policy: contextualPolicy,
         authorization: contextualAuthorization,
-        client: contextualClient,
+        client: syntheticClient,
         validator: ContextualDecisionValidator(),
         fixture: try! SyntheticDiagnosticFixture.load(),
         time: contextualTimeComposition.shared
@@ -83,7 +110,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         preferences: preferences,
         contextualStore: contextualStore,
         authorization: contextualAuthorization,
-        diagnostic: contextualDiagnosticController
+        diagnostic: contextualDiagnosticController,
+        personalAuthorization: personalAuthorization
     )
 
     var productSettingsView: ProductSettingsView {
@@ -91,7 +119,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             preferences: preferences,
             contextualStore: contextualStore,
             authorization: contextualAuthorization,
-            diagnostic: contextualDiagnosticController
+            diagnostic: contextualDiagnosticController,
+            personalAuthorization: personalAuthorization
         )
     }
 
@@ -129,7 +158,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 self?.recordTranscript(text)
             },
             onFailure: { _ in },
-            continuousContextEnabled: { [weak preferences] in preferences?.localPreviewEnabled ?? false },
+            continuousContextEnabled: { [weak preferences] in preferences?.continuousContextEnabled ?? false },
             continuousContextSessionFactory: { ContinuousContextSession() },
             onContinuousPreview: { [weak self] revision in
                 guard let self else { return }
@@ -137,10 +166,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     self.panel.updateContinuousPreview(revision)
                 }
             },
+            continuousContextLoopFactory: { [weak self] session in
+                guard let self else { return nil }
+                return RevisionBoundJevLoop(
+                    session: session,
+                    provider: self.personalClient,
+                    time: self.contextualTimeComposition.shared,
+                    storeSnapshot: { [contextualStore] in contextualStore.snapshot },
+                    policyGeneration: { [contextualPolicy] in contextualPolicy.generation }
+                )
+            },
+            onContinuousContextualPreview: { [weak self] attemptID, revision, text in
+                guard let self, self.preferences.showsHUD else { return }
+                self.panel.updateContinuousContextualPreview(
+                    attemptID: attemptID,
+                    revision: revision,
+                    text: text
+                )
+            },
             outputSink: TextInjector(),
             contextualResolver: contextualResolver,
             contextualTokenSource: DictationCoordinator.productionContextualTokenSource(
-                policy: contextualPolicy
+                authorization: personalAuthorization
             ),
             contextualStoreGeneration: { [weak contextualStore] in contextualStore?.generation ?? 0 }
         ))
@@ -171,6 +218,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         preferences.onLocalPreviewChange = { [weak self] enabled in
             self?.coordinator?.continuousContextModeChanged()
             if !enabled { self?.panel.clearContinuousPreview() }
+        }
+        preferences.onPersonalRemoteChange = { [weak self] _ in
+            self?.coordinator?.continuousContextModeChanged()
         }
     }
 

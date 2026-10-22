@@ -126,6 +126,21 @@ final class FloatingPanelModel: ObservableObject {
         return true
     }
 
+    @discardableResult
+    func applyContextualPreview(attemptID: UUID, revision: UInt64, text: String) -> Bool {
+        guard let preview,
+              preview.phase == .provisional,
+              preview.attemptID == attemptID,
+              preview.revision == revision else { return false }
+        self.preview = FloatingPreview(
+            attemptID: attemptID,
+            revision: revision,
+            text: text,
+            phase: .provisional
+        )
+        return true
+    }
+
     func showLocalFallback(attemptID: UUID) {
         guard preview == nil || preview?.attemptID == attemptID else { return }
         preview = FloatingPreview(

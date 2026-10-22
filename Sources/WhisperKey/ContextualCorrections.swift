@@ -425,9 +425,9 @@ enum ContextualTransportScope: Equatable, Sendable {
 }
 
 enum PersonalRemoteReleaseDecision: String, CaseIterable, Equatable, Sendable {
-    case personalRemoteUnavailable
+    case personalRemoteAvailable
 
-    static let current = PersonalRemoteReleaseDecision.personalRemoteUnavailable
+    static let current = PersonalRemoteReleaseDecision.personalRemoteAvailable
 }
 
 enum ContextualPolicyInvalidationReason: Sendable {
@@ -435,6 +435,7 @@ enum ContextualPolicyInvalidationReason: Sendable {
     case credentialDeleted
     case storeMutated
     case appTerminated
+    case authorityChanged
 }
 
 struct ContextualPolicyToken: Equatable, Sendable {
@@ -681,6 +682,7 @@ final class ContextualCorrectionResolver: ContextualCorrectionResolverContract {
     private let candidateMatcher: CandidateMatcher
     private let time: any ContextualMonotonicTime
     private let validator: ContextualDecisionValidator
+    private let onProviderError: @MainActor @Sendable (Error) -> Void
 
     init(
         store: ContextualCorrectionStore,
@@ -702,6 +704,29 @@ final class ContextualCorrectionResolver: ContextualCorrectionResolverContract {
         self.storeGeneration = storeGeneration
         self.candidateMatcher = candidateMatcher
         self.time = time
+        onProviderError = { _ in }
+        validator = .init()
+    }
+
+    init(
+        store: ContextualCorrectionStore,
+        policy: ContextualCorrectionPolicy,
+        provider: any ContextualDecisionProvider,
+        storeGeneration: @escaping @MainActor @Sendable () -> UInt64,
+        time: any ContextualMonotonicTime,
+        onProviderError: @escaping @MainActor @Sendable (Error) -> Void
+    ) {
+        self.store = store
+        self.policy = policy
+        self.provider = provider
+        self.storeGeneration = storeGeneration
+        self.candidateMatcher = { examples, text, language in
+            ContextualCorrectionResolver.matchCandidates(
+                examples: examples, text: text, language: language
+            )
+        }
+        self.time = time
+        self.onProviderError = onProviderError
         validator = .init()
     }
 
@@ -763,7 +788,10 @@ final class ContextualCorrectionResolver: ContextualCorrectionResolverContract {
             providerTask.cancel()
             return original
         }
-        guard case .success(let receipt) = raced else { return original }
+        guard case .success(let receipt) = raced else {
+            if case .failure(let error) = raced { onProviderError(error) }
+            return original
+        }
         let currentSnapshot = store.snapshot
         guard currentSnapshot.health == .healthy,
               currentSnapshot.generation == storeSnapshot.generation,
@@ -939,7 +967,7 @@ final class ContextualCorrectionResolver: ContextualCorrectionResolverContract {
     }
 
     private func isProviderEligible(_ scope: ContextualTransportScope) -> Bool {
-        scope == .syntheticDiagnostic || scope == .testDouble
+        scope == .personalDictation || scope == .syntheticDiagnostic || scope == .testDouble
     }
 }
 
@@ -1368,6 +1396,8 @@ actor OpenRouterDecisionsClient: OpenRouterDecisionsClientContract {
 
     private let transport: any DecisionsStreamingTransport
     private let credential: @Sendable () throws -> String
+    private let beforeTransportOpen: @Sendable () async -> Bool
+    private let onFailure: @Sendable (Error) async -> Void
 
     init(
         transport: any DecisionsStreamingTransport,
@@ -1375,6 +1405,20 @@ actor OpenRouterDecisionsClient: OpenRouterDecisionsClientContract {
     ) {
         self.transport = transport
         self.credential = credential
+        beforeTransportOpen = { true }
+        onFailure = { _ in }
+    }
+
+    init(
+        transport: any DecisionsStreamingTransport,
+        credential: @escaping @Sendable () throws -> String,
+        beforeTransportOpen: @escaping @Sendable () async -> Bool,
+        onFailure: @escaping @Sendable (Error) async -> Void = { _ in }
+    ) {
+        self.transport = transport
+        self.credential = credential
+        self.beforeTransportOpen = beforeTransportOpen
+        self.onFailure = onFailure
     }
 
     func decide(
@@ -1383,13 +1427,18 @@ actor OpenRouterDecisionsClient: OpenRouterDecisionsClientContract {
         occurrences: [ContextualCorrectionOccurrence],
         deadline: ContextualInstant
     ) async throws -> ContextualDecisionReceipt {
-        try await perform(
-            sentence: sentence,
-            language: language,
-            occurrences: occurrences,
-            deadline: deadline,
-            beforeTransportOpen: { true }
-        )
+        do {
+            return try await perform(
+                sentence: sentence,
+                language: language,
+                occurrences: occurrences,
+                deadline: deadline,
+                beforeTransportOpen: beforeTransportOpen
+            )
+        } catch {
+            await onFailure(error)
+            throw error
+        }
     }
 
     func decideSynthetic(
@@ -1566,7 +1615,8 @@ protocol ContextualCredentialStore: Sendable {
 
 enum KeychainContextualCredentialConstants {
     static let service = "br.com.luisroquette.Resenha.contextual-corrections"
-    static let account = "openrouter-synthetic-diagnostic"
+    static let syntheticAccount = "openrouter-synthetic-diagnostic"
+    static let personalAccount = "openrouter-personal-context"
 }
 
 enum ContextualCredentialError: Error, Equatable, Sendable {
@@ -1575,6 +1625,12 @@ enum ContextualCredentialError: Error, Equatable, Sendable {
 }
 
 struct KeychainContextualCredentialStore: ContextualCredentialStore {
+    let account: String
+
+    init(account: String = KeychainContextualCredentialConstants.syntheticAccount) {
+        self.account = account
+    }
+
     func save(_ value: String) throws {
         guard !value.isEmpty, let data = value.data(using: .utf8) else {
             throw ContextualCredentialError.invalidValue
@@ -1622,7 +1678,7 @@ struct KeychainContextualCredentialStore: ContextualCredentialStore {
         [
             kSecClass: kSecClassGenericPassword,
             kSecAttrService: KeychainContextualCredentialConstants.service,
-            kSecAttrAccount: KeychainContextualCredentialConstants.account,
+            kSecAttrAccount: account,
             kSecAttrSynchronizable: false
         ]
     }
@@ -1866,6 +1922,118 @@ actor SyntheticDiagnosticGuard: SyntheticDiagnosticGuardStore {
 protocol ContextualOptInStore: AnyObject {
     var contextualCorrectionsEnabled: Bool { get }
     func persistContextualCorrectionsEnabled(_ enabled: Bool) throws
+}
+
+@MainActor
+protocol PersonalRemoteOptInStore: AnyObject {
+    var contextualCorrectionsEnabled: Bool { get }
+    var personalRemoteEnabled: Bool { get }
+    func persistPersonalRemoteEnabled(_ enabled: Bool) throws
+}
+
+struct PersonalRemoteAuthorizationHealth: Equatable, Sendable {
+    let releaseDecision: PersonalRemoteReleaseDecision
+    let enabled: Bool
+    let credentialPresent: Bool
+    let locallyEligible: Bool
+
+    var canDispatch: Bool {
+        releaseDecision == .personalRemoteAvailable
+            && enabled && credentialPresent && locallyEligible
+    }
+}
+
+enum PersonalRemoteAuthorizationError: Error, Equatable, Sendable {
+    case consentRequired
+    case credentialUnverified
+    case locallyIneligible
+    case releaseUnavailable
+}
+
+@MainActor
+protocol PersonalRemoteAuthorizationManaging: AnyObject {
+    func authorizePersonalRemote(explicitConsent: Bool, credential: String) throws
+    func revokePersonalRemote() throws
+    func personalRemoteHealth() -> PersonalRemoteAuthorizationHealth
+}
+
+@MainActor
+final class PersonalRemoteAuthorizationOwner: PersonalRemoteAuthorizationManaging {
+    private let optInStore: any PersonalRemoteOptInStore
+    private let credentialStore: any ContextualCredentialStore
+    private let policy: ContextualCorrectionPolicy
+    private let storeSnapshot: @MainActor @Sendable () -> ContextualCorrectionStoreSnapshot
+
+    init(
+        optInStore: any PersonalRemoteOptInStore,
+        credentialStore: any ContextualCredentialStore,
+        policy: ContextualCorrectionPolicy,
+        storeSnapshot: @escaping @MainActor @Sendable () -> ContextualCorrectionStoreSnapshot
+    ) {
+        self.optInStore = optInStore
+        self.credentialStore = credentialStore
+        self.policy = policy
+        self.storeSnapshot = storeSnapshot
+    }
+
+    func authorizePersonalRemote(explicitConsent: Bool, credential: String) throws {
+        guard PersonalRemoteReleaseDecision.current == .personalRemoteAvailable else {
+            throw PersonalRemoteAuthorizationError.releaseUnavailable
+        }
+        guard explicitConsent else { throw PersonalRemoteAuthorizationError.consentRequired }
+        guard isLocallyEligible else { throw PersonalRemoteAuthorizationError.locallyIneligible }
+        do {
+            try credentialStore.save(credential)
+            guard try credentialStore.load() == credential else {
+                throw PersonalRemoteAuthorizationError.credentialUnverified
+            }
+            try optInStore.persistPersonalRemoteEnabled(true)
+            guard optInStore.personalRemoteEnabled else {
+                throw PersonalRemoteAuthorizationError.credentialUnverified
+            }
+            policy.invalidate(.authorityChanged)
+        } catch {
+            try? optInStore.persistPersonalRemoteEnabled(false)
+            try? credentialStore.delete()
+            policy.invalidate(.authorityChanged)
+            throw error
+        }
+    }
+
+    func revokePersonalRemote() throws {
+        try? optInStore.persistPersonalRemoteEnabled(false)
+        policy.invalidate(.authorityChanged)
+        try credentialStore.delete()
+        guard try credentialStore.load() == nil else {
+            throw PersonalRemoteAuthorizationError.credentialUnverified
+        }
+    }
+
+    func personalRemoteHealth() -> PersonalRemoteAuthorizationHealth {
+        let credential = (try? credentialStore.load()) ?? nil
+        return .init(
+            releaseDecision: .current,
+            enabled: optInStore.personalRemoteEnabled,
+            credentialPresent: credential?.isEmpty == false,
+            locallyEligible: isLocallyEligible
+        )
+    }
+
+    func issueToken() -> ContextualPolicyToken {
+        policy.issueToken(scope: personalRemoteHealth().canDispatch ? .personalDictation : .disabled)
+    }
+
+    func handleProviderError(_ error: Error) {
+        guard case OpenRouterDecisionsError.invalidStatus(let status) = error,
+              [401, 402, 403, 429].contains(status) else { return }
+        try? revokePersonalRemote()
+    }
+
+    private var isLocallyEligible: Bool {
+        let snapshot = storeSnapshot()
+        return optInStore.contextualCorrectionsEnabled
+            && snapshot.health == .healthy && !snapshot.examples.isEmpty
+    }
 }
 
 struct SyntheticDiagnosticAuthorizationHealth: Equatable, Sendable {

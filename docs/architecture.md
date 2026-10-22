@@ -38,10 +38,10 @@ One XcodeGen application target (`WhisperKey`, product name `Resenha`) and one u
 | `DictationCoordinator` | own state, cancellation and cleanup | one active attempt; fail closed |
 | `TranscriptHistory` | retain up to ten successful texts when enabled | local only; no audio or sync |
 | `ContextualCorrectionStore` | retain up to 100 confirmed sentence/occurrence examples | local file, 600-character sentence cap, separate from glossary |
-| `ContextualCorrectionResolver` | match occurrences and fail closed | personal scope always preserves original in this beta |
-| `SyntheticDiagnosticController` | run the allowlisted fixture once | only network-capable scope; 900 ms, zero retry, one-shot guard |
+| `ContextualCorrectionResolver` | match occurrences and preserve the local candidate on failure | personal scope requires distinct consent, credential and eligible local examples |
+| `SyntheticDiagnosticController` | run the allowlisted fixture once | separate network authority; 900 ms, zero retry, one-shot guard |
 | `ContinuousContextSession` | bind rolling revisions to one attempt and reconcile one final candidate | one active evaluation, latest pending revision, no external partial writes |
-| `RevisionBoundJevLoop` | evaluate allowlisted occurrence alternatives asynchronously | 200 ms hard deadline; personal remote scope unavailable in this release |
+| `RevisionBoundJevLoop` | evaluate allowlisted occurrence alternatives asynchronously | 200 ms hard deadline; local fallback on failure |
 
 ## Permissions
 
@@ -62,6 +62,9 @@ The app requests permissions only after explicit user action and exposes separat
   individual/all deletion mutates the shared policy generation.
 - Synthetic diagnostic: ephemeral HTTPS session to OpenRouter/TypeSafe using
   `typesafe/jev-1.14`; no personal dictation, examples, history or clipboard.
+- Personal contextual evaluation: optional HTTPS text-only requests to the same
+  provider using a distinct Keychain account; no audio, history, clipboard or
+  target-app content.
 
 ## Continuous contextual boundary
 
@@ -70,11 +73,12 @@ second insertion path: only the completed-WAV final candidate reaches the
 existing single-commit output sink. Jev is a bounded decision evaluator, not an
 ASR engine or next-token generator. It may only keep or select allowlisted
 alternatives tied to an exact recognized occurrence. Invalid, late, cancelled
-or unauthorized work fails open to the local candidate.
+or unauthorized work preserves the local candidate.
 
-`PersonalRemoteReleaseDecision.current` is closed in the shipping tree, so
-personal dictation cannot create a remote request. The synthetic diagnostic has
-separate one-shot authority and cannot upgrade that scope. The 500/100/50/750 ms
+`PersonalRemoteReleaseDecision.current` is available, but personal requests
+require a separate disabled-by-default opt-in, credential, healthy examples and
+current policy/store generations. The synthetic diagnostic cannot upgrade that
+scope. The 500/100/50/750 ms
 figures in the task are acceptance targets until acoustic hardware evidence is
 recorded; deterministic clocks prove orchestration, not physical latency.
 

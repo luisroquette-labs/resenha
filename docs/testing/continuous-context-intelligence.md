@@ -1,6 +1,6 @@
 # Continuous contextual intelligence evidence
 
-Status: candidate baseline; physical acceptance pending
+Status: superseded candidate; SHIP authority change requires a new candidate and all evidence rerun
 
 ## Shipping contract
 
@@ -11,10 +11,10 @@ Status: candidate baseline; physical acceptance pending
   single-insertion path. Late or cancelled revisions cannot edit committed text.
 - Jev is a bounded decision evaluator for allowlisted occurrence alternatives.
   It is not an audio transcriber, next-token predictor or free-text generator.
-- `PersonalRemoteReleaseDecision.current` is
-  `personalRemoteUnavailable`; production personal dictation issues `.disabled`
-  scope and makes zero remote requests. The separately authorized synthetic
-  diagnostic does not change this release decision.
+- `PersonalRemoteReleaseDecision.current` is `personalRemoteAvailable`.
+  Production personal transport still defaults off and requires distinct
+  consent, Keychain credential and eligible local examples. Synthetic
+  diagnostic authority cannot enable it.
 - The 500/100/50/650/750 ms values are acceptance targets, not measured product
   claims. Deterministic Step 08 results prove orchestration only.
 
@@ -23,7 +23,8 @@ Status: candidate baseline; physical acceptance pending
 The frozen `continuous-context-events.json` corpus contains 43 contextual cases
 and 10 no-change controls. XCTest verifies revision ordering, strict decision
 deadline behavior, bounded work, fail-open behavior, single final insertion,
-cancel/revocation handling, corpus metrics and the closed remote authority. This
+cancel/revocation handling and corpus metrics. The former closed-authority
+candidate is superseded and cannot evidence the SHIP branch. This
 does not prove acoustic accuracy, capture-to-candidate latency, cold/warm model
 behavior, real focus/clipboard preservation, VoiceOver speech, CPU, RAM or
 thermal behavior.
@@ -63,13 +64,14 @@ or physical evidence.
 
 ## Physical result and provenance
 
-PENDING. No physical/acoustic claim is made until a sanitized append identifies
+INVALIDATED. Commits `33de02a` and `b9e5ea7` describe the former closed release
+decision and are not provenance for the SHIP source. No physical/acoustic claim is made until a sanitized append identifies
 the frozen candidate and satisfies the protocol above. If permissions, hardware
 or user presence prevent 100 revisions, 30 finalizations, VoiceOver or target
 field observation, that gate is recorded as unmet and personal remote capability
 remains unavailable.
 
-### Candidate provenance — 2026-10-22
+### Superseded candidate provenance — 2026-10-22 (not current evidence)
 
 | Field | Observed value |
 |---|---|
@@ -109,10 +111,10 @@ candidate, not a release, notarized or publication artifact.
   contrast and reduced-motion observation: **NOT RUN — unmet gate**. Unit and
   fixture coverage is not substituted for these observations.
 - Synthetic remote run: **NOT RUN**. No call, credential, paid API or provider
-  request was used; the prior synthetic key was revoked. Personal remote
-  authority remains closed and production continues to issue `.disabled`.
+  request was used; the prior synthetic key was revoked. This observation
+  belongs only to the superseded closed candidate.
 
-Result: the exact candidate is attributable, signed, launchable and green under
-deterministic gates. Acoustic quality, physical latency, accessibility speech
-and resource acceptance remain unproven; no claim of iPhone-like measured
-prediction speed is approved from this evidence.
+Result: the historical candidate was attributable, signed and green, but the
+SHIP authority source change invalidates it. A new exact candidate, gates and
+physical evidence are required. No claim of iPhone-like measured prediction
+speed is approved from this evidence.

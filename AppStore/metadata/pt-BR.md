@@ -22,7 +22,7 @@ Escolha PT-BR, inglês ou espanhol. Em português, o Resenha preserva anglicismo
 
 PRIVADO POR PADRÃO
 
-O áudio é processado pelo whisper.cpp no próprio Mac e apagado após cada tentativa. Não há conta, backend, anúncios, analytics ou chave de API. O código é aberto e auditável.
+O áudio é processado pelo whisper.cpp no próprio Mac e apagado após cada tentativa. Não há conta, backend do Resenha, anúncios ou analytics. A avaliação contextual de texto é opcional, começa desligada e usa uma chave pessoal do OpenRouter; áudio nunca é enviado. O código é aberto e auditável.
 
 RÁPIDO DE USAR
 

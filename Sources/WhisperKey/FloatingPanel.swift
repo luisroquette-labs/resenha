@@ -361,6 +361,12 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
         }
     }
 
+    func updateContinuousContextualPreview(attemptID: UUID, revision: UInt64, text: String) {
+        guard model.status == .listening,
+              model.applyContextualPreview(attemptID: attemptID, revision: revision, text: text) else { return }
+        if panel.isVisible { positionPanel() }
+    }
+
     func showLocalPreviewFallback(attemptID: UUID) {
         guard model.status == .listening else { return }
         pendingPreview = nil

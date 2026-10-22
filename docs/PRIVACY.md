@@ -1,11 +1,11 @@
 # Política de Privacidade do Resenha
 
-**Vigência:** 2 de outubro de 2026  
+**Vigência:** 22 de outubro de 2026
 **Aplicável à versão:** 1.0.0
 
 Resenha é um aplicativo de ditado local para macOS. Não criamos contas, não
-operamos um backend do produto, não exibimos anúncios e não coletamos dados
-pessoais, áudio, transcrições, diagnósticos ou métricas de uso.
+operamos um backend do produto e não exibimos anúncios. O áudio permanece no
+Mac. A avaliação contextual remota de texto é opcional e começa desligada.
 
 ## Processamento local
 
@@ -17,24 +17,28 @@ pessoais, áudio, transcrições, diagnósticos ou métricas de uso.
 - Correções contextuais ficam em arquivo local separado do glossário: idioma,
   forma ouvida, forma canônica, frase confirmada e ocorrência. São no máximo
   100 exemplos, com frases de até 600 caracteres, apagáveis individualmente ou
-  em conjunto. O beta começa desligado e não envia ditados pessoais.
+  em conjunto. O beta local começa desligado.
 - A prévia contínua é opcional e começa desligada. Suas hipóteses ficam somente
   na sessão atual e no HUD do Resenha; não entram no clipboard, histórico ou
   aplicativo de destino. O contexto temporário é descartado ao finalizar ou
   cancelar.
 
-## Inteligência contextual contínua
+## Inteligência contextual contínua opcional
 
-O áudio continua sempre local. Nesta versão, ditados pessoais não possuem
-autoridade de transporte remoto e geram zero requisições, mesmo quando a prévia
-local está ativa. O diagnóstico sintético descrito abaixo não concede essa
-autoridade.
+Com consentimento separado e uma chave pessoal do OpenRouter, o Resenha envia
+ao OpenRouter/TypeSafe (JEV) somente a frase já transcrita e as alternativas dos
+exemplos locais pertinentes, enquanto você dita. Nunca envia áudio, histórico, clipboard ou
+conteúdo do aplicativo de destino. O envio é limitado a 4096 bytes, uma
+avaliação ativa e uma pendente substituível, com intervalo mínimo de 500 ms.
+Falha, atraso ou indisponibilidade preservam a transcrição local.
 
-Uma versão futura só poderá enviar texto reconhecido após consentimento próprio,
-revogável e explícito. Jev será limitado a escolher entre alternativas
-permitidas, vinculadas a ocorrências do texto reconhecido; não receberá áudio,
-não gerará próximos tokens e não poderá reescrever texto já inserido. Falha,
-timeout, revogação ou resposta tardia preservam o candidato local.
+A função começa desligada e exige ao menos um exemplo local elegível. Sua chave
+fica em uma conta separada no Keychain e a autorização do diagnóstico sintético
+não pode ativá-la. OpenRouter/TypeSafe podem medir tokens, cobrar pelo uso e
+reter dados ou metadados conforme suas políticas. O Resenha não estima o custo
+total nem promete preço ou retenção zero. Ao
+revogar, o app cancela o trabalho pendente, remove a chave pessoal e volta ao
+modo local. Revogar a chave na conta OpenRouter é uma ação separada do usuário.
 
 ## Diagnóstico sintético opcional
 

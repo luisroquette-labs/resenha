@@ -2,7 +2,7 @@
 
 ## Privacy declaration
 
-- App Privacy answer: Data Not Collected, provided the final binary has no analytics, network transcription, account, crash SDK or remote logging.
+- App Privacy answer: optional Other User Content, linked to the user's provider account, not used for tracking, for App Functionality; audio remains local.
 - Microphone audio is processed on-device and deleted after each attempt.
 - Transcript history is local, optional, limited and clearable.
 - Privacy policy explains microphone, Input Monitoring, clipboard recovery, local storage and model delivery.
@@ -10,9 +10,9 @@
 
 ### Continuous context release decision (2026-10-22)
 
-- Release decision: `personalRemoteUnavailable`. Recurring personal-text transmission and its cost are not authorized; local eligibility and provider ZDR are not verified.
-- Production dictation issues only the disabled transport scope. The local preview and confirmed examples remain on-device; the separately authorized one-shot synthetic diagnostic cannot authorize personal text.
-- `Config/PrivacyInfo.xcprivacy` remains unchanged: this release adds no collected-data category, tracking domain or new required-reason API. Existing local-only public claims remain accurate.
+- Release decision: `personalRemoteAvailable`. The owner authorized recurring OpenRouter/JEV calls with transcribed text only; audio remains prohibited.
+- Fresh installs default off. Personal transport requires separate consent, a distinct Keychain credential, healthy local examples and current policy/store generations. Synthetic diagnostic consent cannot authorize it.
+- `Config/PrivacyInfo.xcprivacy` declares Other User Content for App Functionality, linked because the personal provider key authenticates an OpenRouter account, and not used for tracking. No tracking domain or new required-reason API was added.
 
 ## Review package
 
