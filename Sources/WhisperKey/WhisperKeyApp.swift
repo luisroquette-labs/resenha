@@ -159,6 +159,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             },
             onFailure: { _ in },
             continuousContextEnabled: { [weak preferences] in preferences?.continuousContextEnabled ?? false },
+            continuousPreviewVisible: { [weak preferences] in preferences?.localPreviewEnabled ?? false },
             continuousContextSessionFactory: { ContinuousContextSession() },
             onContinuousPreview: { [weak self] revision in
                 guard let self else { return }

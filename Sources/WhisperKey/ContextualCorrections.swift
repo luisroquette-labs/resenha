@@ -1936,10 +1936,11 @@ struct PersonalRemoteAuthorizationHealth: Equatable, Sendable {
     let enabled: Bool
     let credentialPresent: Bool
     let locallyEligible: Bool
+    let revokedInProcess: Bool
 
     var canDispatch: Bool {
         releaseDecision == .personalRemoteAvailable
-            && enabled && credentialPresent && locallyEligible
+            && enabled && credentialPresent && locallyEligible && !revokedInProcess
     }
 }
 
@@ -1963,6 +1964,7 @@ final class PersonalRemoteAuthorizationOwner: PersonalRemoteAuthorizationManagin
     private let credentialStore: any ContextualCredentialStore
     private let policy: ContextualCorrectionPolicy
     private let storeSnapshot: @MainActor @Sendable () -> ContextualCorrectionStoreSnapshot
+    private var revokedInProcess = false
 
     init(
         optInStore: any PersonalRemoteOptInStore,
@@ -1991,8 +1993,10 @@ final class PersonalRemoteAuthorizationOwner: PersonalRemoteAuthorizationManagin
             guard optInStore.personalRemoteEnabled else {
                 throw PersonalRemoteAuthorizationError.credentialUnverified
             }
+            revokedInProcess = false
             policy.invalidate(.authorityChanged)
         } catch {
+            revokedInProcess = true
             try? optInStore.persistPersonalRemoteEnabled(false)
             try? credentialStore.delete()
             policy.invalidate(.authorityChanged)
@@ -2001,11 +2005,21 @@ final class PersonalRemoteAuthorizationOwner: PersonalRemoteAuthorizationManagin
     }
 
     func revokePersonalRemote() throws {
-        try? optInStore.persistPersonalRemoteEnabled(false)
+        revokedInProcess = true
+        var firstError: Error?
+        do { try optInStore.persistPersonalRemoteEnabled(false) }
+        catch { firstError = error }
         policy.invalidate(.authorityChanged)
-        try credentialStore.delete()
-        guard try credentialStore.load() == nil else {
-            throw PersonalRemoteAuthorizationError.credentialUnverified
+        do { try credentialStore.delete() }
+        catch { if firstError == nil { firstError = error } }
+        let credentialStillPresent: Bool
+        do { credentialStillPresent = try credentialStore.load() != nil }
+        catch {
+            credentialStillPresent = true
+            if firstError == nil { firstError = error }
+        }
+        guard !optInStore.personalRemoteEnabled, !credentialStillPresent, firstError == nil else {
+            throw firstError ?? PersonalRemoteAuthorizationError.credentialUnverified
         }
     }
 
@@ -2015,7 +2029,8 @@ final class PersonalRemoteAuthorizationOwner: PersonalRemoteAuthorizationManagin
             releaseDecision: .current,
             enabled: optInStore.personalRemoteEnabled,
             credentialPresent: credential?.isEmpty == false,
-            locallyEligible: isLocallyEligible
+            locallyEligible: isLocallyEligible,
+            revokedInProcess: revokedInProcess
         )
     }
 

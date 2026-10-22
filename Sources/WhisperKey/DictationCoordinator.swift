@@ -148,6 +148,7 @@ final class DictationCoordinator {
     private let contextualTokenSource: ContextualPolicyTokenSource
     private let contextualStoreGeneration: ContextualStoreGenerationSource
     private let continuousContextEnabled: @MainActor @Sendable () -> Bool
+    private let continuousPreviewVisible: @MainActor @Sendable () -> Bool
     private let continuousContextSessionFactory: ContinuousContextSessionFactory
     private let onContinuousPreview: ContinuousContextPreview
     private let continuousContextLoopFactory: ContinuousContextLoopFactory
@@ -190,6 +191,7 @@ final class DictationCoordinator {
         transcriber: WhisperTranscriber = WhisperTranscriber(),
         recorder: AudioRecorder? = nil,
         continuousContextEnabled: @escaping @MainActor @Sendable () -> Bool = { false },
+        continuousPreviewVisible: @escaping @MainActor @Sendable () -> Bool = { true },
         continuousContextSessionFactory: @escaping ContinuousContextSessionFactory = { ContinuousContextSession() },
         onContinuousPreview: @escaping ContinuousContextPreview = { _ in },
         continuousContextLoopFactory: @escaping ContinuousContextLoopFactory = { _ in nil },
@@ -210,6 +212,7 @@ final class DictationCoordinator {
         self.transcriber = transcriber
         self.recorder = recorder ?? AudioRecorder()
         self.continuousContextEnabled = continuousContextEnabled
+        self.continuousPreviewVisible = continuousPreviewVisible
         self.continuousContextSessionFactory = continuousContextSessionFactory
         self.onContinuousPreview = onContinuousPreview
         self.continuousContextLoopFactory = continuousContextLoopFactory
@@ -240,7 +243,7 @@ final class DictationCoordinator {
         }
 
         do {
-            let requestedContinuousPreview = continuousContextEnabled()
+            let requestedContinuousPreview = continuousPreviewVisible()
             var startedContinuousPreview = false
             if beginContinuousContextForActiveAttempt() {
                 do {
@@ -441,7 +444,7 @@ final class DictationCoordinator {
               self.attemptID == attemptID,
               phase == .recording,
               let revision = session.ingest(hypothesis) else { return }
-        onContinuousPreview(revision)
+        if continuousPreviewVisible() { onContinuousPreview(revision) }
         scheduleContinuousContextEvaluation(for: session)
     }
 
@@ -571,7 +574,8 @@ final class DictationCoordinator {
                       self.phase == .recording else { return }
                 if let result = await loop.evaluateNext(scope: token.scope),
                    result.outcome.category != .abstained,
-                   session.contextualPreviewText == result.text {
+                   session.contextualPreviewText == result.text,
+                   self.continuousPreviewVisible() {
                     self.onContinuousContextualPreview(
                         result.identity.attemptID,
                         result.identity.revision,

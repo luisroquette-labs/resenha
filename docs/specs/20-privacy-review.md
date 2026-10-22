@@ -32,7 +32,7 @@
 
 ## Acceptance
 
-- `PRIVACY-001`: static scan and runtime observation find no network request during dictation.
+- `PRIVACY-001`: static scan and runtime observation find zero personal network requests when remote evaluation is off, locally ineligible, missing its personal key or revoked; deliberately authorized eligible dictation may send the disclosed text-only requests.
 - `PRIVACY-002`: privacy manifest validates and appears in the archive.
 - `REVIEW-001`: TestFlight build reproduces `STORE-001` on a clean account/device state.
 - `RELEASE-001`: App Store public URL resolves to the approved version and installation succeeds.

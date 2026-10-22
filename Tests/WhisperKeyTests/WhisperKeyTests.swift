@@ -5696,6 +5696,7 @@ final class ContextualCoordinatorTests: XCTestCase {
         scope: ContextualTransportScope = .testDouble,
         continuousEnabled: Bool = false,
         personalRemoteEnabled: Bool = false,
+        localPreviewVisible: Bool? = nil,
         wiresContinuousRemote: Bool = false
     ) -> Harness {
         let actualPolicy = policy ?? ContextualCorrectionPolicy()
@@ -5713,6 +5714,7 @@ final class ContextualCoordinatorTests: XCTestCase {
         let probe = CoordinatorPipelineProbe()
         let provider = ControlledCoordinatorProvider(mode: providerMode, probe: probe)
         let continuousMode = continuousEnabled || personalRemoteEnabled
+        let previewVisible = localPreviewVisible ?? continuousEnabled
         let continuousSession = continuousMode ? ContinuousContextSession() : nil
         let time = ContinuousContextualTime()
         let resolver = ContextualCorrectionResolver(
@@ -5730,6 +5732,7 @@ final class ContextualCoordinatorTests: XCTestCase {
             language: { .portuguese },
             onTranscript: { probe.events.append(.history($0)) },
             continuousContextEnabled: { continuousMode },
+            continuousPreviewVisible: { previewVisible },
             continuousContextSessionFactory: { continuousSession ?? ContinuousContextSession() },
             onContinuousPreview: {
                 if continuousMode { probe.events.append(.preview($0?.sourceText)) }
@@ -5828,15 +5831,14 @@ final class ContextualCoordinatorTests: XCTestCase {
         let attempt = beginContinuous(harness)
         emitPartial("Reservei um rosto.", to: harness, attemptID: attempt)
         await harness.provider.waitUntilStarted()
-        for _ in 0..<20 where harness.probe.events.last != .preview("Reservei um Hostel.") {
+        for _ in 0..<20 where harness.probe.events.last != .providerInput("Reservei um rosto.") {
             await Task.yield()
         }
 
-        XCTAssertEqual(Array(harness.probe.events.prefix(2)), [
-            .preview("Reservei um rosto."),
-            .providerInput("Reservei um rosto.")
-        ])
-        XCTAssertEqual(harness.probe.events.last, .preview("Reservei um Hostel."))
+        XCTAssertEqual(harness.probe.events, [.providerInput("Reservei um rosto.")])
+        XCTAssertFalse(harness.probe.events.contains {
+            if case .preview(let text) = $0 { text != nil } else { false }
+        })
         let callsBeforeRevocation = await harness.provider.calls
         XCTAssertEqual(callsBeforeRevocation, 1)
 
@@ -5845,6 +5847,9 @@ final class ContextualCoordinatorTests: XCTestCase {
         await Task.yield()
         let callsAfterRevocation = await harness.provider.calls
         XCTAssertEqual(callsAfterRevocation, 1)
+        XCTAssertFalse(harness.probe.events.contains {
+            if case .preview(let text) = $0 { text != nil } else { false }
+        })
     }
 
     func testContinuousCoordinatorRejectsDuplicateFinalAndLatePreview() async throws {
@@ -5939,7 +5944,7 @@ final class ContextualCoordinatorTests: XCTestCase {
         _ = URLSessionDecisionsStreamingTransport(time: composition.shared)
     }
 
-    func testPersonalRemoteRequiresDistinctConsentCredentialAndLocalEligibility() throws {
+    func testPersonalRemoteRequiresDistinctConsentCredentialAndLocalEligibility() async throws {
         XCTAssertEqual(PersonalRemoteReleaseDecision.current, .personalRemoteAvailable)
         XCTAssertEqual(PersonalRemoteReleaseDecision.allCases, [.personalRemoteAvailable])
         let policy = ContextualCorrectionPolicy()
@@ -5979,6 +5984,72 @@ final class ContextualCoordinatorTests: XCTestCase {
         XCTAssertEqual(source(UUID()).scope, .disabled)
         XCTAssertFalse(optIn.personalRemoteEnabled)
         XCTAssertNil(try credential.load())
+
+        let failingOptIn = PersonalRemoteOptInStoreStub()
+        let failingCredential = InMemoryCredentialStore()
+        let failingOwner = PersonalRemoteAuthorizationOwner(
+            optInStore: failingOptIn,
+            credentialStore: failingCredential,
+            policy: ContextualCorrectionPolicy(),
+            storeSnapshot: { store.snapshot }
+        )
+        try failingOwner.authorizePersonalRemote(explicitConsent: true, credential: "retained-key")
+        failingOptIn.failOnDisable = true
+        failingCredential.setDeleteFailure(true)
+        XCTAssertThrowsError(try failingOwner.revokePersonalRemote())
+        XCTAssertTrue(failingOptIn.personalRemoteEnabled)
+        XCTAssertEqual(try failingCredential.load(), "retained-key")
+        XCTAssertTrue(failingOwner.personalRemoteHealth().revokedInProcess)
+        XCTAssertFalse(failingOwner.personalRemoteHealth().canDispatch)
+        XCTAssertEqual(failingOwner.issueToken().scope, .disabled)
+        let blockedTransport = DecisionsStreamingTransportStub(chunks: [])
+        let blockedClient = OpenRouterDecisionsClient(
+            transport: blockedTransport,
+            credential: { "retained-key" },
+            beforeTransportOpen: {
+                await failingOwner.personalRemoteHealth().canDispatch
+            }
+        )
+        let blockedSentence = "Reservei um rosto."
+        let blockedRange = try XCTUnwrap(blockedSentence.range(of: "rosto"))
+        do {
+            _ = try await blockedClient.decide(
+                sentence: blockedSentence,
+                language: "pt",
+                occurrences: [.init(
+                    questionID: "o1", heard: "rosto", canonical: "Hostel",
+                    ordinal: 1, range: blockedRange
+                )],
+                deadline: .init(offset: .seconds(1))
+            )
+            XCTFail("Revoked authority must block before transport open")
+        } catch {
+            XCTAssertEqual(error as? OpenRouterDecisionsError, .authorizationInvalidated)
+        }
+        XCTAssertNil(blockedTransport.snapshot().capturedRequest)
+
+        failingOptIn.failOnDisable = false
+        failingCredential.setDeleteFailure(false)
+        XCTAssertEqual(failingOwner.issueToken().scope, .disabled)
+        try failingOwner.authorizePersonalRemote(explicitConsent: true, credential: "new-explicit-key")
+        XCTAssertFalse(failingOwner.personalRemoteHealth().revokedInProcess)
+        XCTAssertEqual(failingOwner.issueToken().scope, .personalDictation)
+
+        for (index, status) in [401, 402, 403, 429].enumerated() {
+            failingOptIn.failOnDisable = true
+            failingCredential.setDeleteFailure(true)
+            failingOwner.handleProviderError(OpenRouterDecisionsError.invalidStatus(status))
+            XCTAssertTrue(failingOwner.personalRemoteHealth().revokedInProcess)
+            XCTAssertFalse(failingOwner.personalRemoteHealth().canDispatch)
+            XCTAssertEqual(failingOwner.issueToken().scope, .disabled)
+            guard index < 3 else { continue }
+            failingOptIn.failOnDisable = false
+            failingCredential.setDeleteFailure(false)
+            try failingOwner.authorizePersonalRemote(
+                explicitConsent: true,
+                credential: "explicit-key-\(status)"
+            )
+        }
     }
 
     func testCoordinatorTestTokenSourceUsesTestDoubleScope() async throws {
@@ -6584,6 +6655,7 @@ private final class InMemoryCredentialStore: ContextualCredentialStore, @uncheck
     private var value: String?
     private(set) var calls: [String] = []
     var loadOverride: String?
+    private var deleteFails = false
 
     func save(_ value: String) throws {
         lock.withLock { calls.append("credential-save"); self.value = value }
@@ -6591,7 +6663,14 @@ private final class InMemoryCredentialStore: ContextualCredentialStore, @uncheck
     func load() throws -> String? {
         lock.withLock { calls.append("credential-load"); return loadOverride ?? value }
     }
-    func delete() throws { lock.withLock { calls.append("credential-delete"); value = nil } }
+    func delete() throws {
+        try lock.withLock {
+            calls.append("credential-delete")
+            if deleteFails { throw ContextualCredentialError.invalidValue }
+            value = nil
+        }
+    }
+    func setDeleteFailure(_ enabled: Bool) { lock.withLock { deleteFails = enabled } }
     func snapshotCalls() -> [String] { lock.withLock { calls } }
 }
 
@@ -6611,9 +6690,11 @@ private final class PersonalRemoteOptInStoreStub: PersonalRemoteOptInStore {
     var contextualCorrectionsEnabled = true
     private(set) var personalRemoteEnabled = false
     private(set) var writes: [Bool] = []
+    var failOnDisable = false
 
     func persistPersonalRemoteEnabled(_ enabled: Bool) throws {
         writes.append(enabled)
+        if !enabled, failOnDisable { throw PersonalRemoteAuthorizationError.credentialUnverified }
         personalRemoteEnabled = enabled
     }
 }
