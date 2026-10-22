@@ -51,7 +51,7 @@ private struct PermissionOnboardingView: View {
     private var setupReady: Bool { snapshot.isReady && modelReady }
 
     private var introText: String {
-        "Três permissões conectam voz, atalho e inserção automática. O áudio nunca sai deste Mac."
+        "O áudio permanece neste Mac. Correções contextuais ficam locais; somente o diagnóstico sintético opcional usa rede."
     }
     var body: some View {
         ZStack {
@@ -74,7 +74,7 @@ private struct PermissionOnboardingView: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer()
-                    ResenhaStatusPill(title: "100% local", symbol: "lock.fill", active: true)
+                    ResenhaStatusPill(title: "Áudio local", symbol: "lock.fill", active: true)
                 }
 
                 VStack(spacing: 0) {

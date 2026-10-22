@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 
 struct PanelDismissal {
@@ -31,11 +32,41 @@ final class CorrectionSession: ObservableObject {
     @Published var invalidField: TranscriptionCorrectionView.Field?
     @Published var rejectedEditGeneration = 0
     private(set) var inputLimitField: TranscriptionCorrectionView.Field?
+    private(set) var language: TranscriptionLanguage
+    private(set) var sentence: String
+    @Published private(set) var candidateOrdinals: [Int] = []
+    @Published private(set) var selectedOrdinal: Int?
+    private var retentionProbe: ContextRetentionProbe?
     var actionID: UUID { token ?? recoveryID }
+    var selectedContext: (sentence: String, occurrenceOrdinal: Int)? {
+        let ranges = Self.occurrenceRanges(of: heard, in: sentence)
+        guard let selectedOrdinal, ranges.indices.contains(selectedOrdinal - 1) else { return nil }
+        let selectedRange = ranges[selectedOrdinal - 1]
+        guard let sentenceRange = ContextualSentenceBoundary.ranges(in: sentence).first(where: {
+            $0.lowerBound <= selectedRange.lowerBound && $0.upperBound >= selectedRange.upperBound
+        }) else { return nil }
+        let localRanges = ranges.filter {
+            $0.lowerBound >= sentenceRange.lowerBound && $0.upperBound <= sentenceRange.upperBound
+        }
+        guard let localIndex = localRanges.firstIndex(of: selectedRange) else { return nil }
+        return (
+            String(sentence[sentenceRange]).trimmingCharacters(in: .whitespacesAndNewlines),
+            localIndex + 1
+        )
+    }
 
-    init(token: UUID, targetPID: pid_t?) {
+    init(
+        token: UUID,
+        targetPID: pid_t?,
+        text: String,
+        language: TranscriptionLanguage,
+        retentionProbe: ContextRetentionProbe?
+    ) {
         self.targetPID = targetPID
         self.token = token
+        sentence = text
+        self.language = language
+        self.retentionProbe = retentionProbe
     }
 
     func update(heard: String, canonical: String) {
@@ -51,7 +82,16 @@ final class CorrectionSession: ObservableObject {
         }
         self.heard = heard
         self.canonical = canonical
+        let occurrenceCount = Self.occurrenceRanges(of: heard, in: sentence).count
+        candidateOrdinals = occurrenceCount == 0 ? [] : Array(1...occurrenceCount)
+        selectedOrdinal = candidateOrdinals.count == 1 ? candidateOrdinals[0] : nil
         if inputLimitField != nil { errorMessage = nil; inputLimitField = nil; invalidField = nil }
+    }
+
+    func select(ordinal: Int) {
+        guard candidateOrdinals.contains(ordinal) else { return }
+        selectedOrdinal = ordinal
+        errorMessage = nil
     }
 
     func clear() {
@@ -62,13 +102,34 @@ final class CorrectionSession: ObservableObject {
         errorMessage = nil
         invalidField = nil
         inputLimitField = nil
+        candidateOrdinals = []
+        selectedOrdinal = nil
+        sentence = ""
+        retentionProbe = nil
         token = nil
+    }
+
+    private static func occurrenceRanges(of term: String, in sentence: String) -> [Range<String.Index>] {
+        let trimmed = term.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return [] }
+        let escaped = NSRegularExpression.escapedPattern(for: trimmed)
+        let regex = try? NSRegularExpression(
+            pattern: "(?<![\\p{L}\\p{N}])\(escaped)(?![\\p{L}\\p{N}])",
+            options: [.caseInsensitive]
+        )
+        return regex?.matches(
+            in: sentence,
+            range: NSRange(sentence.startIndex..<sentence.endIndex, in: sentence)
+        ).compactMap { Range($0.range, in: sentence) } ?? []
     }
 }
 
 private struct FeedbackOffer {
     let token: UUID
     let targetPID: pid_t?
+    let text: String
+    let language: TranscriptionLanguage
+    let retentionProbe: ContextRetentionProbe?
 }
 
 private final class FeedbackTargetPanel: NSPanel {
@@ -85,21 +146,38 @@ private final class FeedbackTargetButton: NSButton {
 
 private struct CorrectionEditor: View {
     @ObservedObject var session: CorrectionSession
-    @ObservedObject var preferences: ProductPreferences
     let onSave: () -> Void
     let onCancel: () -> Void
     let onInvalidInput: () -> Void
+    let requiresOccurrenceSelection: Bool
 
     var body: some View {
-        TranscriptionCorrectionView(
-            heard: Binding(get: { session.heard }, set: { session.update(heard: $0, canonical: session.canonical) }),
-            canonical: Binding(get: { session.canonical }, set: { session.update(heard: session.heard, canonical: $0) }),
-            errorMessage: session.errorMessage ?? (preferences.canSaveTranscriptionCorrection ? nil
-                : ProductPreferences.CorrectionSaveResult.storageFailure(recoveryRequired: true).message),
-            invalidField: session.invalidField,
-            isSaveEnabled: preferences.canSaveTranscriptionCorrection && session.token != nil && session.inputLimitField == nil,
-            onSave: onSave, onCancel: onCancel
-        )
+        VStack(alignment: .leading, spacing: 12) {
+            Text(session.sentence)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .accessibilityLabel("Frase confirmada: \(session.sentence)")
+            if session.candidateOrdinals.count > 1 {
+                HStack {
+                    Text("Qual ocorrência estava errada?")
+                    ForEach(session.candidateOrdinals, id: \.self) { ordinal in
+                        Button("\(ordinal)ª") { session.select(ordinal: ordinal) }
+                            .buttonStyle(.bordered)
+                            .accessibilityLabel("Selecionar ocorrência \(ordinal)")
+                            .accessibilityAddTraits(session.selectedOrdinal == ordinal ? .isSelected : [])
+                    }
+                }
+            }
+            TranscriptionCorrectionView(
+                heard: Binding(get: { session.heard }, set: { session.update(heard: $0, canonical: session.canonical) }),
+                canonical: Binding(get: { session.canonical }, set: { session.update(heard: session.heard, canonical: $0) }),
+                errorMessage: session.errorMessage,
+                invalidField: session.invalidField,
+                isSaveEnabled: session.token != nil && session.inputLimitField == nil
+                    && (!requiresOccurrenceSelection || session.selectedOrdinal != nil),
+                onSave: onSave, onCancel: onCancel
+            )
+        }
         .id(session.rejectedEditGeneration)
         .onChange(of: session.rejectedEditGeneration) { _, _ in onInvalidInput() }
     }
@@ -122,6 +200,7 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
     private var feedbackTargets: [NSPanel] = []
     private(set) var correctionWindow: NSWindow?
     private var correctionPreferences: ProductPreferences?
+    private var contextualStore: ContextualCorrectionStore?
     var onFeedbackChange: (@MainActor () -> Void)?
     var hasFeedback: Bool { feedback != nil || offeredFeedback != nil || recoveryOffer != nil }
     var isEditingCorrection: Bool { feedback?.isEditing == true }
@@ -133,8 +212,11 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
     }
     var correctionError: String? { feedback?.errorMessage }
     var canSaveCorrection: Bool {
-        isEditingCorrection && feedbackToken != nil && feedback?.inputLimitField == nil
-            && correctionPreferences?.canSaveTranscriptionCorrection == true
+        guard isEditingCorrection, feedbackToken != nil, feedback?.inputLimitField == nil else { return false }
+        if let contextualStore {
+            return contextualStore.snapshot.health == .healthy && feedback?.selectedOrdinal != nil
+        }
+        return correctionPreferences?.canSaveTranscriptionCorrection == true
     }
     var ignoresMouseEvents: Bool { panel.ignoresMouseEvents }
     var isVisible: Bool { panel.isVisible }
@@ -242,13 +324,25 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
 
     func configureFeedback(preferences: ProductPreferences) {
         correctionPreferences = preferences
+        contextualStore = nil
+    }
+
+    func configureFeedback(preferences: ProductPreferences, store: ContextualCorrectionStore) {
+        correctionPreferences = preferences
+        contextualStore = store
     }
 
     func offerFeedback(_ context: DictationCompletion) {
         hide()
         let token = context.id
         let targetPID = context.targetApplication?.processIdentifier
-        offeredFeedback = FeedbackOffer(token: token, targetPID: targetPID)
+        offeredFeedback = FeedbackOffer(
+            token: token,
+            targetPID: targetPID,
+            text: context.text,
+            language: context.language,
+            retentionProbe: context.retentionProbe
+        )
         model.feedbackPhase = .entering
         present(.feedback, target: .session(targetPID))
         makeFeedbackTargets(token: token)
@@ -265,7 +359,13 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
     func openCorrection(token: UUID) {
         guard correctionActionToken == token, correctionPreferences != nil else { return }
         if let offer = offeredFeedback ?? recoveryOffer {
-            feedback = CorrectionSession(token: offer.token, targetPID: offer.targetPID)
+            feedback = CorrectionSession(
+                token: offer.token,
+                targetPID: offer.targetPID,
+                text: offer.text,
+                language: offer.language,
+                retentionProbe: offer.retentionProbe
+            )
             offeredFeedback = nil
             recoveryOffer = nil
         }
@@ -278,7 +378,7 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
             correctionWindow?.makeKeyAndOrderFront(nil)
             return
         }
-        if session.token == nil || !preferences.canSaveTranscriptionCorrection {
+        if contextualStore == nil && (session.token == nil || !preferences.canSaveTranscriptionCorrection) {
             if preferences.reloadTranscriptionGlossaryForCorrection() {
                 session.token = UUID()
                 session.errorMessage = nil
@@ -298,13 +398,14 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
         window.isReleasedWhenClosed = false
         window.delegate = self
         window.contentView = NSHostingView(rootView: CorrectionEditor(
-            session: session, preferences: preferences,
+            session: session,
             onSave: { [weak self] in self?.saveCorrection(token: actionID) },
             onCancel: { [weak self] in self?.cancelFeedback(token: actionID) },
             onInvalidInput: { [weak self] in
                 guard self?.correctionActionToken == actionID else { return }
                 self?.announce(TranscriptionGlossary.CorrectionValidationError.lineLimit.message)
-            }
+            },
+            requiresOccurrenceSelection: contextualStore != nil
         ))
         let screen = NSScreen.screens.first { screenID($0) == selectedScreenID } ?? NSScreen.main
         if let screen {
@@ -324,9 +425,27 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
         session.update(heard: heard, canonical: canonical)
     }
 
+    func selectCorrectionOccurrence(token: UUID, ordinal: Int) {
+        guard let session = feedback, session.actionID == token, session.isEditing else { return }
+        session.select(ordinal: ordinal)
+    }
+
     func saveCorrection(token: UUID) {
         guard let session = feedback, session.token == token, canSaveCorrection,
               let preferences = correctionPreferences else { return }
+        if let contextualStore {
+            guard let selectedContext = session.selectedContext else { return }
+            let result = contextualStore.save(.init(
+                id: UUID(),
+                language: session.language.rawValue,
+                heard: session.heard,
+                canonical: session.canonical,
+                sentence: selectedContext.sentence,
+                occurrenceOrdinal: selectedContext.occurrenceOrdinal
+            ))
+            handleContextualSave(result, session: session)
+            return
+        }
         let result = preferences.saveTranscriptionCorrection(heard: session.heard, canonical: session.canonical)
         switch result {
         case .saved, .alreadyExists:
@@ -344,6 +463,26 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
                 || session.canonical.rangeOfCharacter(from: invalidCharacters) != nil
             session.invalidField = !heardInvalid && canonicalInvalid ? .canonical : .heard
             announce(result.message)
+        }
+    }
+
+    private func handleContextualSave(
+        _ result: ContextualCorrectionSaveResult,
+        session: CorrectionSession
+    ) {
+        let message = result.feedbackMessage
+        switch result {
+        case .saved, .alreadyExists:
+            let targetPID = session.targetPID
+            announce(message)
+            hide()
+            let restored = restoreTarget(pid: targetPID)
+            showTemporarily(.feedbackNotice(
+                restored ? message : "\(message). Volte ao campo de texto para ditar"
+            ))
+        case .conflict, .limitReached, .invalid, .storageFailure:
+            session.errorMessage = message
+            announce(message)
         }
     }
 
@@ -370,9 +509,16 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
         }
         guard let session = feedback, session.actionID == token else { return false }
         let targetPID = session.targetPID
-        if session.isEditing && correctionPreferences?.canSaveTranscriptionCorrection == false {
+        if contextualStore == nil && session.isEditing
+            && correctionPreferences?.canSaveTranscriptionCorrection == false {
             hide()
-            recoveryOffer = FeedbackOffer(token: UUID(), targetPID: targetPID)
+            recoveryOffer = FeedbackOffer(
+                token: UUID(),
+                targetPID: targetPID,
+                text: "",
+                language: .portuguese,
+                retentionProbe: nil
+            )
             onFeedbackChange?()
         } else {
             hide()

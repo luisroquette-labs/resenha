@@ -7,7 +7,7 @@ struct WhisperKeyApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     var body: some Scene {
-        Settings { ProductSettingsView(preferences: appDelegate.preferences) }
+        Settings { appDelegate.productSettingsView }
     }
 }
 
@@ -25,16 +25,82 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var hotkeyFailureFeedback = HotkeyFailureFeedback()
     private var didPlayLaunchReadyCue = false
     let preferences = ProductPreferences()
+    private let contextualTime = ContinuousContextualTime()
+    private let contextualPolicy = ContextualCorrectionPolicy()
+    private let contextualStore = ContextualCorrectionStore()
+    private let contextualCredentialStore = KeychainContextualCredentialStore()
+    private lazy var contextualTimeComposition: ContextualTimeComposition = {
+        do {
+            return try ContextualTimeComposition(
+                resolver: contextualTime,
+                diagnostic: contextualTime,
+                transport: contextualTime
+            )
+        } catch {
+            preconditionFailure("Contextual clocks must share one origin")
+        }
+    }()
+    private lazy var contextualTransport = URLSessionDecisionsStreamingTransport(
+        time: contextualTimeComposition.shared
+    )
+    private lazy var contextualClient = OpenRouterDecisionsClient(
+        transport: contextualTransport,
+        credential: { [contextualCredentialStore] in
+            guard let value = try contextualCredentialStore.load() else {
+                throw OpenRouterDecisionsError.missingCredential
+            }
+            return value
+        }
+    )
+    private lazy var contextualAuthorization = SyntheticDiagnosticAuthorizationOwner(
+        optInStore: preferences,
+        credentialStore: contextualCredentialStore,
+        guardStore: SyntheticDiagnosticGuard(),
+        policy: contextualPolicy
+    )
+    private lazy var contextualResolver = ContextualCorrectionResolver(
+        store: contextualStore,
+        policy: contextualPolicy,
+        provider: contextualClient,
+        storeGeneration: { [contextualStore] in contextualStore.generation },
+        time: contextualTimeComposition.shared
+    )
+    private lazy var contextualDiagnosticController = SyntheticDiagnosticController(
+        policy: contextualPolicy,
+        authorization: contextualAuthorization,
+        client: contextualClient,
+        validator: ContextualDecisionValidator(),
+        fixture: try! SyntheticDiagnosticFixture.load(),
+        time: contextualTimeComposition.shared
+    )
     private lazy var transcriptHistory = TranscriptHistory()
     private lazy var menuController = NativeMenuController(delegate: self)
     private lazy var onboardingController = PermissionOnboardingController(
         requestPermissions: { [weak self] in self?.enablePermissions() },
         openSettings: { [weak self] permission in self?.openSettings(for: permission) }
     )
-    private lazy var settingsController = ProductSettingsWindowController(preferences: preferences)
+    private lazy var settingsController = ProductSettingsWindowController(
+        preferences: preferences,
+        contextualStore: contextualStore,
+        authorization: contextualAuthorization,
+        diagnostic: contextualDiagnosticController
+    )
+
+    var productSettingsView: ProductSettingsView {
+        ProductSettingsView(
+            preferences: preferences,
+            contextualStore: contextualStore,
+            authorization: contextualAuthorization,
+            diagnostic: contextualDiagnosticController
+        )
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         AudioRecorder.cleanupStaleRecordings()
+        contextualStore.onMutation = { [weak contextualPolicy] in
+            contextualPolicy?.invalidate(.storeMutated)
+        }
+        _ = contextualDiagnosticController
         transcriptHistory.onChange = { [weak self] items, storageAvailable in
             self?.menuController.updateRecentTranscripts(items, storageAvailable: storageAvailable)
         }
@@ -58,7 +124,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             onTranscript: { [weak self] text in
                 self?.recordTranscript(text)
             },
-            onFailure: { _ in }
+            onFailure: { _ in },
+            outputSink: TextInjector(),
+            contextualResolver: contextualResolver,
+            contextualTokenSource: DictationCoordinator.productionContextualTokenSource(
+                policy: contextualPolicy,
+                isEnabled: { [preferences] in preferences.contextualCorrectionsEnabled }
+            ),
+            contextualStoreGeneration: { [weak contextualStore] in contextualStore?.generation ?? 0 }
         ))
         configureHotkeyRouting()
         configureMenuBar()
@@ -81,7 +154,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             guard let self, self.preferences.showsHUD else { return }
             self.panel.offerFeedback(context)
         }
-        panel.configureFeedback(preferences: preferences)
+        panel.configureFeedback(preferences: preferences, store: contextualStore)
         panel.onFeedbackChange = { [weak self] in self?.updateFeedbackMenu() }
         preferences.onHUDChange = { [weak self] visible in if !visible { self?.panel.hide() } }
     }
@@ -124,7 +197,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         startHotkeyIfReady()
     }
 
+    func applicationShouldHandleReopen(
+        _ sender: NSApplication,
+        hasVisibleWindows flag: Bool
+    ) -> Bool {
+        settingsController.show()
+        return true
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
+        contextualPolicy.invalidate(.appTerminated)
         permissionTimer?.invalidate()
         hotkey.stop()
         panel.hide()

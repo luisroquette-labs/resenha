@@ -42,3 +42,19 @@ The owner explicitly replaced the Store shortcut boundary with direct distributi
 ## Definition of done
 
 M0 is done only when a locally launched `.app` completes `hotkey → recording → whisper.cpp → text → insertion` in another application, without network access or manual clipboard action.
+
+## Amendment 004 — contextual correction beta (2026-10-21)
+
+The local-only invariant continues to cover all microphone audio and personal
+dictation. The owner authorized a default-off local store of at most 100
+confirmed examples, each with a sentence of at most 600 characters, separate
+from legacy glossary rules and fully deletable. Personal dictation is never
+routed to a provider in this beta and uncertain, failed or late decisions
+preserve the original text.
+
+One separately consented infrastructure diagnostic may send only the bundled
+synthetic fixture to OpenRouter/TypeSafe using `typesafe/jev-1.14`, once, with
+a 900 ms deadline and no retry. Its disposable credential belongs in Keychain;
+local deletion does not replace provider-side revocation. This exception does
+not authorize cloud transcription, AI rewrite, recurring calls, or claims of
+PT-BR quality.

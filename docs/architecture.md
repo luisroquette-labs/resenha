@@ -31,6 +31,9 @@ One XcodeGen application target (`WhisperKey`, product name `Resenha`) and one u
 | `TextInjector` | stage text, restore target focus and post `Command-V` | target, permission and clipboard guards |
 | `DictationCoordinator` | own state, cancellation and cleanup | one active attempt; fail closed |
 | `TranscriptHistory` | retain up to ten successful texts when enabled | local only; no audio or sync |
+| `ContextualCorrectionStore` | retain up to 100 confirmed sentence/occurrence examples | local file, 600-character sentence cap, separate from glossary |
+| `ContextualCorrectionResolver` | match occurrences and fail closed | personal scope always preserves original in this beta |
+| `SyntheticDiagnosticController` | run the allowlisted fixture once | only network-capable scope; 900 ms, zero retry, one-shot guard |
 
 ## Permissions
 
@@ -47,6 +50,10 @@ The app requests permissions only after explicit user action and exposes separat
 - Model: persistent local file accepted only after exact size and SHA-256 verification.
 - Preferences: local `UserDefaults`; no account or sync.
 - Diagnostics: no raw audio or transcript content in logs.
+- Contextual examples: local language/heard/canonical/sentence/ordinal records;
+  individual/all deletion mutates the shared policy generation.
+- Synthetic diagnostic: ephemeral HTTPS session to OpenRouter/TypeSafe using
+  `typesafe/jev-1.14`; no personal dictation, examples, history or clipboard.
 
 ## Validation boundary
 

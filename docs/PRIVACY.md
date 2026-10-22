@@ -14,6 +14,25 @@ pessoais, áudio, transcrições, diagnósticos ou métricas de uso.
 - A transcrição é colocada no clipboard para recuperação imediata.
 - Se “Textos recentes” estiver ativo, até 10 transcrições ficam apenas neste Mac.
 - O usuário pode desativar e apagar esse histórico nos Ajustes do Resenha.
+- Correções contextuais ficam em arquivo local separado do glossário: idioma,
+  forma ouvida, forma canônica, frase confirmada e ocorrência. São no máximo
+  100 exemplos, com frases de até 600 caracteres, apagáveis individualmente ou
+  em conjunto. O beta começa desligado e não envia ditados pessoais.
+
+## Diagnóstico sintético opcional
+
+Com consentimento separado, o usuário pode fornecer uma chave descartável e
+executar uma única frase sintética identificada pelo app. Só essa fixture é
+enviada ao OpenRouter e ao provedor TypeSafe para o modelo
+`typesafe/jev-1.14`; áudio, histórico, clipboard, exemplos locais e ditados
+pessoais não entram na requisição. A tentativa expira em 900 ms, não repete e
+consome um bloqueio local antes do envio. A chave fica no Keychain e pode ser
+removida no app, mas a revogação no provedor é uma ação separada do usuário.
+
+O transporte usa sessão efêmera, sem cache, cookies ou armazenamento de
+credenciais HTTP. OpenRouter/TypeSafe ainda podem reter metadados técnicos
+conforme suas próprias políticas; o Resenha não controla essa retenção. O
+diagnóstico mede somente compatibilidade do contrato, não qualidade PT-BR.
 
 ## Download do modelo
 

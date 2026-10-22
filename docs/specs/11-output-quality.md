@@ -123,15 +123,26 @@ O candidato com prompt reduziu o WER em 94% relativo. A contagem anterior de 96%
 
 ## Correção explícita após o ditado
 
-Com o HUD ligado, uma inserção concluída e ainda atual oferece “Transcrição correta” e “Corrigir transcrição”, também no menu de status. Aprovar encerra a oferta sem guardar uma nota. Corrigir abre os campos vazios “Saiu como” e “Correto é”; somente Salvar válido adiciona o termo canônico de “Correto é” como uma linha sem `=` ao glossário existente. O texto ouvido não é persistido nem vira uma substituição. A interface explica: “Salvar adiciona somente o termo correto ao vocabulário local, sem criar uma substituição para o texto ouvido. O reconhecimento pode variar.” Não é retreinamento do modelo. Salvar não reescreve texto já inserido, clipboard ou histórico; o próximo ditado lê o glossário atualizado como auxílio probabilístico.
+Com o HUD ligado, uma inserção concluída e ainda atual oferece “Transcrição
+correta” e “Corrigir transcrição”, também no menu de status. Aprovar encerra a
+oferta sem guardar nota. Corrigir mostra a frase confirmada e os campos “Saiu
+como” e “Correto é”; múltiplas ocorrências exigem seleção explícita. Salvar não
+reescreve o texto já inserido, clipboard ou histórico e não é retreinamento do
+modelo.
 
-O Save usa o conteúdo atual de Ajustes, preserva suas linhas e confere o valor relido e o parser antes de confirmar. Rejeita campos vazios após trim, termos exatamente iguais, quebras de linha e `=` em qualquer campo. Correção apenas de caixa é permitida, salvo conflito com uma substituição manual. Cada campo bruto é limitado a 160 caracteres Swift e 2.560 bytes UTF-8, tanto no binding quanto no Save; o limite de bytes também impede um único grafema excessivo. Cada campo mostra seu contador. Uma entrada acima do limite mantém o último valor aceito, sem truncar silenciosamente, bloqueia Save/Return até a correção e informa: “Use até 160 caracteres e 2.560 bytes por campo. O texto anterior foi preservado.” Os limites do glossário continuam em 200 entradas aceitas antes da deduplicação, texto de 20.000 caracteres e prompt completo de 8.000. Excesso é recusado integralmente; não abre espaço apagando entradas.
+Like e cancelamento não persistem feedback. Dislike + Salvar cria um exemplo
+contextual local com idioma, forma ouvida, forma canônica, frase confirmada e
+ocorrência; não cria regra global no glossário. Há no máximo 100 exemplos,
+frase de até 600 caracteres e exclusão individual ou total. Ocorrências
+múltiplas exigem escolha explícita. Duplicata é idempotente; conflito, limite e
+falha preservam o draft. `rosto → Hostel` nunca significa troca global.
 
-Salvar confirma “Termo adicionado ao vocabulário”; um termo canônico já efetivo é um no-op (“Termo já existente”). Conflitos com substituições manuais existentes, inclusive em linhas fora das primeiras 200, são rejeitados: “Há uma substituição manual conflitante no glossário. Revise-a em Ajustes → Transcrição.” Entradas manuais `forma ouvida = forma final` continuam compatíveis em Ajustes, com limites de termos completos, escaping, prioridade por fonte mais longa e comportamento sequencial legado. O feedback não cria essas regras e preserva as substituições preexistentes; um termo isolado pode apenas normalizar sua própria grafia, sem prometer correção semântica geral.
-
-Falha de escrita/read-back tenta restaurar e verificar a baseline anterior, conserva o draft somente enquanto o editor atual permanece aberto e não confirma sucesso. Se o rollback também falhar, Save fica bloqueado, inclusive por Return, com mensagem no editor. Cancelar, Escape ou fechar libera ambos os campos e a sessão, sem nova escrita, inclusive nesse terminal. A ação de recuperação guarda apenas token e PID do alvo: reabri-la cria um editor vazio e verifica o armazenamento real antes de permitir nova confirmação explícita. Uma falha nessa leitura mantém o novo editor vazio e bloqueado; a baseline pode já conter a escrita anterior. Novo ditado, HUD desligado e encerramento também descartam a ação de recuperação. Não há retry de escrita em background, `synchronize()`, promessa de flush síncrono ou criptografia: o glossário usa o UserDefaults local existente.
-
-Like, dislike, edição e cancelamento não criam persistência de feedback. Só o termo canônico confirmado muda o glossário; a preferência de histórico continua independente. Sessões não retêm transcrição completa nem objetos de aplicação, apenas token, PID e campos limitados enquanto o editor está aberto. Não se introduzem rede, analytics, login ou dependência. Os testes isolados de Save → reconstrução de preferências → prompt/pós-processador provam que o termo salvo chega ao vocabulário sem criar uma troca da forma ouvida: salvar `rosto` → `Hostel` não altera “Meu rosto está vermelho”. Salvar `Coisa` → `COESA` também não garante uma substituição determinística futura. Voz real, foco, teclado/VoiceOver e observação de rede são evidências distintas, registradas em [UI-REFINEMENT-EVIDENCE](../testing/UI-REFINEMENT-EVIDENCE.md).
+O beta local começa desligado. Mesmo ligado, ditado pessoal recebe escopo
+proibido para transporte e permanece byte a byte original. Apenas o diagnóstico
+sintético consentido pode usar `typesafe/jev-1.14` via OpenRouter/TypeSafe, uma
+vez, com deadline de 900 ms; falha, timeout ou dúvida preservam o original. A
+chamada controlada mede contrato, não precisão PT-BR, recorrência, custo ou
+privacidade além das políticas publicadas.
 
 ## Falhas e recuperação
 

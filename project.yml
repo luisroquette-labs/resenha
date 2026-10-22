@@ -15,6 +15,8 @@ targets:
       - path: Sources/WhisperKey
       - path: Config/PrivacyInfo.xcprivacy
         buildPhase: resources
+      - path: Tests/Fixtures/contextual-corrections.json
+        buildPhase: resources
     dependencies:
       - framework: Frameworks/whisper.xcframework
         embed: false
@@ -45,6 +47,8 @@ targets:
     sources:
       - path: Tests/WhisperKeyTests
       - path: Vendor/whisper.cpp/samples/jfk.wav
+        buildPhase: resources
+      - path: Tests/Fixtures/contextual-corrections.json
         buildPhase: resources
     dependencies:
       - target: WhisperKey
