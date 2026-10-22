@@ -1,6 +1,6 @@
 # Continuous contextual intelligence evidence
 
-Status: superseded candidate; SHIP authority change requires a new candidate and all evidence rerun
+Status: current SHIP candidate baseline; physical acceptance pending
 
 ## Shipping contract
 
@@ -64,57 +64,56 @@ or physical evidence.
 
 ## Physical result and provenance
 
-INVALIDATED. Commits `33de02a` and `b9e5ea7` describe the former closed release
-decision and are not provenance for the SHIP source. No physical/acoustic claim is made until a sanitized append identifies
-the frozen candidate and satisfies the protocol above. If permissions, hardware
-or user presence prevent 100 revisions, 30 finalizations, VoiceOver or target
-field observation, that gate is recorded as unmet and personal remote capability
-remains unavailable.
+PENDING. Candidate `11cb1ffe900107893b216895b3ab35ed911a90bd` is the
+current SHIP baseline. No physical/acoustic claim is made until a sanitized
+append satisfies the protocol above. If permissions, hardware or user presence
+prevent 100 revisions, 30 finalizations, VoiceOver or target-field observation,
+that gate remains unmet rather than being replaced by deterministic evidence.
 
-### Superseded candidate provenance — 2026-10-22 (not current evidence)
+### Current SHIP candidate provenance — 2026-10-22
 
 | Field | Observed value |
 |---|---|
-| `tested_product_sha` | `33de02a46eaf719e3f5b6f33f355ad99f3632764` |
-| `tested_product_tree` | `57bd819e286c8497782f87752af67642b3003cfb` |
+| `tested_product_sha` | `11cb1ffe900107893b216895b3ab35ed911a90bd` |
+| `tested_product_tree` | `b01fdc994b8e9c6322f6ffd03269524472f31e19` |
 | Evidence commit | commit containing this append; its SHA is the Git object identifier and is intentionally not self-embedded |
-| Manifest SHA-256 | `52cf669f84d8a8d3a66e3ccc98c45b0802a43f94daf7eca6c8dba5b6719454bd` |
-| Isolated app | `build/continuous-context-candidate-33de02a46eaf719e3f5b6f33f355ad99f3632764/DerivedData/Build/Products/Debug/Resenha.app` |
-| Executable SHA-256 | `6bdb7b0804f02437a7390810303950f684f4d55ec7bd61bc5839c03a9f7dc5cd` |
-| Implementation dylib SHA-256 | `6a8478fa8b56131bc03a30c84adbe1dbc0543df2169b7ec5ce3b389a76213453` |
-| Fixture SHA-256 | `46c5794007c61b5135374cc275f01d5a012838807c28df6624d77fd556dd9415` |
+| Source/config/resource manifest SHA-256 | `725faed4cf971d0d12a12cf20b02c5d2a38fdc0b7e5ec8d60f3e707e7d3a6a8b` |
+| App-content manifest SHA-256 | `b70e3fb3de090622884561bd1b3d1ad5a5bd7f7d08e73e9975268e1de17233f8` |
+| Isolated app | `build/continuous-context-candidate-11cb1ffe900107893b216895b3ab35ed911a90bd/DerivedData/Build/Products/Debug/Resenha.app` |
+| Executable SHA-256 | `c17d68ec073b248dda8ad2632562a3f688846bc1c6713737424a64197de27db7` |
+| Implementation dylib SHA-256 | `7ff25b1567e74537665f4cfb62912a97bed901922d51ba97e06888a225da2e62` |
+| Packaged privacy resource SHA-256 | `05ec7b59faf0bd18201e1f11334c1306f962923b56101ee3268a5d2a9754f59b` |
+| Fixture SHA-256, source and packaged | `46c5794007c61b5135374cc275f01d5a012838807c28df6624d77fd556dd9415` |
 | Recognizer model | `ggml-small-q5_1.bin`, 190085487 bytes, SHA-256 `ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb` |
 | Hardware / OS | MacBook Pro `Mac17,2`, Apple M5, 16 GB; macOS 26.1 (`25B78`) |
 
-The sorted source/config/resource manifest is retained beside the ignored
-isolated build at `evidence/source-config-resource-manifest.sha256`. The app is
-arm64, bundle `br.com.luisroquette.Resenha`, development-signed by team
-`S3YCFYY8SC`; `codesign --verify --deep --strict` passed. This is a Debug proof
-candidate, not a release, notarized or publication artifact.
+The two sorted manifests are retained beside the ignored isolated build under
+`evidence/`. The app is arm64, bundle `br.com.luisroquette.Resenha`,
+development-signed by team `S3YCFYY8SC`; `codesign --verify --deep --strict`
+passed. This is a Debug proof candidate, not a Release, notarized or publication
+artifact. It did not replace `/Applications/Resenha.app`.
 
-### Gates and bounded hardware attempt
+### Gates and bounded hardware state
 
-- Native gate: PASS, 197/197, result
-  `build/Logs/Test/Test-WhisperKey-2026.10.22_10-01-17--0300.xcresult`.
-  A prior loaded run exposed a 100 ms test-only scheduling assumption; the test
-  now polls with a one-second bound and its focused rerun plus the full gate pass.
-- Conditional static-site gate: PASS, 41/41. No site/publication file changed.
-- Isolated signed candidate: BUILD PASS; process launch PASS and clean TERM exit
-  PASS. `/Applications/Resenha.app` was not copied over or replaced and was
-  reopened afterward from its installed path.
-- Physical microphone corpus: **NOT RUN — unmet gate**. The owner was away, so
-  no spoken input existed to produce three runs, 100 acoustic provisional
-  revisions or 30 finalizations. Consequently there are no physical
-  completed-WAV/rolling comparisons, stage percentiles, cold/warm, CPU, RAM or
-  thermal measurements.
+- Native gate on the exact clean SHA: PASS, 201/201, result
+  `build/Logs/Test/Test-WhisperKey-2026.10.22_12-02-53--0300.xcresult`.
+  An immediately preceding attempt compiled but ran zero tests because
+  LaunchServices refused the XCTest host while installed Resenha PID `66936`
+  held the same bundle identity. After the owner-authorized graceful TERM, the
+  exact command passed; the installed bundle was neither deleted nor replaced.
+- Conditional static-site gate on the exact SHA: PASS, 41/41 through
+  `mac-gate node Scripts/site.test.mjs`.
+- Isolated signed candidate: BUILD PASS through `mac-gate`; strict deep-sign
+  verification PASS. Static source/privacy scans found the SHIP authority,
+  consent and revocation paths expected by the current task.
+- Physical microphone corpus and completed-WAV/rolling comparison: **NOT RUN —
+  unmet gate**. There are no current-candidate stage percentiles, cold/warm,
+  CPU, RAM or thermal measurements.
 - TextEdit/browser focus, clipboard, keyboard, spoken VoiceOver, increased
-  contrast and reduced-motion observation: **NOT RUN — unmet gate**. Unit and
-  fixture coverage is not substituted for these observations.
-- Synthetic remote run: **NOT RUN**. No call, credential, paid API or provider
-  request was used; the prior synthetic key was revoked. This observation
-  belongs only to the superseded closed candidate.
+  contrast and reduced-motion observation: **NOT RUN — unmet gate**.
+- Personal provider call: **NOT RUN**. No credential was entered and no paid or
+  remote API request was made while preparing this candidate.
 
-Result: the historical candidate was attributable, signed and green, but the
-SHIP authority source change invalidates it. A new exact candidate, gates and
-physical evidence are required. No claim of iPhone-like measured prediction
-speed is approved from this evidence.
+Commits `33de02a` and `b9e5ea7` remain superseded historical evidence for the
+former closed-authority candidate and do not support this SHIP result. No claim
+of iPhone-like measured prediction speed is approved from this baseline.
