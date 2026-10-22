@@ -97,15 +97,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         AudioRecorder.cleanupStaleRecordings()
-        contextualStore.onMutation = { [weak contextualPolicy] in
+        contextualStore.onMutation = { [weak self, weak contextualPolicy] in
             contextualPolicy?.invalidate(.storeMutated)
+            Task { @MainActor in self?.coordinator?.continuousContextModeChanged() }
         }
         _ = contextualDiagnosticController
         transcriptHistory.onChange = { [weak self] items, storageAvailable in
             self?.menuController.updateRecentTranscripts(items, storageAvailable: storageAvailable)
         }
         preferences.onHistoryChange = { [weak self] enabled in self?.historyPreferenceChanged(enabled) }
-        preferences.onLanguageChange = { [weak self] language in self?.menuController.updateLanguage(language) }
+        preferences.onLanguageChange = { [weak self] language in
+            self?.coordinator?.continuousContextModeChanged()
+            self?.menuController.updateLanguage(language)
+        }
         hotkey.configure(shortcut: preferences.shortcut)
         preferences.onShortcutChange = { [weak self] shortcut in
             guard let self else { return }
@@ -125,6 +129,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 self?.recordTranscript(text)
             },
             onFailure: { _ in },
+            continuousContextEnabled: { false },
+            continuousContextSessionFactory: { ContinuousContextSession() },
+            onContinuousPreview: { _ in },
             outputSink: TextInjector(),
             contextualResolver: contextualResolver,
             contextualTokenSource: DictationCoordinator.productionContextualTokenSource(

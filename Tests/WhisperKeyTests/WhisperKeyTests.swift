@@ -4503,6 +4503,7 @@ extension ContextualTransportCorpusTests {
 private final class CoordinatorPipelineProbe: DictationOutputSink {
     enum Event: Equatable {
         case providerInput(String)
+        case preview(String?)
         case staged(String)
         case history(String)
         case inserted
@@ -4603,13 +4604,15 @@ final class ContextualCoordinatorTests: XCTestCase {
         let probe: CoordinatorPipelineProbe
         let provider: ControlledCoordinatorProvider
         let coordinator: DictationCoordinator
+        let continuousSession: ContinuousContextSession?
     }
 
     private func makeHarness(
         providerMode: ControlledCoordinatorProvider.Mode,
         store: ContextualCorrectionStore? = nil,
         policy: ContextualCorrectionPolicy? = nil,
-        scope: ContextualTransportScope = .testDouble
+        scope: ContextualTransportScope = .testDouble,
+        continuousEnabled: Bool = false
     ) -> Harness {
         let actualPolicy = policy ?? ContextualCorrectionPolicy()
         let actualStore = store ?? ContextualCorrectionStore(
@@ -4625,6 +4628,7 @@ final class ContextualCoordinatorTests: XCTestCase {
         actualStore.onMutation = { actualPolicy.invalidate(.storeMutated) }
         let probe = CoordinatorPipelineProbe()
         let provider = ControlledCoordinatorProvider(mode: providerMode, probe: probe)
+        let continuousSession = continuousEnabled ? ContinuousContextSession() : nil
         let time = ContinuousContextualTime()
         let resolver = ContextualCorrectionResolver(
             store: actualStore,
@@ -4640,6 +4644,11 @@ final class ContextualCoordinatorTests: XCTestCase {
             soundsEnabled: { false },
             language: { .portuguese },
             onTranscript: { probe.events.append(.history($0)) },
+            continuousContextEnabled: { continuousEnabled },
+            continuousContextSessionFactory: { continuousSession ?? ContinuousContextSession() },
+            onContinuousPreview: {
+                if continuousEnabled { probe.events.append(.preview($0?.sourceText)) }
+            },
             outputSink: probe,
             contextualResolver: resolver,
             contextualTokenSource: { _ in actualPolicy.issueToken(scope: scope) },
@@ -4651,7 +4660,8 @@ final class ContextualCoordinatorTests: XCTestCase {
             policy: actualPolicy,
             probe: probe,
             provider: provider,
-            coordinator: coordinator
+            coordinator: coordinator,
+            continuousSession: continuousSession
         )
     }
 
@@ -4659,6 +4669,117 @@ final class ContextualCoordinatorTests: XCTestCase {
         coordinator.transition(to: .recording)
         coordinator.transition(to: .transcribing)
         return coordinator.attemptID
+    }
+
+    private func beginContinuous(_ harness: Harness) -> UUID {
+        harness.coordinator.transition(to: .recording)
+        XCTAssertTrue(harness.coordinator.beginContinuousContextForActiveAttempt())
+        return harness.coordinator.attemptID
+    }
+
+    private func emitPartial(
+        _ text: String,
+        to harness: Harness,
+        attemptID: UUID,
+        snapshotID: UInt64 = 1
+    ) {
+        harness.coordinator.receiveContinuousHypothesis(
+            .init(
+                snapshotID: snapshotID,
+                sampleRange: 0..<8_000,
+                capturedAt: 1,
+                candidateAt: 2,
+                text: text,
+                isStale: false
+            ),
+            attemptID: attemptID,
+            session: harness.continuousSession
+        )
+    }
+
+    func testContinuousCoordinatorPreviewsLocallyThenCommitsAuthoritativeFinalOnce() async throws {
+        let harness = makeHarness(providerMode: .replace, scope: .disabled, continuousEnabled: true)
+        let attempt = beginContinuous(harness)
+        emitPartial("A COIS Energia chegou", to: harness, attemptID: attempt)
+        XCTAssertEqual(harness.probe.events, [.preview("A COIS Energia chegou")])
+        harness.coordinator.transition(to: .transcribing)
+
+        try await harness.coordinator.finishTranscription(
+            "A COESA Energia chegou", attemptID: attempt, language: .portuguese
+        )
+
+        XCTAssertEqual(harness.probe.events, [
+            .preview("A COIS Energia chegou"),
+            .staged("A COESA Energia chegou"),
+            .history("A COESA Energia chegou"),
+            .inserted,
+            .preview(nil),
+            .completed("A COESA Energia chegou")
+        ])
+        XCTAssertEqual(harness.continuousSession?.state, .committed)
+    }
+
+    func testContinuousCoordinatorRejectsDuplicateFinalAndLatePreview() async throws {
+        let harness = makeHarness(providerMode: .replace, scope: .disabled, continuousEnabled: true)
+        let attempt = beginContinuous(harness)
+        emitPartial("texto parcial", to: harness, attemptID: attempt)
+        harness.coordinator.transition(to: .transcribing)
+
+        try await harness.coordinator.finishTranscription(
+            "texto final", attemptID: attempt, language: .portuguese
+        )
+        emitPartial("texto atrasado", to: harness, attemptID: attempt, snapshotID: 2)
+        try await harness.coordinator.finishTranscription(
+            "duplicado", attemptID: attempt, language: .portuguese
+        )
+
+        XCTAssertEqual(harness.probe.events.filter {
+            if case .staged = $0 { true } else { false }
+        }, [.staged("texto final")])
+        XCTAssertFalse(harness.probe.events.contains(.preview("texto atrasado")))
+    }
+
+    func testContinuousCoordinatorModeChangeClearsPreviewWithoutBlockingFinalFallback() async throws {
+        let harness = makeHarness(providerMode: .replace, scope: .disabled, continuousEnabled: true)
+        let attempt = beginContinuous(harness)
+        emitPartial("texto parcial", to: harness, attemptID: attempt)
+        harness.coordinator.continuousContextModeChanged()
+        emitPartial("texto atrasado", to: harness, attemptID: attempt, snapshotID: 2)
+        harness.coordinator.transition(to: .transcribing)
+
+        try await harness.coordinator.finishTranscription(
+            "texto final local", attemptID: attempt, language: .portuguese
+        )
+
+        XCTAssertEqual(harness.probe.events, [
+            .preview("texto parcial"),
+            .preview(nil),
+            .staged("texto final local"),
+            .history("texto final local"),
+            .inserted,
+            .preview(nil),
+            .completed("texto final local")
+        ])
+        XCTAssertEqual(harness.continuousSession?.state, .cancelled)
+    }
+
+    func testContinuousCoordinatorFeatureOffPreservesExistingFinalPath() async throws {
+        let harness = makeHarness(providerMode: .replace, scope: .disabled)
+        harness.coordinator.transition(to: .recording)
+        XCTAssertFalse(harness.coordinator.beginContinuousContextForActiveAttempt())
+        harness.coordinator.transition(to: .transcribing)
+        let attempt = harness.coordinator.attemptID
+
+        try await harness.coordinator.finishTranscription(
+            "texto local", attemptID: attempt, language: .portuguese
+        )
+
+        XCTAssertEqual(harness.probe.events, [
+            .staged("texto local"),
+            .history("texto local"),
+            .inserted,
+            .completed("texto local")
+        ])
     }
 
     func testCoordinatorUsesRealResolverAndOneResolvedStringForClipboardHistoryAndCompletion() async throws {
@@ -4878,16 +4999,20 @@ final class ContextualCoordinatorTests: XCTestCase {
     }
 
     func testCoordinatorProviderFailureFlowsOriginalExactlyOnce() async throws {
-        let harness = makeHarness(providerMode: .failure)
-        let attempt = begin(harness.coordinator)
+        let harness = makeHarness(providerMode: .failure, continuousEnabled: true)
+        let attempt = beginContinuous(harness)
+        emitPartial("Reservei um rosto", to: harness, attemptID: attempt)
+        harness.coordinator.transition(to: .transcribing)
         try await harness.coordinator.finishTranscription(
             "Reservei um rosto.", attemptID: attempt, language: .portuguese
         )
         XCTAssertEqual(harness.probe.events, [
+            .preview("Reservei um rosto"),
             .providerInput("Reservei um rosto."),
             .staged("Reservei um rosto."),
             .history("Reservei um rosto."),
             .inserted,
+            .preview(nil),
             .completed("Reservei um rosto.")
         ])
     }
