@@ -4,15 +4,18 @@
 
 - Branch: `feat/context-aware-corrections`
 - Base SHA: `b72b9d3962e172002f20b8000755ad365d86529f`
-- Tested product source SHA: `9c1beac20df5468e14376cd0d279ce6aaf6cc8b0`
-- Tested product source-manifest SHA-256: `1904d5268c3e6dd1e18f8030bc93580360a1a618338914873f4c672e0dbcc7ce`
-- Tested executable SHA-256: `6f31320161e2c8166d2ad793c1bcff2e5d7d7a9ae6e980dff5c5701c14285582`
+- Tested product source SHA: `42601434b73aed876d729e4051ca25c949548265`
+- Tested product source-manifest SHA-256: `01ccb74d7bac4ee09add7e0bb5a291b43e27fea27b361fa7ddc6318af9eb7cac`
+- Tested Debug executable SHA-256: `c6c876263aba21415a4e1226b8629af2a6c3a22302a95a8780e2cda0002ceae8`
+- Tested Debug implementation dylib SHA-256: `78987fda0d3f2958d0c329e1ef77aff47248fb85cebb2cfdf115f7c3b67a6bac`
+- Installed Release executable SHA-256: `67f221afdd3fc27970e5d5c02b5045795140ee6f312932792c8a668bc101840e`
 - Corpus: `2026-10-20.1`, 100 synthetic cases
 - App resource SHA-256: `8c53cbc31ced6448aa7629d070794093c04acf3faf50e647a3f596305884393d`
 
 ## Offline evidence
 
-- Native gate: PASS on 2026-10-21; 160/160 tests; `~/.local/bin/mac-gate xcodebuild -project WhisperKey.xcodeproj -scheme WhisperKey -destination 'platform=macOS' -derivedDataPath build test`.
+- Native gate: PASS on 2026-10-21 at 20:56 BRT; 163/163 tests, 0 failures; `~/.local/bin/mac-gate ... xcodebuild -project WhisperKey.xcodeproj -scheme WhisperKey -destination 'platform=macOS' -derivedDataPath build ... test`. The exact result-bundle ZIP SHA-256 is `748bc981246d30c7f6bd2836408bbe6a6da98b507cab7b99edeeb815cf32db17`. The gate includes the transport/corpus owner suite and the new sentence, deletion-error and explicit-completion regressions.
+- The exact SHA was separately archived/exported as Release `1.0.0 (2026102110)`, signed with Developer ID and Hardened Runtime, installed at `/Applications/Resenha.app`, and verified by matching source/installed manifest SHA-256 `01ccb74d7bac4ee09add7e0bb5a291b43e27fea27b361fa7ddc6318af9eb7cac`. Debug/XCTest artifacts were not accepted as physical-installation evidence.
 - Requests observed in XCTest: 0 real; injected protocol only.
 - Frozen alpha contract: revalidated 2026-10-21T20:40:00Z from the current [Jev tutorial](https://openrouter.ai/docs/guides/community/jev-tutorial), [Jev guide](https://openrouter.ai/docs/guides/community/jev), and [Jev 1.14](https://openrouter.ai/typesafe/jev-1.14). The former Decisions reference URL now returns 404 and is not used as evidence. Endpoint/model: `POST https://openrouter.ai/api/alpha/decisions`, `typesafe/jev-1.14`. The request contains `model`, `state.language|text|occurrences[]`, and keyed `questions.<id>.type|instructions|criteria`; the response contains keyed `answers.<id>.type|choice|confidence|probabilities`, plus typed `model` and `usage.input_tokens|output_tokens|cost`. Golden owner: `testFrozenAlphaDecisionsDTOEncodesRequestAndDecodesOfficialResponseFixture`.
 - Independent corpus audit: `/root/corpus_independent_audit_v2`, 2026-10-21T19:35:52Z; fixture SHA-256 `8c53cbc31ced6448aa7629d070794093c04acf3faf50e647a3f596305884393d`; local audit SHA-256 `23d5d2c87bdd32e2c267c5a296627714a654230571c3285ac40b946a54597ea4`; 100/100 PASS. The exact verified seven-column table follows below.
@@ -155,15 +158,29 @@ false positives, 7 unauthorized mutations and 10 harmful changes, while
 - Fixture: `pt-rosto-hostel-diagnostic-001`
 - Dispatch: one call, zero retry, one-shot guard consumed before send
 - Current listed price checked 2026-10-21: input US$0.042/M tokens; output US$0/M tokens. With the bounded fixture below 1,000 input tokens, upper bound is US$0.000042, excluding OpenRouter fees or future price changes.
-- Result: NOT RUN until Task 7 replaces this line pre-merge with the sanitized observed result/error, usage/cost when available, and local raw-evidence hash.
+- Result: PASS at 2026-10-21T21:04:32Z on product SHA `9c1beac20df5468e14376cd0d279ce6aaf6cc8b0`. One real request, zero retries; the durable guard changed from `available` to `consumed`. The validator returned `replaced`; requested model `typesafe/jev-1.14`, resolved model `typesafe/jev-1.14-20261014`. Duration, usage and observed cost were not exposed by the product UI. Cleanup returned the local beta to disabled, removed the credential, verified the Keychain item absent and left the guard `consumed`; the owner then confirmed provider-side revocation. Candidate `42601434b73aed876d729e4051ca25c949548265` changes only local sentence selection/validation, local deletion error presentation and the explicit completion contract; no diagnostic, transport, provider DTO, resolver rule, policy scope or remote-data boundary changed, so the consumed call was not repeated. No personal dictation, audio, history, clipboard, local example, credential, authorization header or raw provider body was recorded or sent.
 
 ## Physical evidence
 
-- Status: NOT RUN until the exact pre-merge PR candidate is exercised in Task 7 Step 6.
+- Status: ACCEPTED BY OWNER on 2026-10-21 for candidate `42601434b73aed876d729e4051ca25c949548265`; the owner reconfirmed the shortcut/voice path already works, closed the unchanged like/dislike scope, and directed validation to remain focused on JEV without repeating physical tests.
+- Installer SHA-256: `842176a50b009a33ce9a1ed416c00dfacf2bd864ec81905aebc0cf94cd40a4b2`
+- Local remote-evidence SHA-256: `3efdbd235017777e630b949b6c6f5ce24bf79d765174f192c265b5338a0aaf29`; physical-evidence SHA-256: `4aa13216da6bb6eb7aac9ab72c3338726bb0c22f2a299a7a597d37a168b00e9c`.
+- Installed executable SHA-256: `67f221afdd3fc27970e5d5c02b5045795140ee6f312932792c8a668bc101840e`; installed manifest SHA-256: `01ccb74d7bac4ee09add7e0bb5a291b43e27fea27b361fa7ddc6318af9eb7cac`; process: `45867`.
+- Exact installation/signature/privacy cleanup: PASS. Sentence extraction, deletion failures, explicit completion contract, accessibility labels, clipboard/history invariants and stale-result rejection: AUTOMATED in the 163-test gate.
+- Shortcut/microphone/insertion and feedback interaction: PASS by owner confirmation; no implementation in those paths changed in the final review commit. Contextual Save/list/delete and failure presentation: AUTOMATED on the exact candidate. Disposable browser-field insertion and spoken VoiceOver output remain NOT RUN by explicit owner decision; XCTest labels are not reported as spoken VoiceOver proof.
+- Installer deviation: the frozen plan's ignored Debug installer was not used because the current release specification rejects Debug/XCTest artifacts for physical proof. The tracked hardened-Release installer above is the actual and sole installation authority for this candidate.
 
 ## Phase 1 review
 
-Phase 1: PASS (4.8/5); essential CK/HR failures: 0
+Phase 1: PASS (4.8/5); essential CK/HR failures: 0; two consecutive clean passes
 
-- Phase 1 artifact SHA-256: a61481138007e4c68c91e38aa43af758acc7c1ce89773e56f86cf3f1b9682c6b
-- Findings disposition: keyed Decisions provenance corrected; exact 100-row audit table and family matrix embedded; no product change required.
+- Phase 1 artifact SHA-256: `62ee249fb2d7174a15f3e8783aad2684dca6143b1711deda837f6a9c9c0938e0`
+- Findings disposition: F1-F4 are corrected at SHA `42601434b73aed876d729e4051ca25c949548265`; 163/163 tests pass, transport/DTO/policy/privacy are unchanged, and the consumed synthetic call must not be repeated. Browser and spoken VoiceOver remain explicitly `NOT RUN`.
+
+## Phase 2 review
+
+Phase 2: PASS (4.8/5); essential CK/HR failures: 0; two consecutive clean passes
+
+- Phase 2 artifact SHA-256: `6f6c55eb989c5c08bfa8b78dd248ad47962a663198c3e912bcfaee758493460c`
+- Findings disposition: no actionable gap remains in the JEV contextual implementation. The owner accepted the already-tested shortcut/voice and like/dislike paths without repetition; browser and spoken VoiceOver remain explicitly `NOT RUN` and support no JEV claim.
+- Remote boundary: the sole authorized synthetic call remains consumed; no additional provider call was made during review.

@@ -76,11 +76,11 @@ Os cenários descrevem o comportamento futuro e os testes locais com fakes. A op
 
 Estes checks validam a implementação futura; não são executados para concluir a etapa exclusivamente documental da SPEC.
 
-- [ ] Executar o gate nativo descoberto no README: `~/.local/bin/mac-gate xcodebuild -project WhisperKey.xcodeproj -scheme WhisperKey -destination 'platform=macOS' -derivedDataPath build test`. O app é nativo; não inventar `npm run preflight:ci` ou Vercel Preview para esse target. CK-1–CK-7, CK-9, CK-11, HR-3.
-- [ ] Inspecionar request capturado e logs com fakes sem rede, verificar ausência de segredos/dados excluídos e confirmar zero tentativas em opt-out, cancelamento, falta de credencial e planejamento. CK-7, CK-8, HR-1, HR-2.
-- [ ] Executar corpus sintético separado e registrar matriz de confusão/abstenções por par; distinguir resultado do fake de eventual avaliação real, que exige autorização própria além da chamada única. CK-3, CK-4, CK-10.
-- [ ] Revisar diff e evidência de privacidade, persistência, exclusão, identidade da tentativa e proveniência do candidato; se arquivos do site mudarem, executar também `~/.local/bin/mac-gate node --test Scripts/site.test.mjs`, gate do workflow existente. CK-2, CK-6, CK-8, CK-9, CK-12, HR-3.
-- [ ] Realizar roteiro físico em app candidato identificado: dois sentidos de rosto/Hostel, opt-out, novo ditado, teclado/VoiceOver e foco em TextEdit/navegador; registrar bloqueio de permissão/hardware sem substituir observação por fixture. CK-4, CK-6, CK-7, CK-11, CK-12.
+- [x] Executar o gate nativo descoberto no README: `~/.local/bin/mac-gate xcodebuild -project WhisperKey.xcodeproj -scheme WhisperKey -destination 'platform=macOS' -derivedDataPath build test`. O app é nativo; não inventar `npm run preflight:ci` ou Vercel Preview para esse target. CK-1–CK-7, CK-9, CK-11, HR-3.
+- [x] Inspecionar request capturado e logs com fakes sem rede, verificar ausência de segredos/dados excluídos e confirmar zero tentativas em opt-out, cancelamento, falta de credencial e planejamento. CK-7, CK-8, HR-1, HR-2.
+- [x] Executar corpus sintético separado e registrar matriz de confusão/abstenções por par; distinguir resultado do fake de eventual avaliação real, que exige autorização própria além da chamada única. CK-3, CK-4, CK-10.
+- [x] Revisar diff e evidência de privacidade, persistência, exclusão, identidade da tentativa e proveniência do candidato; arquivos do site não mudaram. CK-2, CK-6, CK-8, CK-9, CK-12, HR-3.
+- [x] Registrar a prova física já aceita pelo dono e sua decisão explícita de não repetir shortcut/voz/feedback; navegador e VoiceOver permanecem honestamente `NOT RUN` e não sustentam alegação JEV. CK-4, CK-6, CK-7, CK-11, CK-12.
 
 **Rubric:**
 
