@@ -2773,6 +2773,7 @@ final class WhisperKeyTests: XCTestCase {
         private var retainedRequestText: String?
         private var retainedRequestProbe: RevisionLifetimeProbe?
         private var cancellationCountStorage = 0
+        private var decisionCountStorage = 0
 
         init(requestProbe: RevisionLifetimeProbe) {
             retainedRequestProbe = requestProbe
@@ -2788,6 +2789,7 @@ final class WhisperKeyTests: XCTestCase {
                 try await withCheckedThrowingContinuation { continuation in
                     var startWaiters: [CheckedContinuation<Void, Never>] = []
                     let cancelImmediately = lock.withLock {
+                        decisionCountStorage += 1
                         retainedRequestText = sentence
                         startWaiters = self.startWaiters
                         self.startWaiters.removeAll()
@@ -2830,6 +2832,7 @@ final class WhisperKeyTests: XCTestCase {
         }
 
         var cancellationCount: Int { lock.withLock { cancellationCountStorage } }
+        var decisionCount: Int { lock.withLock { decisionCountStorage } }
         var capturedRequestText: String? { lock.withLock { retainedRequestText } }
 
         private func cancelRequest() {
@@ -3049,6 +3052,62 @@ final class WhisperKeyTests: XCTestCase {
         await Task.yield()
         XCTAssertNil(taskProbe.value)
         XCTAssertNil(provider.value)
+    }
+
+    @MainActor
+    func testRevisionBoundLoopAuthorityInvalidationCancelsOpenedProviderAndDiscardsResponse() async throws {
+        let uptime = RevisionUptime()
+        let session = ContinuousContextSession(now: { uptime.now() })
+        XCTAssertTrue(session.start(attemptID: UUID(), language: "pt"))
+        _ = session.ingest(SessionEvent(
+            snapshotID: 1, sampleRange: 0..<100, capturedAt: 0,
+            candidateAt: 0, text: "Reservei um rosto."
+        ))
+        let snapshot = ContextualCorrectionStoreSnapshot(
+            examples: [revisionExample], generation: 7, health: .healthy
+        )
+        let policy = ContextualCorrectionPolicy()
+        let provider = RevisionCancellationProvider(requestProbe: RevisionLifetimeProbe())
+        let loop = RevisionBoundJevLoop(
+            session: session,
+            provider: provider,
+            time: ManualContextualTime(),
+            storeSnapshot: { snapshot },
+            policyGeneration: { policy.generation },
+            policy: policy
+        )
+        let token = policy.issueToken(scope: .personalDictation)
+        let task = Task {
+            await loop.evaluateNext(scope: token.scope, policyToken: token)
+        }
+        await provider.waitUntilStarted()
+
+        policy.invalidate(.authorityChanged)
+        let completed = await task.value
+        let result = try XCTUnwrap(completed)
+        XCTAssertEqual(result.outcome.category, .abstained)
+        XCTAssertEqual(result.text, "Reservei um rosto.")
+        XCTAssertEqual(provider.cancellationCount, 1)
+        XCTAssertFalse(provider.completeLate(with: revisionReceipt()))
+
+        uptime.set(milliseconds: 1_000)
+        _ = session.ingest(SessionEvent(
+            snapshotID: 2, sampleRange: 0..<200, capturedAt: 0.5,
+            candidateAt: 0.5, text: "Reservei outro rosto."
+        ))
+        let staleResult = await loop.evaluateNext(scope: token.scope, policyToken: token)
+        XCTAssertEqual(staleResult?.outcome.category, .abstained)
+        XCTAssertEqual(provider.cancellationCount, 1)
+        XCTAssertEqual(provider.decisionCount, 1)
+
+        uptime.set(milliseconds: 2_000)
+        _ = session.ingest(SessionEvent(
+            snapshotID: 3, sampleRange: 0..<300, capturedAt: 1.5,
+            candidateAt: 1.5, text: "Reservei mais um rosto."
+        ))
+        let unbound = await loop.evaluateNext(scope: .personalDictation)
+        XCTAssertEqual(unbound?.outcome.category, .abstained)
+        XCTAssertEqual(provider.decisionCount, 1)
     }
 
     @MainActor
@@ -5744,7 +5803,8 @@ final class ContextualCoordinatorTests: XCTestCase {
                     provider: provider,
                     time: time,
                     storeSnapshot: { actualStore.snapshot },
-                    policyGeneration: { actualPolicy.generation }
+                    policyGeneration: { actualPolicy.generation },
+                    policy: actualPolicy
                 )
             },
             onContinuousContextualPreview: { _, _, text in

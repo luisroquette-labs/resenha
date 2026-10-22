@@ -176,7 +176,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     provider: self.personalClient,
                     time: self.contextualTimeComposition.shared,
                     storeSnapshot: { [contextualStore] in contextualStore.snapshot },
-                    policyGeneration: { [contextualPolicy] in contextualPolicy.generation }
+                    policyGeneration: { [contextualPolicy] in contextualPolicy.generation },
+                    policy: self.contextualPolicy
                 )
             },
             onContinuousContextualPreview: { [weak self] attemptID, revision, text in

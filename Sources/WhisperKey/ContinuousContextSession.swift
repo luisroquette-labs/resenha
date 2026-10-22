@@ -495,12 +495,35 @@ private actor RevisionBoundDecisionRace {
 }
 
 @MainActor
+private final class RevisionBoundTaskCancellation {
+    private var cancellation: (@Sendable () -> Void)?
+    private var cancelled = false
+
+    func install(_ cancellation: @escaping @Sendable () -> Void) {
+        guard !cancelled else {
+            cancellation()
+            return
+        }
+        self.cancellation = cancellation
+    }
+
+    func cancel() {
+        guard !cancelled else { return }
+        cancelled = true
+        let cancellation = cancellation
+        self.cancellation = nil
+        cancellation?()
+    }
+}
+
+@MainActor
 final class RevisionBoundJevLoop {
     private let session: ContinuousContextSession
     private let provider: any ContextualDecisionProvider
     private let time: any ContextualMonotonicTime
     private let storeSnapshot: @MainActor @Sendable () -> ContextualCorrectionStoreSnapshot
     private let policyGeneration: @MainActor @Sendable () -> UInt64
+    private let policy: ContextualCorrectionPolicy?
     private let validator = ContextualDecisionValidator()
 
     init(
@@ -508,17 +531,22 @@ final class RevisionBoundJevLoop {
         provider: any ContextualDecisionProvider,
         time: any ContextualMonotonicTime,
         storeSnapshot: @escaping @MainActor @Sendable () -> ContextualCorrectionStoreSnapshot,
-        policyGeneration: @escaping @MainActor @Sendable () -> UInt64
+        policyGeneration: @escaping @MainActor @Sendable () -> UInt64,
+        policy: ContextualCorrectionPolicy? = nil
     ) {
         self.session = session
         self.provider = provider
         self.time = time
         self.storeSnapshot = storeSnapshot
         self.policyGeneration = policyGeneration
+        self.policy = policy
     }
 
     @discardableResult
-    func evaluateNext(scope: ContextualTransportScope) async -> RevisionBoundContextualResult? {
+    func evaluateNext(
+        scope: ContextualTransportScope,
+        policyToken: ContextualPolicyToken? = nil
+    ) async -> RevisionBoundContextualResult? {
         guard let work = session.takeNextWork() else { return nil }
         let snapshot = storeSnapshot()
         let policyAtStart = policyGeneration()
@@ -533,7 +561,12 @@ final class RevisionBoundJevLoop {
             outcome: .init(category: .abstained, decisions: [])
         )
 
-        guard (scope == .testDouble || scope == .personalDictation),
+        if let policyToken,
+           policyToken.scope != scope || policy?.isCurrent(policyToken) != true {
+            _ = session.applyContextualResult(abstained, for: work)
+            return abstained
+        }
+        guard (scope == .testDouble || (scope == .personalDictation && policyToken != nil)),
               snapshot.health == .healthy,
               let input = ContextualCorrectionResolver.validatedDecisionInput(
                 examples: snapshot.examples,
@@ -558,6 +591,17 @@ final class RevisionBoundJevLoop {
             deadline: .init(offset: time.now().offset + .milliseconds(200))
         )
         let race = RevisionBoundDecisionRace()
+        let policyCancellation = RevisionBoundTaskCancellation()
+        if let policyToken {
+            guard let policy,
+                  policy.register(policyToken, cancel: { policyCancellation.cancel() }) else {
+                _ = session.applyContextualResult(abstained, for: work)
+                return abstained
+            }
+        }
+        defer {
+            if let policyToken { policy?.finish(policyToken) }
+        }
         let provider = provider
         let providerTask = Task {
             do {
@@ -583,6 +627,7 @@ final class RevisionBoundJevLoop {
             timeoutTask.cancel()
             Task { await race.finish(nil) }
         }
+        policyCancellation.install(cancelWork)
         let ownsWork = session.registerCancellation(for: work, cancellation: cancelWork)
         defer { session.unregisterCancellation(for: work) }
         if !ownsWork { cancelWork() }

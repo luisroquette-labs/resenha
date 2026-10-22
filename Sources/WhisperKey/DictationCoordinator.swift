@@ -572,7 +572,7 @@ final class DictationCoordinator {
                       session === self.continuousSession,
                       self.attemptID == scheduledAttemptID,
                       self.phase == .recording else { return }
-                if let result = await loop.evaluateNext(scope: token.scope),
+                if let result = await loop.evaluateNext(scope: token.scope, policyToken: token),
                    result.outcome.category != .abstained,
                    session.contextualPreviewText == result.text,
                    self.continuousPreviewVisible() {
