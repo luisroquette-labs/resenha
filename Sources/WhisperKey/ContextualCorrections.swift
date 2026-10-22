@@ -798,7 +798,7 @@ final class ContextualCorrectionResolver: ContextualCorrectionResolverContract {
 
         let provider = provider
         let race = ContextualDecisionRace()
-        let providerTask = Task {
+        let providerTask = Task { [time] in
             do {
                 let receipt = try await provider.decide(
                     sentence: sentence,
@@ -806,7 +806,7 @@ final class ContextualCorrectionResolver: ContextualCorrectionResolverContract {
                     occurrences: occurrences,
                     deadline: deadline
                 )
-                await race.finish(.success(receipt))
+                await race.finish(time.now() < deadline ? .success(receipt) : nil)
             } catch {
                 await race.finish(.failure(error))
             }
@@ -838,8 +838,7 @@ final class ContextualCorrectionResolver: ContextualCorrectionResolverContract {
         guard currentSnapshot.health == .healthy,
               currentSnapshot.generation == storeSnapshot.generation,
               request.storeGenerationAtStart == storeGeneration(),
-              policy.isCurrent(request.policyToken),
-              time.now() < deadline else {
+              policy.isCurrent(request.policyToken) else {
             report(receipt, .discarded)
             return original
         }

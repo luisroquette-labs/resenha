@@ -610,7 +610,7 @@ final class RevisionBoundJevLoop {
             if let policyToken { policy?.finish(policyToken) }
         }
         let provider = provider
-        let providerTask = Task {
+        let providerTask = Task { [time] in
             do {
                 let receipt = try await provider.decide(
                     sentence: request.sentence,
@@ -618,7 +618,7 @@ final class RevisionBoundJevLoop {
                     occurrences: request.occurrences,
                     deadline: request.deadline
                 )
-                await race.finish(.success(receipt))
+                await race.finish(time.now() < request.deadline ? .success(receipt) : nil)
             } catch {
                 await race.finish(.failure(error))
             }
@@ -649,7 +649,6 @@ final class RevisionBoundJevLoop {
 
         guard let raced,
               case .success(let receipt) = raced,
-              time.now() < request.deadline,
               policyGeneration() == policyAtStart else {
             providerTask.cancel()
             _ = session.applyContextualResult(abstained, for: work)
