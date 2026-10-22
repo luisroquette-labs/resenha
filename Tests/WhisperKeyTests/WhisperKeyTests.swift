@@ -5024,6 +5024,262 @@ private struct ContinuousContextEventsFixture: Decodable {
     }
 }
 
+private struct ContinuousContextCorpusTrace: Codable, Equatable {
+    let caseID: String
+    let category: String
+    let revisionCount: Int
+    let noChangeRequired: Bool
+    let baselineMatchesReference: Bool
+    let mockedContextualMatchesReference: Bool
+    let contextualOutcome: String
+    let maximumScheduledWorkCount: Int
+    let simulatedDecisionOffsetMilliseconds: Int
+}
+
+private struct ContinuousContextCorpusReport: Codable, Equatable {
+    let schemaVersion: Int
+    let corpusVersion: String
+    let corpusSHA256: String
+    let generatedBy: String
+    let evidenceScope: String
+    let timeBasis: String
+    let remoteAuthority: String
+    let personalRemoteRequestCount: Int
+    let totalCases: Int
+    let contextualCases: Int
+    let controls: Int
+    let baselineErrors: Int
+    let mockedContextualErrors: Int
+    let improvements: Int
+    let regressions: Int
+    let controlMeaningChanges: Int
+    let timeoutFallbackErrors: Int
+    let featureOffErrors: Int
+    let maximumScheduledWorkCount: Int
+    let unsupportedProofClaims: [String]
+    let traces: [ContinuousContextCorpusTrace]
+}
+
+private enum ContinuousContextCorpusRunnerError: Error {
+    case invalidFixture
+    case invalidEvent
+    case missingWork
+    case rejectedMockResult
+}
+
+private final class ContinuousContextCorpusClock: @unchecked Sendable {
+    private let lock = NSLock()
+    private var seconds = 0.0
+
+    func now() -> TimeInterval { lock.withLock { seconds } }
+    func set(milliseconds: Int) { lock.withLock { seconds = Double(milliseconds) / 1_000 } }
+    func set(seconds: TimeInterval) { lock.withLock { self.seconds = seconds } }
+}
+
+private struct ContinuousContextCorpusEvent: ContinuousContextRollingEvent {
+    let snapshotID: UInt64
+    let sampleRange: Range<Int64>
+    let capturedAt: TimeInterval
+    let candidateAt: TimeInterval
+    let text: String
+    let isStale = false
+}
+
+private enum ContinuousContextCorpusRunner {
+    private enum Mode {
+        case localCandidate
+        case mockedContextual
+        case timeoutFallback
+        case featureOff
+    }
+
+    private struct Result {
+        let output: String
+        let outcome: String
+        let maximumScheduledWorkCount: Int
+        let simulatedDecisionOffsetMilliseconds: Int
+    }
+
+    static func run(bundle: Bundle) throws -> ContinuousContextCorpusReport {
+        let loaded = try ContinuousContextEventsFixture.load(bundle: bundle)
+        guard loaded.fixture.validate(),
+              SHA256.hash(data: loaded.data).map({ String(format: "%02x", $0) }).joined()
+                == ContinuousContextEventsFixture.frozenSHA256 else {
+            throw ContinuousContextCorpusRunnerError.invalidFixture
+        }
+
+        var traces: [ContinuousContextCorpusTrace] = []
+        var baselineErrors = 0
+        var mockedErrors = 0
+        var improvements = 0
+        var regressions = 0
+        var controlMeaningChanges = 0
+        var timeoutErrors = 0
+        var featureOffErrors = 0
+        var maximumScheduledWorkCount = 0
+
+        for item in loaded.fixture.cases.sorted(by: { $0.id < $1.id }) {
+            let baseline = try execute(item, mode: .localCandidate)
+            let mocked = try execute(item, mode: .mockedContextual)
+            let timeout = try execute(item, mode: .timeoutFallback)
+            let featureOff = try execute(item, mode: .featureOff)
+            let baselineMatches = baseline.output == item.expectedFinalReferenceText
+            let mockedMatches = mocked.output == item.expectedFinalReferenceText
+
+            baselineErrors += baselineMatches ? 0 : 1
+            mockedErrors += mockedMatches ? 0 : 1
+            improvements += !baselineMatches && mockedMatches ? 1 : 0
+            regressions += baselineMatches && !mockedMatches ? 1 : 0
+            controlMeaningChanges += item.noChangeRequired && mocked.output != baseline.output ? 1 : 0
+            timeoutErrors += timeout.output == item.expectedFinalReferenceText ? 0 : 1
+            featureOffErrors += featureOff.output == item.expectedFinalReferenceText ? 0 : 1
+            maximumScheduledWorkCount = max(
+                maximumScheduledWorkCount,
+                baseline.maximumScheduledWorkCount,
+                mocked.maximumScheduledWorkCount,
+                timeout.maximumScheduledWorkCount,
+                featureOff.maximumScheduledWorkCount
+            )
+            traces.append(.init(
+                caseID: item.id,
+                category: item.category,
+                revisionCount: item.sourceEvents.count,
+                noChangeRequired: item.noChangeRequired,
+                baselineMatchesReference: baselineMatches,
+                mockedContextualMatchesReference: mockedMatches,
+                contextualOutcome: mocked.outcome,
+                maximumScheduledWorkCount: mocked.maximumScheduledWorkCount,
+                simulatedDecisionOffsetMilliseconds: mocked.simulatedDecisionOffsetMilliseconds
+            ))
+        }
+
+        let report = ContinuousContextCorpusReport(
+            schemaVersion: 1,
+            corpusVersion: loaded.fixture.corpusVersion,
+            corpusSHA256: ContinuousContextEventsFixture.frozenSHA256,
+            generatedBy: "WhisperKeyTests.ContinuousContextCorpusRunner/v1",
+            evidenceScope: loaded.fixture.evidenceScope,
+            timeBasis: loaded.fixture.eventTimeBasis,
+            remoteAuthority: "closed",
+            personalRemoteRequestCount: 0,
+            totalCases: loaded.fixture.cases.count,
+            contextualCases: loaded.fixture.cases.filter { !$0.noChangeRequired }.count,
+            controls: loaded.fixture.cases.filter(\.noChangeRequired).count,
+            baselineErrors: baselineErrors,
+            mockedContextualErrors: mockedErrors,
+            improvements: improvements,
+            regressions: regressions,
+            controlMeaningChanges: controlMeaningChanges,
+            timeoutFallbackErrors: timeoutErrors,
+            featureOffErrors: featureOffErrors,
+            maximumScheduledWorkCount: maximumScheduledWorkCount,
+            unsupportedProofClaims: [
+                "acoustic_asr_accuracy",
+                "capture_to_candidate_latency",
+                "completed_wav_vs_rolling_asr",
+                "cold_warm_hardware_latency",
+                "cpu_memory_thermal"
+            ],
+            traces: traces
+        )
+        if let path = ProcessInfo.processInfo.environment["CONTINUOUS_CONTEXT_CORPUS_REPORT_PATH"] {
+            try JSONEncoder.sorted.encode(report).write(to: URL(fileURLWithPath: path), options: .atomic)
+        }
+        return report
+    }
+
+    private static func execute(
+        _ item: ContinuousContextEventsFixture.Case,
+        mode: Mode
+    ) throws -> Result {
+        let clock = ContinuousContextCorpusClock()
+        let session = ContinuousContextSession(now: { clock.now() })
+        let attemptID = UUID(uuidString: "71000000-0000-0000-0000-000000000001")!
+        guard session.start(attemptID: attemptID, language: "pt-BR") else {
+            throw ContinuousContextCorpusRunnerError.invalidEvent
+        }
+        var maximumScheduledWorkCount = 0
+        var finalEvent: ContinuousContextCorpusEvent?
+        for source in item.sourceEvents {
+            clock.set(milliseconds: source.logicalOffsetMilliseconds)
+            let event = ContinuousContextCorpusEvent(
+                snapshotID: UInt64(source.revision),
+                sampleRange: 0..<Int64(source.revision * 100),
+                capturedAt: clock.now(),
+                candidateAt: clock.now(),
+                text: source.text
+            )
+            guard session.ingest(event) != nil else {
+                throw ContinuousContextCorpusRunnerError.invalidEvent
+            }
+            finalEvent = event
+            maximumScheduledWorkCount = max(maximumScheduledWorkCount, session.scheduledWorkCount)
+        }
+        guard let finalEvent else { throw ContinuousContextCorpusRunnerError.invalidEvent }
+
+        let output: String
+        let outcome: String
+        switch mode {
+        case .mockedContextual:
+            guard item.allowedContextualAlternatives.contains(item.expectedFinalReferenceText),
+                  let work = session.takeNextWork() else {
+                throw ContinuousContextCorpusRunnerError.missingWork
+            }
+            let changed = work.sourceText != item.expectedFinalReferenceText
+            let result = RevisionBoundContextualResult(
+                identity: work.identity(policyGeneration: 1, storeGeneration: 1),
+                originalText: work.sourceText,
+                text: item.expectedFinalReferenceText,
+                outcome: .init(
+                    category: changed ? .replaced : .kept,
+                    decisions: [.init(
+                        questionID: "fixture-\(item.id)",
+                        choice: changed ? .replace : .keepOriginal,
+                        selectedProbability: 0.99,
+                        runnerUpProbability: 0.01
+                    )]
+                )
+            )
+            guard session.applyContextualResult(result, for: work) else {
+                throw ContinuousContextCorpusRunnerError.rejectedMockResult
+            }
+            output = session.contextualPreviewText ?? work.sourceText
+            outcome = changed ? "replaced" : "kept"
+        case .timeoutFallback:
+            guard let work = session.takeNextWork() else {
+                throw ContinuousContextCorpusRunnerError.missingWork
+            }
+            clock.set(seconds: work.expiresAt)
+            let fallback = RevisionBoundContextualResult(
+                identity: work.identity(policyGeneration: 1, storeGeneration: 1),
+                originalText: work.sourceText,
+                text: work.sourceText,
+                outcome: .init(category: .abstained, decisions: [])
+            )
+            guard !session.applyContextualResult(fallback, for: work) else {
+                throw ContinuousContextCorpusRunnerError.rejectedMockResult
+            }
+            output = work.sourceText
+            outcome = "timed_out_keep_original"
+        case .localCandidate:
+            output = finalEvent.text
+            outcome = "local_candidate"
+        case .featureOff:
+            session.cancel()
+            output = finalEvent.text
+            outcome = "feature_off_keep_original"
+        }
+
+        maximumScheduledWorkCount = max(maximumScheduledWorkCount, session.scheduledWorkCount)
+        return .init(
+            output: output,
+            outcome: outcome,
+            maximumScheduledWorkCount: maximumScheduledWorkCount,
+            simulatedDecisionOffsetMilliseconds: item.sourceEvents.last?.logicalOffsetMilliseconds ?? 0
+        )
+    }
+}
+
 private struct ContextualCorpusFixture: Decodable {
     struct Learning: Codable {
         let id: String
@@ -5147,6 +5403,99 @@ extension ContextualTransportCorpusTests {
         let appURL = try XCTUnwrap(Bundle.main.url(forResource: "continuous-context-events", withExtension: "json"))
         XCTAssertTrue(appURL.path.contains("Resenha.app/Contents/Resources"))
         XCTAssertEqual(try Data(contentsOf: appURL), loaded.data)
+    }
+
+    func testContinuousContextFrozenCorpusImprovesDeterministicOrchestrationWithoutControlRegressions() throws {
+        let bundle = Bundle(for: ContextualTransportCorpusTests.self)
+        let first = try ContinuousContextCorpusRunner.run(bundle: bundle)
+        let second = try ContinuousContextCorpusRunner.run(bundle: bundle)
+
+        XCTAssertEqual(first, second)
+        XCTAssertEqual(first.corpusSHA256, ContinuousContextEventsFixture.frozenSHA256)
+        XCTAssertEqual(first.totalCases, 53)
+        XCTAssertEqual(first.contextualCases, 43)
+        XCTAssertEqual(first.controls, 10)
+        XCTAssertEqual(first.baselineErrors, 35)
+        XCTAssertEqual(first.mockedContextualErrors, 0)
+        XCTAssertEqual(first.improvements, 35)
+        XCTAssertEqual(first.regressions, 0)
+        XCTAssertEqual(first.controlMeaningChanges, 0)
+        XCTAssertEqual(first.timeoutFallbackErrors, first.baselineErrors)
+        XCTAssertEqual(first.featureOffErrors, first.baselineErrors)
+        XCTAssertLessThanOrEqual(first.maximumScheduledWorkCount, 2)
+        XCTAssertEqual(first.remoteAuthority, "closed")
+        XCTAssertEqual(first.personalRemoteRequestCount, 0)
+    }
+
+    func testContinuousContextFrozenCorpusTraceIsSanitizedAndOrchestrationOnly() throws {
+        let bundle = Bundle(for: ContextualTransportCorpusTests.self)
+        let loaded = try ContinuousContextEventsFixture.load(bundle: bundle)
+        let report = try ContinuousContextCorpusRunner.run(bundle: bundle)
+        let encoded = try JSONEncoder.sorted.encode(report)
+        let json = try XCTUnwrap(String(data: encoded, encoding: .utf8))
+
+        XCTAssertEqual(report.evidenceScope, "semantic_orchestration_only")
+        XCTAssertEqual(report.timeBasis, "simulated_logical_milliseconds")
+        XCTAssertEqual(Set(report.traces.map(\.caseID)).count, loaded.fixture.cases.count)
+        XCTAssertEqual(Set(report.traces.map(\.category)), ContinuousContextEventsFixture.requiredCategories)
+        XCTAssertEqual(Set(report.unsupportedProofClaims), [
+            "acoustic_asr_accuracy",
+            "capture_to_candidate_latency",
+            "completed_wav_vs_rolling_asr",
+            "cold_warm_hardware_latency",
+            "cpu_memory_thermal"
+        ])
+        for item in loaded.fixture.cases {
+            XCTAssertFalse(json.contains(item.expectedCompletedRecordingText), item.id)
+            XCTAssertFalse(json.contains(item.expectedFinalReferenceText), item.id)
+            XCTAssertFalse(json.contains(item.sourceEvents[0].text), item.id)
+        }
+        for forbiddenKey in ["audio", "pcm", "transcript", "sourceText", "outputText", "sentence"] {
+            XCTAssertFalse(json.localizedCaseInsensitiveContains("\"\(forbiddenKey)\""), forbiddenKey)
+        }
+    }
+
+    func testContinuousContextCorpusQueueIsBoundedAndExpiredWorkFailsOpen() throws {
+        let clock = ContinuousContextCorpusClock()
+        let session = ContinuousContextSession(now: { clock.now() })
+        XCTAssertTrue(session.start(attemptID: UUID(), language: "pt-BR"))
+
+        for revision in 1...200 {
+            clock.set(milliseconds: revision * 10)
+            let event = ContinuousContextCorpusEvent(
+                snapshotID: UInt64(revision),
+                sampleRange: 0..<Int64(revision * 100),
+                capturedAt: clock.now(),
+                candidateAt: clock.now(),
+                text: "fixture-revision-\(revision)"
+            )
+            XCTAssertNotNil(session.ingest(event))
+            if revision == 1 { XCTAssertNotNil(session.takeNextWork()) }
+            XCTAssertLessThanOrEqual(session.scheduledWorkCount, 2)
+        }
+
+        XCTAssertEqual(session.scheduledWorkCount, 2)
+        clock.set(milliseconds: 2_500)
+        XCTAssertNil(session.takeNextWork(), "An active item and latest-only pending item must not create extra work")
+        session.cancel()
+        XCTAssertEqual(session.scheduledWorkCount, 0)
+        XCTAssertEqual(session.state, .cancelled)
+
+        let expiryClock = ContinuousContextCorpusClock()
+        let expirySession = ContinuousContextSession(now: { expiryClock.now() })
+        XCTAssertTrue(expirySession.start(attemptID: UUID(), language: "pt-BR"))
+        XCTAssertNotNil(expirySession.ingest(ContinuousContextCorpusEvent(
+            snapshotID: 1,
+            sampleRange: 0..<100,
+            capturedAt: 0,
+            candidateAt: 0,
+            text: "fixture-timeout"
+        )))
+        let work = try XCTUnwrap(expirySession.takeNextWork())
+        expiryClock.set(seconds: work.expiresAt)
+        XCTAssertFalse(expirySession.completeWork(work))
+        XCTAssertNil(expirySession.contextualPreviewText)
+        XCTAssertEqual(expirySession.scheduledWorkCount, 0)
     }
 
     func testCorpusSchemaFreezesLearningEvaluationAndDiagnosticIDs() throws {
