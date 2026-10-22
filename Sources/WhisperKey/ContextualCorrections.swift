@@ -1624,6 +1624,18 @@ enum ContextualCredentialError: Error, Equatable, Sendable {
     case keychainStatus(OSStatus)
 }
 
+enum OpenRouterCredential {
+    private static let prefix = "sk-or-v1-"
+
+    static func isValid(_ value: String) -> Bool {
+        guard value.hasPrefix(prefix) else { return false }
+        let suffix = value.dropFirst(prefix.count).utf8
+        return suffix.count == 64 && suffix.allSatisfy {
+            (48...57).contains($0) || (97...102).contains($0)
+        }
+    }
+}
+
 struct KeychainContextualCredentialStore: ContextualCredentialStore {
     let account: String
 
@@ -1632,7 +1644,7 @@ struct KeychainContextualCredentialStore: ContextualCredentialStore {
     }
 
     func save(_ value: String) throws {
-        guard !value.isEmpty, let data = value.data(using: .utf8) else {
+        guard OpenRouterCredential.isValid(value), let data = value.data(using: .utf8) else {
             throw ContextualCredentialError.invalidValue
         }
         let query = baseQuery
@@ -1659,7 +1671,7 @@ struct KeychainContextualCredentialStore: ContextualCredentialStore {
         guard status == errSecSuccess,
               let data = result as? Data,
               let value = String(data: data, encoding: .utf8),
-              !value.isEmpty else {
+              OpenRouterCredential.isValid(value) else {
             throw status == errSecSuccess
                 ? ContextualCredentialError.invalidValue
                 : ContextualCredentialError.keychainStatus(status)

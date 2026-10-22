@@ -4839,6 +4839,22 @@ final class ContextualTransportCorpusTests: XCTestCase {
         }
     }
 
+    func testOpenRouterCredentialRejectsMaskedAndMalformedValues() {
+        let valid = "sk-or-v1-" + String(repeating: "a", count: 64)
+        XCTAssertTrue(OpenRouterCredential.isValid(valid))
+        for invalid in [
+            "",
+            "candidate",
+            "sk-or-v1-" + String(repeating: "a", count: 39),
+            "sk-or-v1-" + String(repeating: "a", count: 65),
+            "sk-or-v1-" + String(repeating: "g", count: 64),
+            valid + " ",
+            String(repeating: "•", count: 148)
+        ] {
+            XCTAssertFalse(OpenRouterCredential.isValid(invalid), invalid)
+        }
+    }
+
     func testTransportRegistryIsolatesCancelledOldAndNewRequestsWithSameTaskIdentifier() {
         let oldSession = NSObject()
         let newSession = NSObject()
