@@ -7,12 +7,9 @@ protocol ContinuousContextRollingEvent: Sendable {
     var candidateAt: TimeInterval { get }
     var text: String { get }
     var isStale: Bool { get }
-    var isFinal: Bool { get }
 }
 
-extension RollingWhisperHypothesis: ContinuousContextRollingEvent {
-    var isFinal: Bool { false }
-}
+extension RollingWhisperHypothesis: ContinuousContextRollingEvent {}
 
 enum ContinuousContextSessionState: Equatable, Sendable {
     case idle
@@ -125,6 +122,7 @@ final class ContinuousContextSession: @unchecked Sendable {
         var nextWorkID: UInt64 = 1
         var lastSnapshotID: UInt64 = 0
         var lastSampleUpperBound: Int64 = 0
+        var lastSampleRange: Range<Int64>?
         var lastSourceText = ""
         var latestRevision: ContinuousContextRevision?
         var retainedContext = ""
@@ -163,21 +161,45 @@ final class ContinuousContextSession: @unchecked Sendable {
 
     @discardableResult
     func ingest(_ event: some ContinuousContextRollingEvent) -> ContinuousContextRevision? {
+        ingest(event, kind: .provisional, finalAttemptID: nil)
+    }
+
+    @discardableResult
+    func finalize(
+        _ event: some ContinuousContextRollingEvent,
+        attemptID: UUID
+    ) -> ContinuousContextRevision? {
+        ingest(event, kind: .final, finalAttemptID: attemptID)
+    }
+
+    private func ingest(
+        _ event: some ContinuousContextRollingEvent,
+        kind: ContinuousContextRevisionKind,
+        finalAttemptID: UUID?
+    ) -> ContinuousContextRevision? {
         lock.withLock {
             guard storage.state == .capturing,
                   !event.isStale,
                   !event.text.isEmpty,
-                  event.snapshotID > storage.lastSnapshotID,
                   event.sampleRange.lowerBound >= 0,
-                  event.sampleRange.upperBound > storage.lastSampleUpperBound,
                   event.capturedAt.isFinite,
                   event.candidateAt.isFinite,
                   event.candidateAt >= event.capturedAt,
                   let attemptID = storage.attemptID else { return nil }
 
+            let isNewerSnapshot = event.snapshotID > storage.lastSnapshotID
+                && event.sampleRange.upperBound > storage.lastSampleUpperBound
+            let matchesLatestFrames = kind == .final
+                && finalAttemptID == attemptID
+                && event.snapshotID >= storage.lastSnapshotID
+                && event.sampleRange == storage.lastSampleRange
+            guard isNewerSnapshot || matchesLatestFrames,
+                  kind != .final || finalAttemptID == attemptID else { return nil }
+
             storage.lastSnapshotID = event.snapshotID
             storage.lastSampleUpperBound = event.sampleRange.upperBound
-            guard event.isFinal || event.text != storage.lastSourceText else { return nil }
+            storage.lastSampleRange = event.sampleRange
+            guard kind == .final || event.text != storage.lastSourceText else { return nil }
 
             let stableCount = Self.commonPrefixCharacterCount(storage.lastSourceText, event.text)
             let mutableSuffix = Self.suffix(event.text, droppingCharacters: stableCount)
@@ -193,7 +215,7 @@ final class ContinuousContextSession: @unchecked Sendable {
                 sampleRange: event.sampleRange,
                 sourceText: event.text,
                 language: storage.language,
-                kind: event.isFinal ? .final : .provisional,
+                kind: kind,
                 generationIDs: generations,
                 capturedAt: event.capturedAt,
                 candidateAt: event.candidateAt,
@@ -207,7 +229,7 @@ final class ContinuousContextSession: @unchecked Sendable {
             storage.latestRevision = revision
             storage.retainedContext = String(event.text.suffix(configuration.maximumContextCharacters))
 
-            if event.isFinal {
+            if kind == .final {
                 guard storage.state.canTransition(to: .finalizing) else { return nil }
                 storage.state = .finalizing
                 storage.finalCandidate = ContinuousContextFinalCandidate(

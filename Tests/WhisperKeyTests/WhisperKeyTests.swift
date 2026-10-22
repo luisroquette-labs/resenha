@@ -2566,7 +2566,6 @@ final class WhisperKeyTests: XCTestCase {
         let candidateAt: TimeInterval
         let text: String
         var isStale = false
-        var isFinal = false
     }
 
     func testContinuousContextSessionReconcilesImmutableUnicodeSnapshotsAndRejectsOldWork() throws {
@@ -2575,14 +2574,13 @@ final class WhisperKeyTests: XCTestCase {
         let session = ContinuousContextSession(now: { uptime })
         XCTAssertTrue(session.start(attemptID: attemptID, language: "pt"))
 
-        func event(_ id: UInt64, _ text: String, final: Bool = false) -> SessionEvent {
+        func event(_ id: UInt64, _ text: String) -> SessionEvent {
             SessionEvent(
                 snapshotID: id,
                 sampleRange: 0..<Int64(id * 100),
                 capturedAt: uptime - 0.1,
                 candidateAt: uptime,
-                text: text,
-                isFinal: final
+                text: text
             )
         }
 
@@ -2661,14 +2659,13 @@ final class WhisperKeyTests: XCTestCase {
         let lateWork = try XCTUnwrap(session.takeNextWork())
         session.retainAudio(.init(id: 1, samples: [1, 2], sampleRange: 0..<2, capturedAt: 8))
 
-        let final = try XCTUnwrap(session.ingest(SessionEvent(
+        let final = try XCTUnwrap(session.finalize(SessionEvent(
             snapshotID: 2,
             sampleRange: 0..<200,
             capturedAt: 8.5,
             candidateAt: 9,
-            text: "texto final",
-            isFinal: true
-        )))
+            text: "texto final"
+        ), attemptID: attemptID))
         XCTAssertEqual(final.kind, .final)
         XCTAssertEqual(session.state, .finalizing)
         XCTAssertEqual(session.finalCandidate?.sourceText, "texto final")
@@ -2695,8 +2692,9 @@ final class WhisperKeyTests: XCTestCase {
 
     func testContinuousContextSessionFinalizesAnUnchangedLastHypothesisAndExpiresWork() throws {
         var uptime: TimeInterval = 4
+        let attemptID = UUID()
         let session = ContinuousContextSession(now: { uptime })
-        XCTAssertTrue(session.start(attemptID: UUID(), language: "pt"))
+        XCTAssertTrue(session.start(attemptID: attemptID, language: "pt"))
         let partial = SessionEvent(
             snapshotID: 1,
             sampleRange: 0..<100,
@@ -2709,16 +2707,62 @@ final class WhisperKeyTests: XCTestCase {
         uptime = 4.201
         XCTAssertFalse(session.completeWork(expiring))
 
-        let final = try XCTUnwrap(session.ingest(SessionEvent(
+        let final = try XCTUnwrap(session.finalize(SessionEvent(
             snapshotID: 2,
             sampleRange: 0..<200,
             capturedAt: 3.5,
             candidateAt: 4.2,
-            text: "mesmo texto",
-            isFinal: true
-        )))
+            text: "mesmo texto"
+        ), attemptID: attemptID))
         XCTAssertEqual(final.mutableSourceCharacterRange, final.sourceText.count..<final.sourceText.count)
         XCTAssertEqual(session.finalCandidate?.sourceText, "mesmo texto")
+    }
+
+    func testContinuousContextSessionAcceptsAuthoritativeFinalForLatestFramesOnlyOnce() throws {
+        let attemptID = UUID()
+        let session = ContinuousContextSession(now: { 10 })
+        XCTAssertTrue(session.start(attemptID: attemptID, language: "pt"))
+        let provisional = SessionEvent(
+            snapshotID: 7,
+            sampleRange: 100..<500,
+            capturedAt: 9,
+            candidateAt: 9.5,
+            text: "A coisa chegou"
+        )
+        _ = try XCTUnwrap(session.ingest(provisional))
+
+        let olderFinal = SessionEvent(
+            snapshotID: 6,
+            sampleRange: 0..<400,
+            capturedAt: 8,
+            candidateAt: 10,
+            text: "texto antigo"
+        )
+        XCTAssertNil(session.finalize(olderFinal, attemptID: attemptID))
+        XCTAssertNil(session.finalize(provisional, attemptID: UUID()))
+
+        let authoritativeFinal = SessionEvent(
+            snapshotID: 7,
+            sampleRange: 100..<500,
+            capturedAt: 9,
+            candidateAt: 10,
+            text: "A COESA chegou"
+        )
+        let revision = try XCTUnwrap(session.finalize(authoritativeFinal, attemptID: attemptID))
+        XCTAssertEqual(revision.kind, .final)
+        XCTAssertEqual(revision.sourceText, "A COESA chegou")
+        XCTAssertEqual(session.state, .finalizing)
+
+        XCTAssertNil(session.finalize(authoritativeFinal, attemptID: attemptID))
+        XCTAssertNil(session.ingest(SessionEvent(
+            snapshotID: 8,
+            sampleRange: 100..<600,
+            capturedAt: 9.5,
+            candidateAt: 10,
+            text: "callback tardio"
+        )))
+        XCTAssertEqual(session.commitFinalCandidate()?.sourceText, "A COESA chegou")
+        XCTAssertNil(session.commitFinalCandidate())
     }
 
     func testContinuousContextSessionCancelAndFailureReleaseAllSensitiveState() {
