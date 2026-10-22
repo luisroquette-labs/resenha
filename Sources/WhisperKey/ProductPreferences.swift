@@ -450,6 +450,7 @@ struct ProductSettingsView: View {
     @ObservedObject var preferences: ProductPreferences
     @ObservedObject var contextualStore: ContextualCorrectionStore
     @StateObject private var contextualModel: ContextualSettingsModel
+    @ObservedObject private var contextualAttemptStore: ContextualAttemptStore
     @State private var selection = ProductSettingsSection.general
 
     init(
@@ -458,10 +459,12 @@ struct ProductSettingsView: View {
         authorization: any SyntheticDiagnosticAuthorizationManaging,
         diagnostic: SyntheticDiagnosticController,
         personalAuthorization: (any PersonalRemoteAuthorizationManaging)? = nil,
+        contextualAttemptStore: ContextualAttemptStore,
         initialSection: ProductSettingsSection = .general
     ) {
         self.preferences = preferences
         self.contextualStore = contextualStore
+        self.contextualAttemptStore = contextualAttemptStore
         _contextualModel = StateObject(wrappedValue: ContextualSettingsModel(
             authorization: authorization,
             diagnostic: diagnostic,
@@ -529,7 +532,8 @@ struct ProductSettingsView: View {
                 case .transcription: TranscriptionSettingsPane(
                     preferences: preferences,
                     contextualStore: contextualStore,
-                    contextualModel: contextualModel
+                    contextualModel: contextualModel,
+                    contextualAttemptStore: contextualAttemptStore
                 )
                 case .about: AboutSettingsPane()
                 }
@@ -675,6 +679,7 @@ private struct TranscriptionSettingsPane: View {
     @ObservedObject var preferences: ProductPreferences
     @ObservedObject var contextualStore: ContextualCorrectionStore
     @ObservedObject var contextualModel: ContextualSettingsModel
+    @ObservedObject var contextualAttemptStore: ContextualAttemptStore
     @ObservedObject private var modelManager = WhisperModelManager.shared
 
     var body: some View {
@@ -749,6 +754,27 @@ private struct TranscriptionSettingsPane: View {
                             ? "Avaliação remota pessoal ativada"
                             : "Avaliação remota pessoal indisponível; modo local"
                     )
+                    if let attempt = contextualAttemptStore.latest {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Última avaliação JEV").font(.callout.weight(.semibold))
+                            Text(attemptSummary(attempt)).font(.callout)
+                            Text(attemptDetails(attempt))
+                                .font(.caption.monospaced())
+                                .foregroundStyle(.secondary)
+                        }
+                        .accessibilityElement(children: .combine)
+                        Button("Apagar registros técnicos") { contextualAttemptStore.deleteAll() }
+                            .accessibilityLabel("Apagar registros técnicos do JEV")
+                    } else {
+                        Text("Nenhuma avaliação JEV registrada neste Mac.")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                    }
+                    if !contextualAttemptStore.storageAvailable {
+                        Text("O registro técnico local está indisponível.")
+                            .font(.callout)
+                            .foregroundStyle(ResenhaTheme.warning)
+                    }
                     Divider()
                     Text(ContextualSettingsModel.disclosureLines[3]).font(.callout)
                     Text(ContextualSettingsModel.disclosureLines[4]).font(.callout)
@@ -789,6 +815,31 @@ private struct TranscriptionSettingsPane: View {
                 }
             }
         }
+    }
+
+    private func attemptSummary(_ attempt: ContextualAttemptRecord) -> String {
+        switch attempt.status {
+        case .requested: return "Solicitada; aguardando resposta."
+        case .failed: return "Falhou sem alterar o texto (\(attempt.failure?.rawValue ?? "unknown"))."
+        case .succeeded:
+            let action = switch attempt.disposition {
+            case .appliedReplacement: "Aplicou a correção"
+            case .keptOriginal: "Manteve o texto original"
+            case .discarded: "Resposta descartada; não guiou a saída"
+            case nil: "Resposta recebida; uso ainda não confirmado"
+            }
+            return "\(action). Modelo \(attempt.resolvedModel ?? "desconhecido")."
+        }
+    }
+
+    private func attemptDetails(_ attempt: ContextualAttemptRecord) -> String {
+        var parts = [attempt.startedAt.formatted(date: .abbreviated, time: .standard)]
+        if let latency = attempt.latencyMilliseconds { parts.append("\(latency) ms") }
+        if !attempt.decisions.isEmpty { parts.append(attempt.decisions.map(\.rawValue).joined(separator: ", ")) }
+        if let confidence = attempt.minimumConfidence { parts.append(String(format: "conf. %.0f%%", confidence * 100)) }
+        if let cost = attempt.costUSD { parts.append("US$ \(NSDecimalNumber(decimal: cost).stringValue)") }
+        if let requestID = attempt.providerRequestID { parts.append("ID \(requestID)") }
+        return parts.joined(separator: " · ")
     }
 
     @ViewBuilder
@@ -839,19 +890,22 @@ final class ProductSettingsWindowController {
     private let authorization: any SyntheticDiagnosticAuthorizationManaging
     private let diagnostic: SyntheticDiagnosticController
     private let personalAuthorization: (any PersonalRemoteAuthorizationManaging)?
+    private let contextualAttemptStore: ContextualAttemptStore
 
     init(
         preferences: ProductPreferences,
         contextualStore: ContextualCorrectionStore,
         authorization: any SyntheticDiagnosticAuthorizationManaging,
         diagnostic: SyntheticDiagnosticController,
-        personalAuthorization: (any PersonalRemoteAuthorizationManaging)? = nil
+        personalAuthorization: (any PersonalRemoteAuthorizationManaging)? = nil,
+        contextualAttemptStore: ContextualAttemptStore
     ) {
         self.preferences = preferences
         self.contextualStore = contextualStore
         self.authorization = authorization
         self.diagnostic = diagnostic
         self.personalAuthorization = personalAuthorization
+        self.contextualAttemptStore = contextualAttemptStore
     }
 
     func show() {
@@ -875,7 +929,8 @@ final class ProductSettingsWindowController {
             contextualStore: contextualStore,
             authorization: authorization,
             diagnostic: diagnostic,
-            personalAuthorization: personalAuthorization
+            personalAuthorization: personalAuthorization,
+            contextualAttemptStore: contextualAttemptStore
         ))
         window.center()
         self.window = window

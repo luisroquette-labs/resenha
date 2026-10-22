@@ -524,6 +524,9 @@ final class RevisionBoundJevLoop {
     private let storeSnapshot: @MainActor @Sendable () -> ContextualCorrectionStoreSnapshot
     private let policyGeneration: @MainActor @Sendable () -> UInt64
     private let policy: ContextualCorrectionPolicy?
+    private let onAttemptDisposition: @MainActor @Sendable (
+        UUID, ContextualAttemptDisposition
+    ) -> Void
     private let validator = ContextualDecisionValidator()
 
     init(
@@ -532,7 +535,10 @@ final class RevisionBoundJevLoop {
         time: any ContextualMonotonicTime,
         storeSnapshot: @escaping @MainActor @Sendable () -> ContextualCorrectionStoreSnapshot,
         policyGeneration: @escaping @MainActor @Sendable () -> UInt64,
-        policy: ContextualCorrectionPolicy? = nil
+        policy: ContextualCorrectionPolicy? = nil,
+        onAttemptDisposition: @escaping @MainActor @Sendable (
+            UUID, ContextualAttemptDisposition
+        ) -> Void = { _, _ in }
     ) {
         self.session = session
         self.provider = provider
@@ -540,6 +546,7 @@ final class RevisionBoundJevLoop {
         self.storeSnapshot = storeSnapshot
         self.policyGeneration = policyGeneration
         self.policy = policy
+        self.onAttemptDisposition = onAttemptDisposition
     }
 
     @discardableResult
@@ -651,6 +658,7 @@ final class RevisionBoundJevLoop {
         let currentSnapshot = storeSnapshot()
         guard currentSnapshot.health == .healthy,
               currentSnapshot.generation == snapshot.generation else {
+            report(receipt, .discarded)
             _ = session.applyContextualResult(abstained, for: work)
             return abstained
         }
@@ -661,6 +669,7 @@ final class RevisionBoundJevLoop {
                 occurrences: request.occurrences,
                 to: request.originalText
               ) else {
+            report(receipt, .discarded)
             _ = session.applyContextualResult(abstained, for: work)
             return abstained
         }
@@ -670,6 +679,19 @@ final class RevisionBoundJevLoop {
             text: resolved,
             outcome: outcome
         )
-        return session.applyContextualResult(result, for: work) ? result : abstained
+        guard session.applyContextualResult(result, for: work) else {
+            report(receipt, .discarded)
+            return abstained
+        }
+        report(receipt, outcome.category == .replaced ? .appliedReplacement : .keptOriginal)
+        return result
+    }
+
+    private func report(
+        _ receipt: ContextualDecisionReceipt,
+        _ disposition: ContextualAttemptDisposition
+    ) {
+        guard let attemptID = receipt.localAttemptID else { return }
+        onAttemptDisposition(attemptID, disposition)
     }
 }

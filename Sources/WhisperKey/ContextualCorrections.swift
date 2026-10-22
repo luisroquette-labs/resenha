@@ -364,6 +364,34 @@ struct ContextualDecisionReceipt: Equatable, Sendable {
     let inputTokens: Int?
     let outputTokens: Int?
     let costUSD: Decimal?
+    let providerRequestID: String?
+    let localAttemptID: UUID?
+
+    init(
+        decisions: [ContextualDecision],
+        resolvedModel: String,
+        inputTokens: Int?,
+        outputTokens: Int?,
+        costUSD: Decimal?,
+        providerRequestID: String? = nil,
+        localAttemptID: UUID? = nil
+    ) {
+        self.decisions = decisions
+        self.resolvedModel = resolvedModel
+        self.inputTokens = inputTokens
+        self.outputTokens = outputTokens
+        self.costUSD = costUSD
+        self.providerRequestID = providerRequestID
+        self.localAttemptID = localAttemptID
+    }
+
+    func associated(with attemptID: UUID) -> Self {
+        .init(
+            decisions: decisions, resolvedModel: resolvedModel,
+            inputTokens: inputTokens, outputTokens: outputTokens, costUSD: costUSD,
+            providerRequestID: providerRequestID, localAttemptID: attemptID
+        )
+    }
 }
 
 protocol ContextualDecisionProvider: Sendable {
@@ -632,7 +660,10 @@ protocol ContextualCorrectionResolverContract: ContextualResolving {
         candidateMatcher: @escaping @MainActor @Sendable (
             _ examples: [ContextualCorrectionExample], _ text: String, _ language: String
         ) -> [ContextualCorrectionOccurrence],
-        time: any ContextualMonotonicTime
+        time: any ContextualMonotonicTime,
+        onAttemptDisposition: @escaping @MainActor @Sendable (
+            UUID, ContextualAttemptDisposition
+        ) -> Void
     )
     nonisolated static func matchCandidates(
         examples: [ContextualCorrectionExample],
@@ -683,6 +714,9 @@ final class ContextualCorrectionResolver: ContextualCorrectionResolverContract {
     private let time: any ContextualMonotonicTime
     private let validator: ContextualDecisionValidator
     private let onProviderError: @MainActor @Sendable (Error) -> Void
+    private let onAttemptDisposition: @MainActor @Sendable (
+        UUID, ContextualAttemptDisposition
+    ) -> Void
 
     init(
         store: ContextualCorrectionStore,
@@ -696,7 +730,10 @@ final class ContextualCorrectionResolver: ContextualCorrectionResolverContract {
                 language: language
             )
         },
-        time: any ContextualMonotonicTime
+        time: any ContextualMonotonicTime,
+        onAttemptDisposition: @escaping @MainActor @Sendable (
+            UUID, ContextualAttemptDisposition
+        ) -> Void = { _, _ in }
     ) {
         self.store = store
         self.policy = policy
@@ -705,6 +742,7 @@ final class ContextualCorrectionResolver: ContextualCorrectionResolverContract {
         self.candidateMatcher = candidateMatcher
         self.time = time
         onProviderError = { _ in }
+        self.onAttemptDisposition = onAttemptDisposition
         validator = .init()
     }
 
@@ -714,7 +752,10 @@ final class ContextualCorrectionResolver: ContextualCorrectionResolverContract {
         provider: any ContextualDecisionProvider,
         storeGeneration: @escaping @MainActor @Sendable () -> UInt64,
         time: any ContextualMonotonicTime,
-        onProviderError: @escaping @MainActor @Sendable (Error) -> Void
+        onProviderError: @escaping @MainActor @Sendable (Error) -> Void,
+        onAttemptDisposition: @escaping @MainActor @Sendable (
+            UUID, ContextualAttemptDisposition
+        ) -> Void = { _, _ in }
     ) {
         self.store = store
         self.policy = policy
@@ -727,6 +768,7 @@ final class ContextualCorrectionResolver: ContextualCorrectionResolverContract {
         }
         self.time = time
         self.onProviderError = onProviderError
+        self.onAttemptDisposition = onAttemptDisposition
         validator = .init()
     }
 
@@ -797,11 +839,18 @@ final class ContextualCorrectionResolver: ContextualCorrectionResolverContract {
               currentSnapshot.generation == storeSnapshot.generation,
               request.storeGenerationAtStart == storeGeneration(),
               policy.isCurrent(request.policyToken),
-              time.now() < deadline else { return original }
+              time.now() < deadline else {
+            report(receipt, .discarded)
+            return original
+        }
 
         let outcome = validator.validate(receipt: receipt, occurrences: occurrences)
-        guard outcome.category != .abstained else { return original }
+        guard outcome.category != .abstained else {
+            report(receipt, .discarded)
+            return original
+        }
         guard outcome.category == .replaced else {
+            report(receipt, .keptOriginal)
             return .init(text: request.text, outcome: outcome, revisionIdentity: request.revisionIdentity)
         }
         var resolved = request.text
@@ -811,7 +860,16 @@ final class ContextualCorrectionResolver: ContextualCorrectionResolverContract {
         for (occurrence, _) in replacements {
             resolved.replaceSubrange(occurrence.range, with: occurrence.canonical)
         }
+        report(receipt, .appliedReplacement)
         return .init(text: resolved, outcome: outcome, revisionIdentity: request.revisionIdentity)
+    }
+
+    private func report(
+        _ receipt: ContextualDecisionReceipt,
+        _ disposition: ContextualAttemptDisposition
+    ) {
+        guard let attemptID = receipt.localAttemptID else { return }
+        onAttemptDisposition(attemptID, disposition)
     }
 
     nonisolated static func matchCandidates(
@@ -1018,6 +1076,7 @@ struct DecisionsResponseDTO: Decodable, Equatable, Sendable {
     let model: String
     let answers: [String: Answer]
     let usage: Usage?
+    let id: String?
 }
 
 struct DecisionsResponseStream: @unchecked Sendable {
@@ -1398,6 +1457,7 @@ actor OpenRouterDecisionsClient: OpenRouterDecisionsClientContract {
     private let credential: @Sendable () throws -> String
     private let beforeTransportOpen: @Sendable () async -> Bool
     private let onFailure: @Sendable (Error) async -> Void
+    private let onAttempt: @Sendable (ContextualProviderAttemptEvent) async -> Void
 
     init(
         transport: any DecisionsStreamingTransport,
@@ -1407,18 +1467,21 @@ actor OpenRouterDecisionsClient: OpenRouterDecisionsClientContract {
         self.credential = credential
         beforeTransportOpen = { true }
         onFailure = { _ in }
+        onAttempt = { _ in }
     }
 
     init(
         transport: any DecisionsStreamingTransport,
         credential: @escaping @Sendable () throws -> String,
         beforeTransportOpen: @escaping @Sendable () async -> Bool,
-        onFailure: @escaping @Sendable (Error) async -> Void = { _ in }
+        onFailure: @escaping @Sendable (Error) async -> Void = { _ in },
+        onAttempt: @escaping @Sendable (ContextualProviderAttemptEvent) async -> Void = { _ in }
     ) {
         self.transport = transport
         self.credential = credential
         self.beforeTransportOpen = beforeTransportOpen
         self.onFailure = onFailure
+        self.onAttempt = onAttempt
     }
 
     func decide(
@@ -1427,15 +1490,37 @@ actor OpenRouterDecisionsClient: OpenRouterDecisionsClientContract {
         occurrences: [ContextualCorrectionOccurrence],
         deadline: ContextualInstant
     ) async throws -> ContextualDecisionReceipt {
+        let attemptID = UUID()
+        let startedAt = Date()
+        let clock = ContinuousClock()
+        let started = clock.now
+        let onAttempt = onAttempt
+        Task { await onAttempt(.requested(id: attemptID, at: startedAt)) }
         do {
-            return try await perform(
+            let receipt = try await perform(
                 sentence: sentence,
                 language: language,
                 occurrences: occurrences,
                 deadline: deadline,
                 beforeTransportOpen: beforeTransportOpen
             )
+            let associated = receipt.associated(with: attemptID)
+            Task { await onAttempt(.succeeded(
+                id: attemptID,
+                startedAt: startedAt,
+                completedAt: Date(),
+                latencyMilliseconds: Self.milliseconds(started.duration(to: clock.now)),
+                receipt: associated
+            )) }
+            return associated
         } catch {
+            Task { await onAttempt(.failed(
+                id: attemptID,
+                startedAt: startedAt,
+                completedAt: Date(),
+                latencyMilliseconds: Self.milliseconds(started.duration(to: clock.now)),
+                failure: .init(error)
+            )) }
             await onFailure(error)
             throw error
         }
@@ -1549,6 +1634,12 @@ actor OpenRouterDecisionsClient: OpenRouterDecisionsClientContract {
         )
     }
 
+    private static func milliseconds(_ duration: Duration) -> Int {
+        let components = duration.components
+        let value = components.seconds * 1_000 + components.attoseconds / 1_000_000_000_000_000
+        return Int(clamping: value)
+    }
+
     static func requestBody(
         sentence: String,
         language: String,
@@ -1602,7 +1693,8 @@ actor OpenRouterDecisionsClient: OpenRouterDecisionsClientContract {
             resolvedModel: response.model,
             inputTokens: response.usage?.inputTokens,
             outputTokens: response.usage?.outputTokens,
-            costUSD: response.usage?.cost
+            costUSD: response.usage?.cost,
+            providerRequestID: response.id
         )
     }
 }

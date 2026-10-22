@@ -42,6 +42,7 @@ One XcodeGen application target (`WhisperKey`, product name `Resenha`) and one u
 | `SyntheticDiagnosticController` | run the allowlisted fixture once | separate network authority; 900 ms, zero retry, one-shot guard |
 | `ContinuousContextSession` | bind rolling revisions to one attempt and reconcile one final candidate | one active evaluation, latest pending revision, no external partial writes |
 | `RevisionBoundJevLoop` | evaluate allowlisted occurrence alternatives asynchronously | 200 ms hard deadline; local fallback on failure |
+| `ContextualAttemptStore` | retain provider-call proof without dictated content | 20 records, 256 KiB file cap, user deletion |
 
 ## Permissions
 
@@ -65,6 +66,9 @@ The app requests permissions only after explicit user action and exposes separat
 - Personal contextual evaluation: optional HTTPS text-only requests to the same
   provider using a distinct Keychain account; no audio, history, clipboard or
   target-app content.
+- Personal evaluation proof: local bounded metadata only (time, status, model,
+  provider request ID, decision, confidence, latency, tokens, cost and sanitized
+  failure); no dictated text, correction pair or credential.
 
 ## Continuous contextual boundary
 

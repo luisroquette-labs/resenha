@@ -794,6 +794,7 @@ final class WhisperKeyTests: XCTestCase {
                     contextualStore: contextual.store,
                     authorization: contextual.authorization,
                     diagnostic: contextual.diagnostic,
+                    contextualAttemptStore: ContextualAttemptStore(fileURL: directory.appendingPathComponent("attempts-\(section.rawValue)-\(appearance).json")),
                     initialSection: section
                 ).environment(\.colorScheme, scheme))
                 view.frame = CGRect(x: 0, y: 0, width: 760, height: 560)
@@ -963,7 +964,11 @@ final class WhisperKeyTests: XCTestCase {
             preferences: preferences,
             contextualStore: contextual.store,
             authorization: contextual.authorization,
-            diagnostic: contextual.diagnostic
+            diagnostic: contextual.diagnostic,
+            contextualAttemptStore: ContextualAttemptStore(
+                fileURL: FileManager.default.temporaryDirectory
+                    .appendingPathComponent("ResenhaTests/\(UUID().uuidString)/attempts.json")
+            )
         )
         controller.show()
         let first = try XCTUnwrap(controller.window)
@@ -2878,7 +2883,8 @@ final class WhisperKeyTests: XCTestCase {
     private func revisionReceipt(
         choice: ContextualDecisionChoice = .replace,
         confidence: Double = 0.99,
-        probability: Double = 0.99
+        probability: Double = 0.99,
+        localAttemptID: UUID? = nil
     ) -> ContextualDecisionReceipt {
         .init(
             decisions: [.init(
@@ -2891,7 +2897,8 @@ final class WhisperKeyTests: XCTestCase {
             resolvedModel: "fixture/deterministic",
             inputTokens: nil,
             outputTokens: nil,
-            costUSD: nil
+            costUSD: nil,
+            localAttemptID: localAttemptID
         )
     }
 
@@ -2973,6 +2980,42 @@ final class WhisperKeyTests: XCTestCase {
                 "boundary-\(boundary)"
             )
         }
+    }
+
+    @MainActor
+    func testRevisionBoundLoopReportsAppliedProviderAttempt() async throws {
+        let attemptID = UUID()
+        let audit = ContextualAttemptStore(fileURL: FileManager.default.temporaryDirectory
+            .appendingPathComponent("ResenhaTests/\(UUID().uuidString)/attempts.json"))
+        audit.consume(.requested(id: attemptID, at: Date()))
+        audit.consume(.succeeded(
+            id: attemptID, startedAt: Date(), completedAt: Date(), latencyMilliseconds: 1,
+            receipt: revisionReceipt(localAttemptID: attemptID)
+        ))
+        let session = ContinuousContextSession(now: { 0 })
+        XCTAssertTrue(session.start(attemptID: UUID(), language: "pt"))
+        _ = session.ingest(SessionEvent(
+            snapshotID: 1, sampleRange: 0..<100, capturedAt: 0,
+            candidateAt: 0, text: "Reservei um rosto."
+        ))
+        let snapshot = ContextualCorrectionStoreSnapshot(
+            examples: [revisionExample], generation: 7, health: .healthy
+        )
+        let loop = RevisionBoundJevLoop(
+            session: session,
+            provider: RevisionLoopProvider(.immediate(revisionReceipt(localAttemptID: attemptID))),
+            time: ManualContextualTime(),
+            storeSnapshot: { snapshot },
+            policyGeneration: { 11 },
+            onAttemptDisposition: { id, disposition in
+                audit.consume(.resolved(id: id, disposition: disposition))
+            }
+        )
+
+        let result = await loop.evaluateNext(scope: .testDouble)
+
+        XCTAssertEqual(result?.text, "Reservei um Hostel.")
+        XCTAssertEqual(audit.latest?.disposition, .appliedReplacement)
     }
 
     @MainActor
@@ -4221,8 +4264,12 @@ actor ResolverDecisionProviderStub: ContextualDecisionProvider {
     private(set) var captured: [ContextualCorrectionOccurrence] = []
     private(set) var capturedSentence: String?
     let decisions: [ContextualDecision]
+    let localAttemptID: UUID?
 
-    init(_ decisions: [ContextualDecision]) { self.decisions = decisions }
+    init(_ decisions: [ContextualDecision], localAttemptID: UUID? = nil) {
+        self.decisions = decisions
+        self.localAttemptID = localAttemptID
+    }
 
     func decide(
         sentence: String,
@@ -4238,7 +4285,8 @@ actor ResolverDecisionProviderStub: ContextualDecisionProvider {
             resolvedModel: "fixture/deterministic",
             inputTokens: nil,
             outputTokens: nil,
-            costUSD: nil
+            costUSD: nil,
+            localAttemptID: localAttemptID
         )
     }
 }
@@ -4295,7 +4343,10 @@ final class ContextualResolverTests: XCTestCase {
         provider: any ContextualDecisionProvider,
         time: ManualContextualTime = .init(),
         matcher: ContextualCorrectionResolver.CandidateMatcher? = nil,
-        fileManager: FileManager = .default
+        fileManager: FileManager = .default,
+        onAttemptDisposition: @escaping @MainActor @Sendable (
+            UUID, ContextualAttemptDisposition
+        ) -> Void = { _, _ in }
     ) -> (ContextualCorrectionResolver, ContextualCorrectionStore, ContextualCorrectionPolicy, ManualContextualTime, URL) {
         let file = FileManager.default.temporaryDirectory
             .appendingPathComponent("ResenhaTests/\(UUID().uuidString)/ContextualCorrections/v1.json")
@@ -4310,7 +4361,8 @@ final class ContextualResolverTests: XCTestCase {
                 provider: provider,
                 storeGeneration: { store.generation },
                 candidateMatcher: matcher,
-                time: time
+                time: time,
+                onAttemptDisposition: onAttemptDisposition
             )
         } else {
             resolver = .init(
@@ -4318,7 +4370,8 @@ final class ContextualResolverTests: XCTestCase {
                 policy: policy,
                 provider: provider,
                 storeGeneration: { store.generation },
-                time: time
+                time: time,
+                onAttemptDisposition: onAttemptDisposition
             )
         }
         return (resolver, store, policy, time, file)
@@ -4382,6 +4435,32 @@ final class ContextualResolverTests: XCTestCase {
         let input = "Lavei o rosto antes de voltar ao rosto perto da estacao."
         let output = await item.0.resolve(request(input, store: item.1, policy: item.2))
         XCTAssertEqual(output, "Lavei o rosto antes de voltar ao Hostel perto da estacao.")
+    }
+
+    func testResolverReportsAppliedProviderAttempt() async {
+        let attemptID = UUID()
+        let audit = ContextualAttemptStore(fileURL: FileManager.default.temporaryDirectory
+            .appendingPathComponent("ResenhaTests/\(UUID().uuidString)/attempts.json"))
+        audit.consume(.requested(id: attemptID, at: Date()))
+        let receipt = ContextualDecisionReceipt(
+            decisions: [decision("o1", .replace)], resolvedModel: "fixture/deterministic",
+            inputTokens: nil, outputTokens: nil, costUSD: nil, localAttemptID: attemptID
+        )
+        audit.consume(.succeeded(
+            id: attemptID, startedAt: Date(), completedAt: Date(), latencyMilliseconds: 1,
+            receipt: receipt
+        ))
+        let provider = ResolverDecisionProviderStub(
+            [decision("o1", .replace)], localAttemptID: attemptID
+        )
+        let item = fixture(provider: provider, onAttemptDisposition: { id, disposition in
+            audit.consume(.resolved(id: id, disposition: disposition))
+        })
+
+        let output = await item.0.resolve(request("Reservei um rosto.", store: item.1, policy: item.2))
+
+        XCTAssertEqual(output, "Reservei um Hostel.")
+        XCTAssertEqual(audit.latest?.disposition, .appliedReplacement)
     }
 
     func testResolverOrdersMultiPairOccurrencesByRangeAndAssignsUniqueQuestionIDs() async {
@@ -4811,6 +4890,7 @@ final class ContextualTransportCorpusTests: XCTestCase {
         XCTAssertEqual(receipt.inputTokens, 357)
         XCTAssertEqual(receipt.outputTokens, 38)
         XCTAssertEqual(receipt.costUSD, Decimal(string: "0.000014994"))
+        XCTAssertEqual(receipt.providerRequestID, "synthetic-id")
     }
 
     func testDecisionsRequestPayloadAccepts4095And4096BytesAndRejects4097() throws {
@@ -5653,6 +5733,155 @@ extension ContextualTransportCorpusTests {
         let fixture = try SyntheticDiagnosticFixture.load(from: .main)
         XCTAssertEqual(fixture.id, SyntheticDiagnosticFixture.id)
         XCTAssertEqual(fixture.language, "pt")
+    }
+}
+
+private actor ContextualAttemptEventCollector {
+    private var events: [ContextualProviderAttemptEvent] = []
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+    func append(_ event: ContextualProviderAttemptEvent) {
+        events.append(event)
+        if events.count >= 2 {
+            let waiters = waiters
+            self.waiters = []
+            waiters.forEach { $0.resume() }
+        }
+    }
+    func waitForPair() async {
+        guard events.count < 2 else { return }
+        await withCheckedContinuation { waiters.append($0) }
+    }
+    func snapshot() -> [ContextualProviderAttemptEvent] { events }
+}
+
+@MainActor
+final class ContextualAttemptAuditTests: XCTestCase {
+    private func temporaryFile() -> URL {
+        FileManager.default.temporaryDirectory
+            .appendingPathComponent("ResenhaTests/\(UUID().uuidString)/jev-attempts-v1.json")
+    }
+
+    private func receipt(index: Int = 0) -> ContextualDecisionReceipt {
+        .init(
+            decisions: [.init(
+                questionID: "o1", choice: index.isMultiple(of: 2) ? .replace : .keepOriginal,
+                confidence: 0.96, chosenProbability: 0.97, runnerUpProbability: 0.03
+            )],
+            resolvedModel: "typesafe/jev-1.14-20261014",
+            inputTokens: 357,
+            outputTokens: 38,
+            costUSD: Decimal(string: "0.000014994"),
+            providerRequestID: "jev-proof-\(index)"
+        )
+    }
+
+    func testAttemptStorePersistsBoundedSanitizedProviderProofAndDeletesIt() throws {
+        struct SensitiveFailure: Error, CustomStringConvertible {
+            let description = "SECRET-SENTINEL dictated sentence and api key"
+        }
+        let file = temporaryFile()
+        defer { try? FileManager.default.removeItem(at: file.deletingLastPathComponent()) }
+        let store = ContextualAttemptStore(fileURL: file)
+
+        for index in 0..<25 {
+            let id = UUID()
+            let start = Date(timeIntervalSince1970: Double(index))
+            store.consume(.requested(id: id, at: start))
+            if index == 0 {
+                store.consume(.failed(
+                    id: id, startedAt: start, completedAt: start.addingTimeInterval(0.01), latencyMilliseconds: 10,
+                    failure: .init(SensitiveFailure())
+                ))
+            } else {
+                if index == 24 {
+                    store.consume(.resolved(id: id, disposition: .appliedReplacement))
+                }
+                store.consume(.succeeded(
+                    id: id, startedAt: start, completedAt: start.addingTimeInterval(0.125),
+                    latencyMilliseconds: 125, receipt: receipt(index: index)
+                ))
+            }
+        }
+
+        XCTAssertEqual(store.records.count, ContextualAttemptStore.maximumRecords)
+        let latest = try XCTUnwrap(store.latest)
+        XCTAssertTrue(latest.providerResponseConfirmed)
+        XCTAssertEqual(latest.resolvedModel, "typesafe/jev-1.14-20261014")
+        XCTAssertEqual(latest.minimumConfidence, 0.96)
+        XCTAssertEqual(latest.minimumProbability, 0.97)
+        XCTAssertEqual(latest.latencyMilliseconds, 125)
+        XCTAssertEqual(latest.costUSD, Decimal(string: "0.000014994"))
+        XCTAssertEqual(latest.providerRequestID, "jev-proof-24")
+        XCTAssertEqual(latest.disposition, .appliedReplacement)
+        XCTAssertEqual(try FileManager.default.attributesOfItem(atPath: file.path)[.posixPermissions] as? NSNumber, 0o600)
+
+        let failureID = UUID()
+        let failureStart = Date(timeIntervalSince1970: 30)
+        store.consume(.requested(id: failureID, at: failureStart))
+        store.consume(.failed(
+            id: failureID, startedAt: failureStart,
+            completedAt: failureStart.addingTimeInterval(0.01), latencyMilliseconds: 10,
+            failure: .init(SensitiveFailure())
+        ))
+        XCTAssertEqual(store.latest?.status, .failed)
+        XCTAssertEqual(store.latest?.failure, .unknown)
+        XCTAssertFalse(String(decoding: try Data(contentsOf: file), as: UTF8.self).contains("SECRET-SENTINEL"))
+
+        let reloaded = ContextualAttemptStore(fileURL: file)
+        XCTAssertEqual(reloaded.records, store.records)
+        reloaded.deleteAll()
+        XCTAssertTrue(reloaded.records.isEmpty)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: file.path))
+
+        try FileManager.default.createDirectory(
+            at: file.deletingLastPathComponent(), withIntermediateDirectories: true
+        )
+        try Data(repeating: 0, count: ContextualAttemptStore.maximumFileBytes + 1).write(to: file)
+        let oversized = ContextualAttemptStore(fileURL: file)
+        XCTAssertTrue(oversized.records.isEmpty)
+        XCTAssertFalse(oversized.storageAvailable)
+    }
+
+    func testPersonalClientEmitsCorrelatedProviderConfirmedAttemptWithUsage() async throws {
+        let response = Data(#"{"model":"typesafe/jev-1.14-20261014","answers":{"o1":{"type":"choice","choice":"replace_1","probabilities":{"keep_original":0.01,"replace_1":0.99},"confidence":0.98}},"usage":{"input_tokens":357,"output_tokens":38,"cost":0.000014994},"id":"jev-proof-123"}"#.utf8)
+        let collector = ContextualAttemptEventCollector()
+        let client = OpenRouterDecisionsClient(
+            transport: DecisionsStreamingTransportStub(chunks: [response]),
+            credential: { "test-only-key" },
+            beforeTransportOpen: { true },
+            onAttempt: { await collector.append($0) }
+        )
+        let sentence = "Reservei um rosto."
+        let range = try XCTUnwrap(sentence.range(of: "rosto"))
+        let receipt = try await client.decide(
+            sentence: sentence,
+            language: "pt",
+            occurrences: [.init(
+                questionID: "o1", heard: "rosto", canonical: "Hostel",
+                ordinal: 1, range: range
+            )],
+            deadline: .init(offset: .seconds(1))
+        )
+
+        XCTAssertEqual(receipt.costUSD, Decimal(string: "0.000014994"))
+        await collector.waitForPair()
+        let events = await collector.snapshot()
+        XCTAssertEqual(events.count, 2)
+        let requestedID = events.compactMap { event -> UUID? in
+            guard case .requested(let id, _) = event else { return nil }
+            return id
+        }.first
+        let success = events.compactMap { event -> (UUID, ContextualDecisionReceipt)? in
+            guard case .succeeded(let id, _, _, _, let receipt) = event else { return nil }
+            return (id, receipt)
+        }.first
+        guard let requestedID, let (succeededID, observedReceipt) = success else {
+            return XCTFail("Expected correlated requested and succeeded events")
+        }
+        XCTAssertEqual(requestedID, succeededID)
+        XCTAssertEqual(observedReceipt.resolvedModel, "typesafe/jev-1.14-20261014")
+        XCTAssertEqual(observedReceipt.costUSD, Decimal(string: "0.000014994"))
+        XCTAssertEqual(observedReceipt.providerRequestID, "jev-proof-123")
     }
 }
 

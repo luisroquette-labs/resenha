@@ -32,6 +32,15 @@ conteúdo do aplicativo de destino. O envio é limitado a 4096 bytes, uma
 avaliação ativa e uma pendente substituível, com intervalo mínimo de 500 ms.
 Falha, atraso ou indisponibilidade preservam a transcrição local.
 
+Para permitir a verificação pelo próprio usuário, o Resenha mantém neste Mac
+até 20 registros técnicos das avaliações pessoais. Eles contêm somente data,
+estado, modelo e identificador retornados pelo provedor, decisão, confiança,
+latência, tokens, custo informado, resultado local (aplicou, manteve ou
+descartou) e categoria de falha. Não contêm áudio,
+transcrição, termos candidatos, chave ou conteúdo do aplicativo de destino.
+Esses registros ficam em arquivo separado, podem ser apagados nos Ajustes e
+não são enviados pelo Resenha a nenhum serviço adicional.
+
 A função começa desligada e exige ao menos um exemplo local elegível. Sua chave
 fica em uma conta separada no Keychain e a autorização do diagnóstico sintético
 não pode ativá-la. OpenRouter/TypeSafe podem medir tokens, cobrar pelo uso e
