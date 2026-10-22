@@ -2983,6 +2983,38 @@ final class WhisperKeyTests: XCTestCase {
     }
 
     @MainActor
+    func testRevisionBoundLoopKeepsResponseThatArrivedBeforeDeadline() async throws {
+        let time = ManualContextualTime()
+        var policyReads = 0
+        let session = ContinuousContextSession(now: { 0 })
+        XCTAssertTrue(session.start(attemptID: UUID(), language: "pt"))
+        _ = session.ingest(SessionEvent(
+            snapshotID: 1, sampleRange: 0..<100, capturedAt: 0,
+            candidateAt: 0, text: "Reservei um rosto."
+        ))
+        let snapshot = ContextualCorrectionStoreSnapshot(
+            examples: [revisionExample], generation: 7, health: .healthy
+        )
+        let loop = RevisionBoundJevLoop(
+            session: session,
+            provider: RevisionLoopProvider(.immediate(revisionReceipt())),
+            time: time,
+            storeSnapshot: { snapshot },
+            policyGeneration: {
+                policyReads += 1
+                if policyReads == 2 { time.advance(milliseconds: 201) }
+                return 11
+            }
+        )
+
+        let result = await loop.evaluateNext(scope: .testDouble)
+
+        XCTAssertEqual(result?.text, "Reservei um Hostel.")
+        XCTAssertEqual(session.contextualPreviewText, "Reservei um Hostel.")
+        XCTAssertEqual(time.now().offset, .milliseconds(201))
+    }
+
+    @MainActor
     func testRevisionBoundLoopReportsAppliedProviderAttempt() async throws {
         let attemptID = UUID()
         let audit = ContextualAttemptStore(fileURL: FileManager.default.temporaryDirectory
@@ -4730,6 +4762,33 @@ final class ContextualResolverTests: XCTestCase {
             inputTokens: nil, outputTokens: nil, costUSD: nil
         ))
         XCTAssertEqual(original, input, "noncooperative-late")
+    }
+
+    func testResolverKeepsResponseThatArrivedBeforeDeadline() async {
+        let provider = ResolverDecisionProviderStub([decision("o1", .replace)])
+        let time = ManualContextualTime()
+        var generationReads = 0
+        let file = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ResenhaTests/\(UUID().uuidString)/ContextualCorrections/v1.json")
+        let store = ContextualCorrectionStore(fileURL: file)
+        XCTAssertTrue(store.save(example()).isSuccess)
+        let policy = ContextualCorrectionPolicy()
+        let resolver = ContextualCorrectionResolver(
+            store: store,
+            policy: policy,
+            provider: provider,
+            storeGeneration: {
+                generationReads += 1
+                if generationReads == 2 { time.advance(milliseconds: 901) }
+                return store.generation
+            },
+            time: time
+        )
+
+        let output = await resolver.resolve(request("Reservei um rosto.", store: store, policy: policy))
+
+        XCTAssertEqual(output, "Reservei um Hostel.")
+        XCTAssertEqual(time.now().offset, .milliseconds(901))
     }
 
     func testResolverRejectsStoreGenerationChangedDuringSuspension() async {
