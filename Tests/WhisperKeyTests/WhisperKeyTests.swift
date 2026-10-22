@@ -2041,7 +2041,9 @@ final class WhisperKeyTests: XCTestCase {
         panel.updateContinuousPreview(previewRevision(attemptID: attempt, revision: 3, text: "um teste local"))
         XCTAssertEqual(panel.preview?.revision, 1)
         now += 0.08
-        try await Task.sleep(for: .milliseconds(100))
+        for _ in 0..<50 where panel.preview?.revision != 3 {
+            try await Task.sleep(for: .milliseconds(20))
+        }
         XCTAssertEqual(panel.preview?.revision, 3)
         XCTAssertEqual(panel.preview?.text, "um teste local")
 
@@ -2080,6 +2082,19 @@ final class WhisperKeyTests: XCTestCase {
         host.layoutSubtreeIfNeeded()
         XCTAssertEqual(host.frame.size, size)
         XCTAssertTrue(model.preview?.accessibilityLabel.contains("PRÉVIA LOCAL") == true)
+    }
+
+    @MainActor
+    func testContinuousContextShippingLabelsAndRemoteDisabledSmoke() {
+        XCTAssertEqual(FloatingPreviewPhase.provisional.title, "PRÉVIA LOCAL")
+        XCTAssertEqual(FloatingPreviewPhase.finalizing.title, "FINALIZANDO")
+        XCTAssertEqual(FloatingPreviewPhase.localFallback.title, "MODO LOCAL")
+        XCTAssertEqual(FloatingPreview.fallbackText, "O ditado continua sem prévia ao vivo.")
+        XCTAssertEqual(PersonalRemoteReleaseDecision.current, .personalRemoteUnavailable)
+
+        let policy = ContextualCorrectionPolicy()
+        let token = DictationCoordinator.productionContextualTokenSource(policy: policy)(UUID())
+        XCTAssertEqual(token.scope, .disabled)
     }
 
     @MainActor

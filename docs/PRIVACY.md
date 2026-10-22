@@ -18,6 +18,23 @@ pessoais, áudio, transcrições, diagnósticos ou métricas de uso.
   forma ouvida, forma canônica, frase confirmada e ocorrência. São no máximo
   100 exemplos, com frases de até 600 caracteres, apagáveis individualmente ou
   em conjunto. O beta começa desligado e não envia ditados pessoais.
+- A prévia contínua é opcional e começa desligada. Suas hipóteses ficam somente
+  na sessão atual e no HUD do Resenha; não entram no clipboard, histórico ou
+  aplicativo de destino. O contexto temporário é descartado ao finalizar ou
+  cancelar.
+
+## Inteligência contextual contínua
+
+O áudio continua sempre local. Nesta versão, ditados pessoais não possuem
+autoridade de transporte remoto e geram zero requisições, mesmo quando a prévia
+local está ativa. O diagnóstico sintético descrito abaixo não concede essa
+autoridade.
+
+Uma versão futura só poderá enviar texto reconhecido após consentimento próprio,
+revogável e explícito. Jev será limitado a escolher entre alternativas
+permitidas, vinculadas a ocorrências do texto reconhecido; não receberá áudio,
+não gerará próximos tokens e não poderá reescrever texto já inserido. Falha,
+timeout, revogação ou resposta tardia preservam o candidato local.
 
 ## Diagnóstico sintético opcional
 
