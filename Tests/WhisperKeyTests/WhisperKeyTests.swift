@@ -1,4 +1,5 @@
 import AppKit
+import CryptoKit
 import XCTest
 import SwiftUI
 @testable import WhisperKey
@@ -3686,6 +3687,90 @@ private enum ContextualCorpusOutcomeKind: String, Codable {
 }
 private enum ContextualCorpusChoice: String, Codable { case keepOriginal = "keep_original", replace = "replace_1" }
 
+private struct ContinuousContextEventsFixture: Decodable {
+    struct Event: Decodable {
+        let revision: Int
+        let logicalOffsetMilliseconds: Int
+        let text: String
+        let isFinal: Bool
+    }
+
+    struct Case: Decodable {
+        let id: String
+        let category: String
+        let noChangeRequired: Bool
+        let sourceEvents: [Event]
+        let expectedCompletedRecordingText: String
+        let expectedFinalReferenceText: String
+        let allowedContextualAlternatives: [String]
+    }
+
+    let schemaVersion: Int
+    let corpusVersion: String
+    let language: String
+    let provenance: String
+    let evidenceScope: String
+    let eventTimeBasis: String
+    let containsAudioOrPCM: Bool
+    let cases: [Case]
+
+    static let frozenSHA256 = "46c5794007c61b5135374cc275f01d5a012838807c28df6624d77fd556dd9415"
+    static let requiredCategories: Set<String> = [
+        "homophone", "technical_term", "names_identifiers", "negation", "numbers",
+        "code_switching", "unicode", "pauses", "retractions", "repeated_occurrences",
+        "topic_changes"
+    ]
+
+    static func load(bundle: Bundle) throws -> (fixture: Self, data: Data, url: URL) {
+        let url = try XCTUnwrap(bundle.url(forResource: "continuous-context-events", withExtension: "json"))
+        let data = try Data(contentsOf: url)
+        return (try JSONDecoder().decode(Self.self, from: data), data, url)
+    }
+
+    func validate() -> Bool {
+        let contextualCases = cases.filter { !$0.noChangeRequired }
+        let controls = cases.filter(\.noChangeRequired)
+        guard schemaVersion == 1,
+              corpusVersion == "2026-10-21.1",
+              language == "pt-BR",
+              provenance == "synthetic_invented",
+              evidenceScope == "semantic_orchestration_only",
+              eventTimeBasis == "simulated_logical_milliseconds",
+              !containsAudioOrPCM,
+              contextualCases.count >= 40,
+              controls.count >= 10,
+              Set(cases.map(\.id)).count == cases.count,
+              Set(cases.map(\.category)).isSuperset(of: Self.requiredCategories) else { return false }
+
+        for item in cases {
+            guard !item.sourceEvents.isEmpty,
+                  !item.expectedCompletedRecordingText.isEmpty,
+                  !item.expectedFinalReferenceText.isEmpty,
+                  !item.allowedContextualAlternatives.isEmpty,
+                  item.allowedContextualAlternatives.contains(item.expectedFinalReferenceText),
+                  item.sourceEvents.last?.isFinal == true,
+                  item.sourceEvents.last?.text == item.expectedCompletedRecordingText else { return false }
+
+            for (index, event) in item.sourceEvents.enumerated() {
+                guard event.revision == index + 1,
+                      event.logicalOffsetMilliseconds >= 0,
+                      !event.text.isEmpty else { return false }
+                if index > 0 {
+                    guard event.logicalOffsetMilliseconds > item.sourceEvents[index - 1].logicalOffsetMilliseconds else {
+                        return false
+                    }
+                }
+            }
+
+            if item.noChangeRequired {
+                guard item.expectedFinalReferenceText == item.expectedCompletedRecordingText,
+                      item.allowedContextualAlternatives == [item.expectedCompletedRecordingText] else { return false }
+            }
+        }
+        return true
+    }
+}
+
 private struct ContextualCorpusFixture: Decodable {
     struct Learning: Codable {
         let id: String
@@ -3792,6 +3877,25 @@ private struct ContextualCorpusFixture: Decodable {
 }
 
 extension ContextualTransportCorpusTests {
+    func testContinuousContextCorpusIsBundledFrozenAndSchemaValid() throws {
+        let testBundle = Bundle(for: ContextualTransportCorpusTests.self)
+        let loaded = try ContinuousContextEventsFixture.load(bundle: testBundle)
+
+        XCTAssertTrue(loaded.url.path.contains("WhisperKeyTests.xctest/Contents/Resources"))
+        XCTAssertTrue(loaded.fixture.validate())
+        XCTAssertEqual(loaded.fixture.cases.filter { !$0.noChangeRequired }.count, 43)
+        XCTAssertEqual(loaded.fixture.cases.filter(\.noChangeRequired).count, 10)
+        XCTAssertEqual(
+            SHA256.hash(data: loaded.data).map { String(format: "%02x", $0) }.joined(),
+            ContinuousContextEventsFixture.frozenSHA256,
+            "The pre-implementation corpus changed. Re-plan and freeze a new baseline before resuming implementation."
+        )
+
+        let appURL = try XCTUnwrap(Bundle.main.url(forResource: "continuous-context-events", withExtension: "json"))
+        XCTAssertTrue(appURL.path.contains("Resenha.app/Contents/Resources"))
+        XCTAssertEqual(try Data(contentsOf: appURL), loaded.data)
+    }
+
     func testCorpusSchemaFreezesLearningEvaluationAndDiagnosticIDs() throws {
         let fixture = try ContextualCorpusFixture.load()
         XCTAssertTrue(fixture.validate())

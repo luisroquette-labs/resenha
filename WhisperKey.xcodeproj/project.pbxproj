@@ -27,6 +27,8 @@
 		73B3AA17549C4AF0E03C6F25 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = B63B342300F9037E5752DC51 /* PrivacyInfo.xcprivacy */; };
 		86DFF8F34B535D75107AB91C /* AudioRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA553ED088000409A1534B10 /* AudioRecorder.swift */; };
 		8A12E0347CA26301459DABDD /* MenuPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E88ECFDFC9BE5A2B95ED500 /* MenuPresentation.swift */; };
+		9CB3B868A339A2ABAB2B44CE /* continuous-context-events.json in Resources */ = {isa = PBXBuildFile; fileRef = 1C11C1398C6FAE6E4CB06E53 /* continuous-context-events.json */; };
+		9E9B5A2E736157310DA189AF /* continuous-context-events.json in Resources */ = {isa = PBXBuildFile; fileRef = 1C11C1398C6FAE6E4CB06E53 /* continuous-context-events.json */; };
 		A117C517B23C28101A3AD434 /* contextual-corrections.json in Resources */ = {isa = PBXBuildFile; fileRef = B37F99010A42725CC6F7CAEE /* contextual-corrections.json */; };
 		A43F5E47CFC6FC2CDEC601A4 /* DictationCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E0F01DAE4C30ED2DC6B9DBC /* DictationCoordinator.swift */; };
 		B35865AFF46A73E125E89E8F /* WhisperKeyApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FFCCC5A27F52BFFEE1004E2 /* WhisperKeyApp.swift */; };
@@ -56,6 +58,7 @@
 		06A6C0A3CA2A532832FE5EA2 /* FloatingStatusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatingStatusView.swift; sourceTree = "<group>"; };
 		08C6D6EE682FF41296ABF618 /* Accelerate.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Accelerate.framework; path = System/Library/Frameworks/Accelerate.framework; sourceTree = SDKROOT; };
 		134C1BDCDE10F8CF85B7E4CF /* HotkeyMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyMonitor.swift; sourceTree = "<group>"; };
+		1C11C1398C6FAE6E4CB06E53 /* continuous-context-events.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "continuous-context-events.json"; sourceTree = "<group>"; };
 		1E88ECFDFC9BE5A2B95ED500 /* MenuPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuPresentation.swift; sourceTree = "<group>"; };
 		360ACBBE554E2869FCDC8B7E /* DictationInteraction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DictationInteraction.swift; sourceTree = "<group>"; };
 		455B40E8E0EA98B11A9E7FF5 /* PermissionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionService.swift; sourceTree = "<group>"; };
@@ -106,6 +109,7 @@
 			isa = PBXGroup;
 			children = (
 				B37F99010A42725CC6F7CAEE /* contextual-corrections.json */,
+				1C11C1398C6FAE6E4CB06E53 /* continuous-context-events.json */,
 			);
 			name = Fixtures;
 			path = Tests/Fixtures;
@@ -289,6 +293,7 @@
 				21BFEB851E15B4030C254977 /* Assets.xcassets in Resources */,
 				73B3AA17549C4AF0E03C6F25 /* PrivacyInfo.xcprivacy in Resources */,
 				A117C517B23C28101A3AD434 /* contextual-corrections.json in Resources */,
+				9E9B5A2E736157310DA189AF /* continuous-context-events.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -297,6 +302,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				FD7E2301B6500BD3FE29F902 /* contextual-corrections.json in Resources */,
+				9CB3B868A339A2ABAB2B44CE /* continuous-context-events.json in Resources */,
 				C2AE8F8BDE3F2909C47F5A3E /* jfk.wav in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
