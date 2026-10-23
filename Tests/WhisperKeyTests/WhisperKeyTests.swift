@@ -6956,12 +6956,13 @@ final class ContextualCoordinatorTests: XCTestCase {
         attemptID: UUID,
         snapshotID: UInt64 = 1
     ) {
+        let candidateAt = ProcessInfo.processInfo.systemUptime
         harness.coordinator.receiveContinuousHypothesis(
             .init(
                 snapshotID: snapshotID,
                 sampleRange: 0..<8_000,
-                capturedAt: 1,
-                candidateAt: 2,
+                capturedAt: candidateAt,
+                candidateAt: candidateAt,
                 text: text,
                 isStale: false
             ),
