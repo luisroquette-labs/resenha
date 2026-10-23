@@ -159,6 +159,11 @@ struct ContinuousContextFinalCandidate: Equatable, Sendable {
     let generationIDs: ContinuousContextGenerationIDs
 }
 
+enum ContinuousContextApplication: Equatable, Sendable {
+    case direct(String)
+    case rebased(String)
+}
+
 final class ContinuousContextSession: @unchecked Sendable {
     struct Configuration: Equatable, Sendable {
         static let standard = Configuration()
@@ -215,6 +220,8 @@ final class ContinuousContextSession: @unchecked Sendable {
         var lastWorkDispatchedAt: TimeInterval?
         var contextualPreviewText: String?
         var finalCandidate: ContinuousContextFinalCandidate?
+        var proactiveSignature: ProactiveCandidateSignature?
+        var proactiveSignatureCount = 0
     }
 
     private let configuration: Configuration
@@ -386,6 +393,27 @@ final class ContinuousContextSession: @unchecked Sendable {
         }
     }
 
+    func isStableForDispatch(_ occurrence: ContextualCorrectionOccurrence) -> Bool {
+        lock.withLock {
+            if occurrence.alternatives.allSatisfy({ $0.source == .learned }) { return true }
+            let signature = ProactiveCandidateSignature(occurrence)
+            if storage.proactiveSignature == signature {
+                storage.proactiveSignatureCount += 1
+            } else {
+                storage.proactiveSignature = signature
+                storage.proactiveSignatureCount = 1
+            }
+            return storage.proactiveSignatureCount >= 2
+        }
+    }
+
+    func resetProactiveStability() {
+        lock.withLock {
+            storage.proactiveSignature = nil
+            storage.proactiveSignatureCount = 0
+        }
+    }
+
     @discardableResult
     func registerCancellation(
         for work: ContinuousContextWork,
@@ -423,23 +451,48 @@ final class ContinuousContextSession: @unchecked Sendable {
 
     @discardableResult
     func applyContextualResult(_ result: RevisionBoundContextualResult, for work: ContinuousContextWork) -> Bool {
+        applyContextualResult(result, occurrence: nil, for: work) != nil
+    }
+
+    @discardableResult
+    func applyContextualResult(
+        _ result: RevisionBoundContextualResult,
+        occurrence: ContextualCorrectionOccurrence?,
+        for work: ContinuousContextWork
+    ) -> ContinuousContextApplication? {
         lock.withLock {
             guard storage.state == .capturing,
                   storage.activeWork?.id == work.id,
                   work.identity(
                     policyGeneration: result.identity.policyGeneration,
                     storeGeneration: result.identity.storeGeneration
-                  ) == result.identity else { return false }
+                  ) == result.identity else { return nil }
             storage.activeWork = nil
             storage.activeWorkCancellation = nil
             guard work.attemptID == storage.attemptID,
                   work.generationIDs.session == storage.sessionGeneration,
-                  work.revision == storage.latestRevision?.revision,
-                  work.sourceText == storage.latestRevision?.sourceText,
                   now() < work.expiresAt,
-                  result.originalText == work.sourceText else { return false }
-            storage.contextualPreviewText = result.text
-            return true
+                  result.originalText == work.sourceText,
+                  let latest = storage.latestRevision else { return nil }
+            let application: ContinuousContextApplication
+            if work.revision == latest.revision, work.sourceText == latest.sourceText {
+                application = .direct(result.text)
+            } else if let occurrence,
+                      let rebased = ContextualRevisionRebase.apply(
+                        result: result,
+                        evaluatedSource: work.sourceText,
+                        occurrence: occurrence,
+                        to: latest.sourceText
+                      ) {
+                application = .rebased(rebased)
+            } else {
+                return nil
+            }
+            let text = switch application {
+            case .direct(let text), .rebased(let text): text
+            }
+            storage.contextualPreviewText = text
+            return application
         }
     }
 
@@ -504,6 +557,8 @@ final class ContinuousContextSession: @unchecked Sendable {
         storage.retainedAudioRange = nil
         storage.retainedContext = ""
         storage.contextualPreviewText = nil
+        storage.proactiveSignature = nil
+        storage.proactiveSignatureCount = 0
         if !keepingFinalCandidate { storage.finalCandidate = nil }
         return cancellation
     }
@@ -599,6 +654,9 @@ final class RevisionBoundJevLoop {
     private let storeSnapshot: @MainActor @Sendable () -> ContextualCorrectionStoreSnapshot
     private let policyGeneration: @MainActor @Sendable () -> UInt64
     private let policy: ContextualCorrectionPolicy?
+    private let dispatchBudget: ContextualDispatchBudget
+    private let glossaryTerms: @MainActor @Sendable () -> [String]
+    private let thresholds: ProactiveCandidateThresholds
     private let onAttemptDisposition: @MainActor @Sendable (
         UUID, ContextualAttemptDisposition
     ) -> Void
@@ -611,6 +669,9 @@ final class RevisionBoundJevLoop {
         storeSnapshot: @escaping @MainActor @Sendable () -> ContextualCorrectionStoreSnapshot,
         policyGeneration: @escaping @MainActor @Sendable () -> UInt64,
         policy: ContextualCorrectionPolicy? = nil,
+        dispatchBudget: ContextualDispatchBudget = ContextualDispatchBudget(),
+        glossaryTerms: @escaping @MainActor @Sendable () -> [String] = { [] },
+        thresholds: ProactiveCandidateThresholds = .frozen,
         onAttemptDisposition: @escaping @MainActor @Sendable (
             UUID, ContextualAttemptDisposition
         ) -> Void = { _, _ in }
@@ -621,6 +682,9 @@ final class RevisionBoundJevLoop {
         self.storeSnapshot = storeSnapshot
         self.policyGeneration = policyGeneration
         self.policy = policy
+        self.dispatchBudget = dispatchBudget
+        self.glossaryTerms = glossaryTerms
+        self.thresholds = thresholds
         self.onAttemptDisposition = onAttemptDisposition
     }
 
@@ -649,11 +713,39 @@ final class RevisionBoundJevLoop {
             return abstained
         }
         guard (scope == .testDouble || (scope == .personalDictation && policyToken != nil)),
-              snapshot.health == .healthy,
-              let input = ContextualCorrectionResolver.validatedDecisionInput(
-                examples: snapshot.examples,
-                text: work.sourceText,
-                language: work.language
+              snapshot.health == .healthy else {
+            _ = session.applyContextualResult(abstained, for: work)
+            return abstained
+        }
+        let learned = ContextualCorrectionResolver.matchCandidates(
+            examples: snapshot.examples,
+            text: work.sourceText,
+            language: work.language
+        )
+        let occurrences: [ContextualCorrectionOccurrence]
+        if !learned.isEmpty {
+            occurrences = learned
+        } else if let proactive = ProactiveContextualCandidateGenerator.candidate(
+            text: work.sourceText,
+            language: work.language,
+            tokenEvidence: work.tokenEvidence,
+            glossaryTerms: glossaryTerms(),
+            examples: [],
+            thresholds: thresholds
+        ) {
+            guard session.isStableForDispatch(proactive) else {
+                _ = session.applyContextualResult(abstained, for: work)
+                return abstained
+            }
+            occurrences = [proactive]
+        } else {
+            session.resetProactiveStability()
+            _ = session.applyContextualResult(abstained, for: work)
+            return abstained
+        }
+        guard let input = ContextualCorrectionResolver.validatedDecisionInput(
+                occurrences: occurrences,
+                text: work.sourceText
               ),
               (try? OpenRouterDecisionsClient.requestBody(
                 sentence: input.sentence,
@@ -670,7 +762,7 @@ final class RevisionBoundJevLoop {
             sentence: input.sentence,
             language: work.language,
             occurrences: input.occurrences,
-            deadline: .init(offset: time.now().offset + .milliseconds(200))
+            deadline: .init(offset: time.now().offset + .milliseconds(1_200))
         )
         let race = RevisionBoundDecisionRace()
         let policyCancellation = RevisionBoundTaskCancellation()
@@ -683,6 +775,10 @@ final class RevisionBoundJevLoop {
         }
         defer {
             if let policyToken { policy?.finish(policyToken) }
+        }
+        guard dispatchBudget.consume() else {
+            _ = session.applyContextualResult(abstained, for: work)
+            return abstained
         }
         let provider = provider
         let providerTask = Task { [time] in
@@ -753,12 +849,25 @@ final class RevisionBoundJevLoop {
             text: resolved,
             outcome: outcome
         )
-        guard session.applyContextualResult(result, for: work) else {
+        let rebaseOccurrence = request.occurrences.count == 1 ? request.occurrences[0] : nil
+        guard let application = session.applyContextualResult(
+            result,
+            occurrence: rebaseOccurrence,
+            for: work
+        ) else {
             report(receipt, .discarded)
             return abstained
         }
         report(receipt, outcome.category == .replaced ? .appliedReplacement : .keptOriginal)
-        return result
+        let appliedText = switch application {
+        case .direct(let text), .rebased(let text): text
+        }
+        return RevisionBoundContextualResult(
+            identity: identity,
+            originalText: request.originalText,
+            text: appliedText,
+            outcome: outcome
+        )
     }
 
     private func report(

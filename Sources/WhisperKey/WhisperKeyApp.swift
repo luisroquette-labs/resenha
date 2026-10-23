@@ -180,7 +180,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     self.panel.updateContinuousPreview(revision)
                 }
             },
-            continuousContextLoopFactory: { [weak self] session in
+            continuousContextLoopFactory: { [weak self] session, budget in
                 guard let self else { return nil }
                 return RevisionBoundJevLoop(
                     session: session,
@@ -189,6 +189,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     storeSnapshot: { [contextualStore] in contextualStore.snapshot },
                     policyGeneration: { [contextualPolicy] in contextualPolicy.generation },
                     policy: self.contextualPolicy,
+                    dispatchBudget: budget,
+                    glossaryTerms: { [weak preferences] in
+                        TranscriptionGlossary(
+                            text: preferences?.transcriptionGlossary ?? TranscriptionGlossary.defaultText
+                        ).terms
+                    },
                     onAttemptDisposition: { [contextualAttemptStore] id, disposition in
                         Task { @MainActor in
                             contextualAttemptStore.consume(.resolved(id: id, disposition: disposition))

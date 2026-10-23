@@ -106,7 +106,9 @@ final class ContextualAttemptStore: ObservableObject {
             update(id: id, startedAt: startedAt, completedAt: completedAt) { record in
                 record.status = .succeeded
                 record.resolvedModel = String(receipt.resolvedModel.prefix(128))
-                record.decisions = Array(receipt.decisions.prefix(3)).map(\.choice)
+                record.decisions = Array(receipt.decisions.prefix(3))
+                    .map(\.choice)
+                    .filter(Self.isSafeChoice)
                 record.minimumConfidence = Self.probability(receipt.decisions.map(\.confidence).min())
                 record.minimumProbability = Self.probability(receipt.decisions.map(\.chosenProbability).min())
                 record.latencyMilliseconds = max(0, latency)
@@ -226,6 +228,7 @@ final class ContextualAttemptStore: ObservableObject {
     private static func isValid(_ record: ContextualAttemptRecord) -> Bool {
         record.resolvedModel.map { !$0.isEmpty && $0.count <= 128 } ?? true
             && record.decisions.count <= 3
+            && record.decisions.allSatisfy(isSafeChoice)
             && probability(record.minimumConfidence) == record.minimumConfidence
             && probability(record.minimumProbability) == record.minimumProbability
             && record.latencyMilliseconds.map { $0 >= 0 } ?? true
@@ -233,6 +236,12 @@ final class ContextualAttemptStore: ObservableObject {
             && record.outputTokens.map { $0 >= 0 } ?? true
             && cost(record.costUSD) == record.costUSD
             && record.providerRequestID.map { !$0.isEmpty && $0.count <= 128 } ?? true
+    }
+
+    private static func isSafeChoice(_ choice: ContextualDecisionChoice) -> Bool {
+        if choice == .keepOriginal { return true }
+        guard choice.rawValue.hasPrefix("replace_") else { return false }
+        return (1...3).contains(Int(choice.rawValue.dropFirst("replace_".count)) ?? 0)
     }
 }
 

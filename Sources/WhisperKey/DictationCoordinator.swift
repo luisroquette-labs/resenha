@@ -34,7 +34,9 @@ typealias ContextualStoreGenerationSource = @MainActor @Sendable () -> UInt64
 typealias ContinuousContextSessionFactory = @MainActor @Sendable () -> ContinuousContextSession
 typealias ContinuousContextPreview = @MainActor @Sendable (ContinuousContextRevision?) -> Void
 typealias ContinuousContextualPreview = @MainActor @Sendable (UUID, UInt64, String) -> Void
-typealias ContinuousContextLoopFactory = @MainActor @Sendable (ContinuousContextSession) -> RevisionBoundJevLoop?
+typealias ContinuousContextLoopFactory = @MainActor @Sendable (
+    ContinuousContextSession, ContextualDispatchBudget
+) -> RevisionBoundJevLoop?
 
 @MainActor
 protocol DictationOutputSink {
@@ -166,6 +168,7 @@ final class DictationCoordinator {
     private var continuousSession: ContinuousContextSession?
     private var continuousJevLoop: RevisionBoundJevLoop?
     private var continuousJevTask: Task<Void, Never>?
+    private var contextualDispatchBudget: ContextualDispatchBudget?
     private var rollingRecognizer: RollingWhisperRecognizer?
     private var finalOutputAttemptID: UUID?
     private(set) var attemptID = UUID()
@@ -194,7 +197,7 @@ final class DictationCoordinator {
         continuousPreviewVisible: @escaping @MainActor @Sendable () -> Bool = { true },
         continuousContextSessionFactory: @escaping ContinuousContextSessionFactory = { ContinuousContextSession() },
         onContinuousPreview: @escaping ContinuousContextPreview = { _ in },
-        continuousContextLoopFactory: @escaping ContinuousContextLoopFactory = { _ in nil },
+        continuousContextLoopFactory: @escaping ContinuousContextLoopFactory = { _, _ in nil },
         onContinuousContextualPreview: @escaping ContinuousContextualPreview = { _, _, _ in },
         outputSink: any DictationOutputSink,
         contextualResolver: any ContextualResolving,
@@ -232,6 +235,7 @@ final class DictationCoordinator {
         invalidateContinuousContext()
         panel.hide()
         attemptID = UUID()
+        contextualDispatchBudget = ContextualDispatchBudget()
         currentError = nil
         sessionLanguage = language()
         targetApplication = NSWorkspace.shared.frontmostApplication
@@ -340,7 +344,8 @@ final class DictationCoordinator {
             text: transcript,
             language: language.rawValue,
             policyToken: token,
-            storeGenerationAtStart: generation
+            storeGenerationAtStart: generation,
+            dispatchBudget: contextualDispatchBudget ?? ContextualDispatchBudget()
         ))
         try Task.checkCancellation()
         guard self.attemptID == attemptID,
@@ -428,7 +433,9 @@ final class DictationCoordinator {
             return false
         }
         continuousSession = session
-        continuousJevLoop = continuousContextLoopFactory(session)
+        let budget = contextualDispatchBudget ?? ContextualDispatchBudget()
+        contextualDispatchBudget = budget
+        continuousJevLoop = continuousContextLoopFactory(session, budget)
         rollingRecognizer = recognizer
         return true
     }
@@ -489,6 +496,7 @@ final class DictationCoordinator {
         task = nil
         executionControl = nil
         finalOutputAttemptID = nil
+        contextualDispatchBudget = nil
         targetApplication = nil
         panel.hide()
         if clearError { currentError = nil }
