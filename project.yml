@@ -6,6 +6,7 @@ options:
 settings:
   base:
     SWIFT_VERSION: "5.0"
+    SWIFT_OBJC_BRIDGING_HEADER: Config/WhisperKey-Bridging-Header.h
     MACOSX_DEPLOYMENT_TARGET: "14.0"
 targets:
   WhisperKey:
@@ -53,6 +54,8 @@ targets:
       - path: Tests/Fixtures/contextual-corrections.json
         buildPhase: resources
       - path: Tests/Fixtures/continuous-context-events.json
+        buildPhase: resources
+      - path: Tests/Fixtures/proactive-context-guidance.json
         buildPhase: resources
     dependencies:
       - target: WhisperKey

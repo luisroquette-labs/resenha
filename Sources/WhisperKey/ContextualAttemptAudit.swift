@@ -13,6 +13,19 @@ enum ContextualAttemptDisposition: String, Codable, Sendable {
     case discarded
 }
 
+enum ContextualAttemptStage: String, Codable, Sendable {
+    case rolling
+    case final
+}
+
+struct ContextualAttemptContext: Equatable, Sendable {
+    let dictationAttemptID: UUID
+    let stage: ContextualAttemptStage
+    let revision: UInt64?
+    let dispatchOrdinal: Int
+    let candidateToDecisionMilliseconds: Int?
+}
+
 enum ContextualAttemptFailure: String, Codable, Sendable {
     case authorization
     case rejected
@@ -53,6 +66,11 @@ struct ContextualAttemptRecord: Codable, Equatable, Identifiable, Sendable {
     var costUSD: Decimal?
     var providerRequestID: String? = nil
     var disposition: ContextualAttemptDisposition? = nil
+    var dictationAttemptID: UUID? = nil
+    var stage: ContextualAttemptStage? = nil
+    var revision: UInt64? = nil
+    var dispatchOrdinal: Int? = nil
+    var candidateToDecisionMilliseconds: Int? = nil
     var failure: ContextualAttemptFailure?
 
     var providerResponseConfirmed: Bool { status == .succeeded }
@@ -68,7 +86,11 @@ enum ContextualProviderAttemptEvent: Sendable {
         id: UUID, startedAt: Date, completedAt: Date,
         latencyMilliseconds: Int, failure: ContextualAttemptFailure
     )
-    case resolved(id: UUID, disposition: ContextualAttemptDisposition)
+    case resolved(
+        id: UUID,
+        disposition: ContextualAttemptDisposition,
+        context: ContextualAttemptContext
+    )
 }
 
 @MainActor
@@ -81,7 +103,7 @@ final class ContextualAttemptStore: ObservableObject {
     @Published private(set) var storageAvailable = true
     private let fileURL: URL
     private let fileManager: FileManager
-    private var pendingDispositions: [UUID: ContextualAttemptDisposition] = [:]
+    private var pendingResolutions: [UUID: (ContextualAttemptDisposition, ContextualAttemptContext)] = [:]
 
     var latest: ContextualAttemptRecord? { records.last }
 
@@ -106,7 +128,9 @@ final class ContextualAttemptStore: ObservableObject {
             update(id: id, startedAt: startedAt, completedAt: completedAt) { record in
                 record.status = .succeeded
                 record.resolvedModel = String(receipt.resolvedModel.prefix(128))
-                record.decisions = Array(receipt.decisions.prefix(3)).map(\.choice)
+                record.decisions = Array(receipt.decisions.prefix(3))
+                    .map(\.choice)
+                    .filter(Self.isSafeChoice)
                 record.minimumConfidence = Self.probability(receipt.decisions.map(\.confidence).min())
                 record.minimumProbability = Self.probability(receipt.decisions.map(\.chosenProbability).min())
                 record.latencyMilliseconds = max(0, latency)
@@ -114,7 +138,9 @@ final class ContextualAttemptStore: ObservableObject {
                 record.outputTokens = receipt.outputTokens.flatMap { $0 >= 0 ? $0 : nil }
                 record.costUSD = Self.cost(receipt.costUSD)
                 record.providerRequestID = receipt.providerRequestID.map { String($0.prefix(128)) }
-                record.disposition = pendingDispositions.removeValue(forKey: id)
+                if let pending = pendingResolutions.removeValue(forKey: id) {
+                    Self.apply(pending, to: &record)
+                }
                 record.failure = nil
             }
         case .failed(let id, let startedAt, let completedAt, let latency, let failure):
@@ -123,16 +149,16 @@ final class ContextualAttemptStore: ObservableObject {
                 record.latencyMilliseconds = max(0, latency)
                 record.failure = failure
             }
-        case .resolved(let id, let disposition):
+        case .resolved(let id, let disposition, let context):
             guard let index = records.lastIndex(where: { $0.id == id && $0.status == .succeeded }) else {
-                if pendingDispositions.count >= Self.maximumRecords,
-                   let oldest = pendingDispositions.keys.first {
-                    pendingDispositions.removeValue(forKey: oldest)
+                if pendingResolutions.count >= Self.maximumRecords,
+                   let oldest = pendingResolutions.keys.first {
+                    pendingResolutions.removeValue(forKey: oldest)
                 }
-                pendingDispositions[id] = disposition
+                pendingResolutions[id] = (disposition, context)
                 return
             }
-            records[index].disposition = disposition
+            Self.apply((disposition, context), to: &records[index])
         }
         if records.count > Self.maximumRecords {
             records.removeFirst(records.count - Self.maximumRecords)
@@ -142,13 +168,25 @@ final class ContextualAttemptStore: ObservableObject {
 
     func deleteAll() {
         records = []
-        pendingDispositions = [:]
+        pendingResolutions = [:]
         do {
             if fileManager.fileExists(atPath: fileURL.path) { try fileManager.removeItem(at: fileURL) }
             storageAvailable = true
         } catch {
             storageAvailable = false
         }
+    }
+
+    private static func apply(
+        _ resolution: (ContextualAttemptDisposition, ContextualAttemptContext),
+        to record: inout ContextualAttemptRecord
+    ) {
+        record.disposition = resolution.0
+        record.dictationAttemptID = resolution.1.dictationAttemptID
+        record.stage = resolution.1.stage
+        record.revision = resolution.1.revision
+        record.dispatchOrdinal = resolution.1.dispatchOrdinal
+        record.candidateToDecisionMilliseconds = resolution.1.candidateToDecisionMilliseconds
     }
 
     nonisolated static func defaultURL(fileManager: FileManager = .default) -> URL {
@@ -226,6 +264,7 @@ final class ContextualAttemptStore: ObservableObject {
     private static func isValid(_ record: ContextualAttemptRecord) -> Bool {
         record.resolvedModel.map { !$0.isEmpty && $0.count <= 128 } ?? true
             && record.decisions.count <= 3
+            && record.decisions.allSatisfy(isSafeChoice)
             && probability(record.minimumConfidence) == record.minimumConfidence
             && probability(record.minimumProbability) == record.minimumProbability
             && record.latencyMilliseconds.map { $0 >= 0 } ?? true
@@ -233,6 +272,33 @@ final class ContextualAttemptStore: ObservableObject {
             && record.outputTokens.map { $0 >= 0 } ?? true
             && cost(record.costUSD) == record.costUSD
             && record.providerRequestID.map { !$0.isEmpty && $0.count <= 128 } ?? true
+            && hasValidContext(record)
+    }
+
+    private static func hasValidContext(_ record: ContextualAttemptRecord) -> Bool {
+        let fieldsAreAbsent = record.dictationAttemptID == nil && record.stage == nil
+            && record.revision == nil && record.dispatchOrdinal == nil
+            && record.candidateToDecisionMilliseconds == nil
+        if fieldsAreAbsent { return true }
+        guard record.dictationAttemptID != nil,
+              let stage = record.stage,
+              let dispatch = record.dispatchOrdinal,
+              (1...6).contains(dispatch) else { return false }
+        switch stage {
+        case .rolling:
+            guard let revision = record.revision, revision > 0,
+                  let latency = record.candidateToDecisionMilliseconds,
+                  (0...60_000).contains(latency) else { return false }
+        case .final:
+            guard record.candidateToDecisionMilliseconds == nil else { return false }
+        }
+        return true
+    }
+
+    private static func isSafeChoice(_ choice: ContextualDecisionChoice) -> Bool {
+        if choice == .keepOriginal { return true }
+        guard choice.rawValue.hasPrefix("replace_") else { return false }
+        return (1...3).contains(Int(choice.rawValue.dropFirst("replace_".count)) ?? 0)
     }
 }
 

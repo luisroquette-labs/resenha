@@ -68,7 +68,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         credentialStore: personalCredentialStore,
         authorizationStateStore: personalAuthorizationStateStore,
         policy: contextualPolicy,
-        storeSnapshot: { [contextualStore] in contextualStore.snapshot }
+        storeSnapshot: { [contextualStore] in contextualStore.snapshot },
+        proactiveEvidenceAvailable: { WhisperTranscriber.supportsProactiveEvidence }
     )
     private lazy var personalClient: OpenRouterDecisionsClient = {
         let authorization = personalAuthorization
@@ -97,9 +98,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         provider: personalClient,
         storeGeneration: { [contextualStore] in contextualStore.generation },
         time: contextualTimeComposition.shared,
-        onAttemptDisposition: { [contextualAttemptStore] id, disposition in
+        onAttemptDisposition: { [contextualAttemptStore] id, disposition, context in
             Task { @MainActor in
-                contextualAttemptStore.consume(.resolved(id: id, disposition: disposition))
+                contextualAttemptStore.consume(.resolved(
+                    id: id, disposition: disposition, context: context
+                ))
             }
         }
     )
@@ -180,7 +183,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     self.panel.updateContinuousPreview(revision)
                 }
             },
-            continuousContextLoopFactory: { [weak self] session in
+            continuousContextLoopFactory: { [weak self] session, budget in
                 guard let self else { return nil }
                 return RevisionBoundJevLoop(
                     session: session,
@@ -189,9 +192,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     storeSnapshot: { [contextualStore] in contextualStore.snapshot },
                     policyGeneration: { [contextualPolicy] in contextualPolicy.generation },
                     policy: self.contextualPolicy,
-                    onAttemptDisposition: { [contextualAttemptStore] id, disposition in
+                    dispatchBudget: budget,
+                    glossaryTerms: { [weak preferences] in
+                        TranscriptionGlossary(
+                            text: preferences?.transcriptionGlossary ?? TranscriptionGlossary.defaultText
+                        ).terms
+                    },
+                    onAttemptDisposition: { [contextualAttemptStore] id, disposition, context in
                         Task { @MainActor in
-                            contextualAttemptStore.consume(.resolved(id: id, disposition: disposition))
+                            contextualAttemptStore.consume(.resolved(
+                                id: id, disposition: disposition, context: context
+                            ))
                         }
                     }
                 )

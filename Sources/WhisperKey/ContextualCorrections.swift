@@ -2,6 +2,24 @@ import Combine
 import Foundation
 import Security
 
+struct ProactiveCandidateThresholds: Codable, Equatable, Sendable {
+    static let frozen = Self(
+        tokenProbability: 0.85,
+        maximumLogitGap: 1.5,
+        minimumVocabularySimilarity: 0.45
+    )
+
+    let tokenProbability: Float
+    let maximumLogitGap: Float
+    let minimumVocabularySimilarity: Double
+
+    func accepts(tokenProbability: Float, logitGap: Float, vocabularySimilarity: Double) -> Bool {
+        tokenProbability <= self.tokenProbability
+            && logitGap <= maximumLogitGap
+            && vocabularySimilarity >= minimumVocabularySimilarity
+    }
+}
+
 struct ContextualCorrectionExample: Codable, Equatable, Identifiable, Sendable {
     let id: UUID
     let language: String
@@ -341,13 +359,287 @@ struct ContextualCorrectionOccurrence: Equatable, Sendable {
     let questionID: String
     let heard: String
     let canonical: String
+    let alternatives: [ContextualReplacementOption]
     let ordinal: Int
     let range: Range<String.Index>
+
+    init(
+        questionID: String,
+        heard: String,
+        canonical: String,
+        alternatives: [ContextualReplacementOption]? = nil,
+        ordinal: Int,
+        range: Range<String.Index>
+    ) {
+        self.questionID = questionID
+        self.heard = heard
+        self.canonical = canonical
+        self.alternatives = alternatives ?? [
+            ContextualReplacementOption(id: "replace_1", value: canonical, source: .learned)
+        ]
+        self.ordinal = ordinal
+        self.range = range
+    }
 }
 
-enum ContextualDecisionChoice: String, Codable, Sendable {
-    case keepOriginal = "keep_original"
-    case replace = "replace_1"
+enum ContextualCandidateSource: String, Codable, Sendable {
+    case learned
+    case acoustic
+    case vocabulary
+}
+
+struct ContextualReplacementOption: Equatable, Sendable {
+    let id: String
+    let value: String
+    let source: ContextualCandidateSource
+}
+
+struct ProactiveContextualCandidateGenerator {
+    static func candidate(
+        text: String,
+        language: String,
+        tokenEvidence: [WhisperTokenEvidence],
+        glossaryTerms: [String],
+        examples: [ContextualCorrectionExample],
+        thresholds: ProactiveCandidateThresholds
+    ) -> ContextualCorrectionOccurrence? {
+        if let learned = ContextualCorrectionResolver.matchCandidates(
+            examples: examples,
+            text: text,
+            language: language
+        ).first {
+            return learned
+        }
+        guard language.lowercased().hasPrefix("pt") else { return nil }
+
+        for (evidenceIndex, evidence) in tokenEvidence.enumerated() {
+            let heard = evidence.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard evidence.probability.isFinite,
+                  evidence.probability <= thresholds.tokenProbability,
+                  isSafeTerm(heard) else { continue }
+            let foldedHeard = folded(heard)
+            let ranges = wholeTermRanges(heard, in: text)
+            let evidenceOrdinal = tokenEvidence.prefix(evidenceIndex + 1).filter {
+                folded($0.text.trimmingCharacters(in: .whitespacesAndNewlines)) == foldedHeard
+            }.count
+            let evidenceCount = tokenEvidence.filter {
+                folded($0.text.trimmingCharacters(in: .whitespacesAndNewlines)) == foldedHeard
+            }.count
+            guard !ranges.isEmpty,
+                  ranges.count == evidenceCount,
+                  evidenceOrdinal > 0,
+                  evidenceOrdinal <= ranges.count else { continue }
+
+            let acoustic = acousticOptions(
+                evidence: evidence,
+                heard: heard,
+                maximumLogitGap: thresholds.maximumLogitGap
+            )
+            if !acoustic.isEmpty {
+                return occurrence(heard: heard, options: acoustic, ordinal: evidenceOrdinal, ranges: ranges)
+            }
+
+            let vocabulary = vocabularyOptions(
+                heard: heard,
+                terms: Array(glossaryTerms.prefix(200)) + Array(examples.prefix(100).map(\.canonical)),
+                minimumSimilarity: thresholds.minimumVocabularySimilarity
+            )
+            if !vocabulary.isEmpty {
+                return occurrence(heard: heard, options: vocabulary, ordinal: evidenceOrdinal, ranges: ranges)
+            }
+        }
+        return nil
+    }
+
+    private static func occurrence(
+        heard: String,
+        options: [ContextualReplacementOption],
+        ordinal: Int,
+        ranges: [Range<String.Index>]
+    ) -> ContextualCorrectionOccurrence? {
+        guard ordinal > 0, ordinal <= ranges.count, let first = options.first else { return nil }
+        let range = ranges[ordinal - 1]
+        return ContextualCorrectionOccurrence(
+            questionID: "o1",
+            heard: heard,
+            canonical: first.value,
+            alternatives: options,
+            ordinal: ordinal,
+            range: range
+        )
+    }
+
+    private static func acousticOptions(
+        evidence: WhisperTokenEvidence,
+        heard: String,
+        maximumLogitGap: Float
+    ) -> [ContextualReplacementOption] {
+        guard let best = evidence.alternatives.first?.logit, best.isFinite else { return [] }
+        var seen = Set<String>()
+        let candidates: [ContextualReplacementOption] = evidence.alternatives.compactMap { alternative in
+            let value = alternative.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            let identity = folded(value)
+            guard alternative.logit.isFinite,
+                  best - alternative.logit <= maximumLogitGap,
+                  identity != folded(heard),
+                  seen.insert(identity).inserted,
+                  isSafeReplacement(heard: heard, replacement: value) else { return nil }
+            return ContextualReplacementOption(id: "", value: value, source: .acoustic)
+        }
+        return candidates.prefix(3).enumerated().map { index, option in
+            ContextualReplacementOption(id: "replace_\(index + 1)", value: option.value, source: option.source)
+        }
+    }
+
+    private static func vocabularyOptions(
+        heard: String,
+        terms: [String],
+        minimumSimilarity: Double
+    ) -> [ContextualReplacementOption] {
+        var seen = Set<String>()
+        let ranked = terms.compactMap { raw -> (String, String, Double)? in
+            let value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            let identity = folded(value)
+            guard identity != folded(heard),
+                  seen.insert(identity).inserted,
+                  isSafeReplacement(heard: heard, replacement: value) else { return nil }
+            return (value, identity, similarity(folded(heard), identity))
+        }.filter { $0.2 >= minimumSimilarity }
+            .sorted { lhs, rhs in lhs.2 == rhs.2 ? lhs.1 < rhs.1 : lhs.2 > rhs.2 }
+        guard let best = ranked.first else { return [] }
+        return [.init(id: "replace_1", value: best.0, source: .vocabulary)]
+    }
+
+    private static func isSafeReplacement(heard: String, replacement: String) -> Bool {
+        guard isSafeTerm(replacement), folded(heard) != folded(replacement) else { return false }
+        return heard.filter(\.isNumber) == replacement.filter(\.isNumber)
+    }
+
+    private static func isSafeTerm(_ value: String) -> Bool {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        let protected = CharacterSet(charactersIn: "@:/\\_`$€£¥")
+        let allowedPunctuation = CharacterSet(charactersIn: "-'’ ")
+        guard !trimmed.isEmpty,
+              trimmed.rangeOfCharacter(from: .decimalDigits) == nil,
+              trimmed.rangeOfCharacter(from: protected) == nil,
+              trimmed.unicodeScalars.contains(where: CharacterSet.letters.contains),
+              trimmed.unicodeScalars.allSatisfy({
+                  CharacterSet.letters.contains($0) || allowedPunctuation.contains($0)
+              }) else { return false }
+        return !Set(["não", "nao", "nunca", "jamais", "sem"]).contains(folded(trimmed))
+    }
+
+    private static func folded(_ value: String) -> String {
+        value.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: Locale(identifier: "pt_BR"))
+            .lowercased()
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func wholeTermRanges(_ term: String, in text: String) -> [Range<String.Index>] {
+        let escaped = NSRegularExpression.escapedPattern(for: term)
+        guard let regex = try? NSRegularExpression(
+            pattern: "(?<![\\p{L}\\p{N}])\(escaped)(?![\\p{L}\\p{N}])",
+            options: [.caseInsensitive]
+        ) else { return [] }
+        return regex.matches(
+            in: text,
+            range: NSRange(text.startIndex..<text.endIndex, in: text)
+        ).compactMap { Range($0.range, in: text) }
+    }
+
+    private static func similarity(_ lhs: String, _ rhs: String) -> Double {
+        let left = Array(lhs)
+        let right = Array(rhs)
+        guard !left.isEmpty || !right.isEmpty else { return 1 }
+        var table = Array(
+            repeating: Array(repeating: 0, count: right.count + 1),
+            count: left.count + 1
+        )
+        for index in 0...left.count { table[index][0] = index }
+        for index in 0...right.count { table[0][index] = index }
+        if !left.isEmpty, !right.isEmpty {
+            for i in 1...left.count {
+                for j in 1...right.count {
+                    let cost = left[i - 1] == right[j - 1] ? 0 : 1
+                    table[i][j] = min(
+                        table[i - 1][j] + 1,
+                        table[i][j - 1] + 1,
+                        table[i - 1][j - 1] + cost
+                    )
+                    if i > 1, j > 1, left[i - 1] == right[j - 2], left[i - 2] == right[j - 1] {
+                        table[i][j] = min(table[i][j], table[i - 2][j - 2] + cost)
+                    }
+                }
+            }
+        }
+        return 1 - Double(table[left.count][right.count]) / Double(max(left.count, right.count))
+    }
+}
+
+struct ContextualDecisionChoice: RawRepresentable, Codable, Equatable, Hashable, Sendable {
+    let rawValue: String
+
+    init(rawValue: String) { self.rawValue = rawValue }
+
+    static let keepOriginal = Self(rawValue: "keep_original")
+    static let replace = Self(rawValue: "replace_1")
+
+    init(from decoder: Decoder) throws {
+        rawValue = try decoder.singleValueContainer().decode(String.self)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
+}
+
+func replacementIndex(for choice: ContextualDecisionChoice, optionCount: Int) -> Int? {
+    guard choice != .keepOriginal,
+          choice.rawValue.hasPrefix("replace_"),
+          let number = Int(choice.rawValue.dropFirst("replace_".count)),
+          (1...optionCount).contains(number) else { return nil }
+    return number - 1
+}
+
+final class ContextualDispatchBudget: @unchecked Sendable {
+    private let limit: Int
+    private let lock = NSLock()
+    private var value = 0
+
+    init(limit: Int = 6) {
+        precondition(limit > 0)
+        self.limit = limit
+    }
+
+    func consume() -> Bool {
+        consumeOrdinal() != nil
+    }
+
+    func consumeOrdinal() -> Int? {
+        lock.withLock {
+            guard value < limit else { return nil }
+            value += 1
+            return value
+        }
+    }
+
+    var consumed: Int { lock.withLock { value } }
+}
+
+struct ProactiveCandidateSignature: Equatable, Sendable {
+    let foldedHeard: String
+    let ordinal: Int
+    let orderedOptionValues: [String]
+
+    init(_ occurrence: ContextualCorrectionOccurrence) {
+        foldedHeard = occurrence.heard.folding(
+            options: [.caseInsensitive, .diacriticInsensitive],
+            locale: Locale(identifier: "pt_BR")
+        ).lowercased()
+        ordinal = occurrence.ordinal
+        orderedOptionValues = occurrence.alternatives.map(\.value)
+    }
 }
 
 struct ContextualDecision: Equatable, Sendable {
@@ -529,6 +821,9 @@ struct ContextualResolutionRequest: Sendable {
     let policyToken: ContextualPolicyToken
     let storeGenerationAtStart: UInt64
     let revisionIdentity: ContextualRevisionWindowIdentity?
+    let tokenEvidence: [WhisperTokenEvidence]
+    let glossaryTerms: [String]
+    let dispatchBudget: ContextualDispatchBudget
 
     init(
         attemptID: UUID,
@@ -536,7 +831,10 @@ struct ContextualResolutionRequest: Sendable {
         language: String,
         policyToken: ContextualPolicyToken,
         storeGenerationAtStart: UInt64,
-        revisionIdentity: ContextualRevisionWindowIdentity? = nil
+        revisionIdentity: ContextualRevisionWindowIdentity? = nil,
+        tokenEvidence: [WhisperTokenEvidence] = [],
+        glossaryTerms: [String] = [],
+        dispatchBudget: ContextualDispatchBudget = ContextualDispatchBudget()
     ) {
         self.attemptID = attemptID
         self.text = text
@@ -544,6 +842,9 @@ struct ContextualResolutionRequest: Sendable {
         self.policyToken = policyToken
         self.storeGenerationAtStart = storeGenerationAtStart
         self.revisionIdentity = revisionIdentity
+        self.tokenEvidence = tokenEvidence
+        self.glossaryTerms = glossaryTerms
+        self.dispatchBudget = dispatchBudget
     }
 }
 
@@ -595,6 +896,39 @@ struct RevisionBoundContextualResult: Equatable, Sendable {
     let outcome: ValidatedContextualOutcome
 }
 
+struct ContextualRevisionRebase {
+    static func apply(
+        result: RevisionBoundContextualResult,
+        evaluatedSource: String,
+        occurrence: ContextualCorrectionOccurrence,
+        to latestSource: String
+    ) -> String? {
+        guard result.originalText == evaluatedSource,
+              latestSource.hasPrefix(evaluatedSource) else { return nil }
+        if result.text == evaluatedSource { return latestSource }
+
+        let lowerOffset = evaluatedSource.distance(
+            from: evaluatedSource.startIndex,
+            to: occurrence.range.lowerBound
+        )
+        let upperOffset = evaluatedSource.distance(
+            from: evaluatedSource.startIndex,
+            to: occurrence.range.upperBound
+        )
+        let matching = occurrence.alternatives.filter { option in
+            var candidate = evaluatedSource
+            candidate.replaceSubrange(occurrence.range, with: option.value)
+            return candidate == result.text
+        }
+        guard matching.count == 1 else { return nil }
+        let lower = latestSource.index(latestSource.startIndex, offsetBy: lowerOffset)
+        let upper = latestSource.index(latestSource.startIndex, offsetBy: upperOffset)
+        var rebased = latestSource
+        rebased.replaceSubrange(lower..<upper, with: matching[0].value)
+        return rebased
+    }
+}
+
 struct RevisionBoundContextualRequest: Sendable {
     let identity: ContextualRevisionWindowIdentity
     let originalText: String
@@ -622,10 +956,13 @@ struct ContextualDecisionValidator: ContextualDecisionValidating {
             return .init(category: .abstained, decisions: [])
         }
         var traces: [ContextualDecisionTrace] = []
-        for decision in receipt.decisions {
+        for (decision, occurrence) in zip(receipt.decisions, occurrences) {
             let values = [decision.confidence, decision.chosenProbability, decision.runnerUpProbability]
             guard values.allSatisfy({ $0.isFinite && (0...1).contains($0) }),
-                  abs(decision.chosenProbability + decision.runnerUpProbability - 1) <= 0.000_001,
+                  occurrence.alternatives.count != 1
+                    || abs(decision.chosenProbability + decision.runnerUpProbability - 1) <= 0.000_001,
+                  decision.choice == .keepOriginal
+                    || replacementIndex(for: decision.choice, optionCount: occurrence.alternatives.count) != nil,
                   decision.chosenProbability > decision.runnerUpProbability,
                   decision.confidence >= 0.90,
                   decision.chosenProbability >= 0.90 else {
@@ -639,7 +976,7 @@ struct ContextualDecisionValidator: ContextualDecisionValidating {
             ))
         }
         return .init(
-            category: traces.contains(where: { $0.choice == .replace }) ? .replaced : .kept,
+            category: traces.contains(where: { $0.choice != .keepOriginal }) ? .replaced : .kept,
             decisions: traces
         )
     }
@@ -662,7 +999,7 @@ protocol ContextualCorrectionResolverContract: ContextualResolving {
         ) -> [ContextualCorrectionOccurrence],
         time: any ContextualMonotonicTime,
         onAttemptDisposition: @escaping @MainActor @Sendable (
-            UUID, ContextualAttemptDisposition
+            UUID, ContextualAttemptDisposition, ContextualAttemptContext
         ) -> Void
     )
     nonisolated static func matchCandidates(
@@ -715,7 +1052,7 @@ final class ContextualCorrectionResolver: ContextualCorrectionResolverContract {
     private let validator: ContextualDecisionValidator
     private let onProviderError: @MainActor @Sendable (Error) -> Void
     private let onAttemptDisposition: @MainActor @Sendable (
-        UUID, ContextualAttemptDisposition
+        UUID, ContextualAttemptDisposition, ContextualAttemptContext
     ) -> Void
 
     init(
@@ -732,8 +1069,8 @@ final class ContextualCorrectionResolver: ContextualCorrectionResolverContract {
         },
         time: any ContextualMonotonicTime,
         onAttemptDisposition: @escaping @MainActor @Sendable (
-            UUID, ContextualAttemptDisposition
-        ) -> Void = { _, _ in }
+            UUID, ContextualAttemptDisposition, ContextualAttemptContext
+        ) -> Void = { _, _, _ in }
     ) {
         self.store = store
         self.policy = policy
@@ -754,8 +1091,8 @@ final class ContextualCorrectionResolver: ContextualCorrectionResolverContract {
         time: any ContextualMonotonicTime,
         onProviderError: @escaping @MainActor @Sendable (Error) -> Void,
         onAttemptDisposition: @escaping @MainActor @Sendable (
-            UUID, ContextualAttemptDisposition
-        ) -> Void = { _, _ in }
+            UUID, ContextualAttemptDisposition, ContextualAttemptContext
+        ) -> Void = { _, _, _ in }
     ) {
         self.store = store
         self.policy = policy
@@ -790,11 +1127,34 @@ final class ContextualCorrectionResolver: ContextualCorrectionResolverContract {
               policy.isCurrent(request.policyToken),
               isProviderEligible(request.policyToken.scope) else { return original }
 
-        let occurrences = candidateMatcher(storeSnapshot.examples, request.text, request.language)
+        let learned = candidateMatcher(storeSnapshot.examples, request.text, request.language)
+        let occurrences: [ContextualCorrectionOccurrence]
+        if !learned.isEmpty {
+            occurrences = learned
+        } else if let proactive = ProactiveContextualCandidateGenerator.candidate(
+            text: request.text,
+            language: request.language,
+            tokenEvidence: request.tokenEvidence,
+            glossaryTerms: request.glossaryTerms,
+            examples: [],
+            thresholds: .frozen
+        ) {
+            occurrences = [proactive]
+        } else {
+            occurrences = []
+        }
         guard (1...3).contains(occurrences.count),
               Self.areValid(occurrences, in: request.text),
               let sentence = Self.decisionSentence(in: request.text, occurrences: occurrences),
-              sentence.count <= ContextualCorrectionStore.maximumSentenceCharacters else { return original }
+              sentence.count <= ContextualCorrectionStore.maximumSentenceCharacters,
+              let dispatchOrdinal = request.dispatchBudget.consumeOrdinal() else { return original }
+        let attemptContext = ContextualAttemptContext(
+            dictationAttemptID: request.attemptID,
+            stage: .final,
+            revision: request.revisionIdentity?.revision,
+            dispatchOrdinal: dispatchOrdinal,
+            candidateToDecisionMilliseconds: nil
+        )
 
         let provider = provider
         let race = ContextualDecisionRace()
@@ -839,36 +1199,43 @@ final class ContextualCorrectionResolver: ContextualCorrectionResolverContract {
               currentSnapshot.generation == storeSnapshot.generation,
               request.storeGenerationAtStart == storeGeneration(),
               policy.isCurrent(request.policyToken) else {
-            report(receipt, .discarded)
+            report(receipt, .discarded, context: attemptContext)
             return original
         }
 
         let outcome = validator.validate(receipt: receipt, occurrences: occurrences)
         guard outcome.category != .abstained else {
-            report(receipt, .discarded)
+            report(receipt, .discarded, context: attemptContext)
             return original
         }
         guard outcome.category == .replaced else {
-            report(receipt, .keptOriginal)
+            report(receipt, .keptOriginal, context: attemptContext)
             return .init(text: request.text, outcome: outcome, revisionIdentity: request.revisionIdentity)
         }
         var resolved = request.text
         let replacements = zip(occurrences, receipt.decisions)
-            .filter { $0.1.choice == .replace }
+            .compactMap { occurrence, decision -> (ContextualCorrectionOccurrence, String)? in
+                guard let index = replacementIndex(
+                    for: decision.choice,
+                    optionCount: occurrence.alternatives.count
+                ) else { return nil }
+                return (occurrence, occurrence.alternatives[index].value)
+            }
             .sorted { $0.0.range.lowerBound > $1.0.range.lowerBound }
-        for (occurrence, _) in replacements {
-            resolved.replaceSubrange(occurrence.range, with: occurrence.canonical)
+        for (occurrence, replacement) in replacements {
+            resolved.replaceSubrange(occurrence.range, with: replacement)
         }
-        report(receipt, .appliedReplacement)
+        report(receipt, .appliedReplacement, context: attemptContext)
         return .init(text: resolved, outcome: outcome, revisionIdentity: request.revisionIdentity)
     }
 
     private func report(
         _ receipt: ContextualDecisionReceipt,
-        _ disposition: ContextualAttemptDisposition
+        _ disposition: ContextualAttemptDisposition,
+        context: ContextualAttemptContext
     ) {
         guard let attemptID = receipt.localAttemptID else { return }
-        onAttemptDisposition(attemptID, disposition)
+        onAttemptDisposition(attemptID, disposition, context)
     }
 
     nonisolated static func matchCandidates(
@@ -925,6 +1292,18 @@ final class ContextualCorrectionResolver: ContextualCorrectionResolverContract {
         return (occurrences, sentence)
     }
 
+    nonisolated static func validatedDecisionInput(
+        occurrences: [ContextualCorrectionOccurrence],
+        text: String
+    ) -> (occurrences: [ContextualCorrectionOccurrence], sentence: String)? {
+        guard (1...3).contains(occurrences.count),
+              areValid(occurrences, in: text),
+              let sentence = decisionSentence(in: text, occurrences: occurrences),
+              sentence.count <= ContextualCorrectionStore.maximumSentenceCharacters,
+              preservesProtectedSemantics(occurrences) else { return nil }
+        return (occurrences, sentence)
+    }
+
     nonisolated static func applying(
         receipt: ContextualDecisionReceipt,
         occurrences: [ContextualCorrectionOccurrence],
@@ -935,10 +1314,16 @@ final class ContextualCorrectionResolver: ContextualCorrectionResolverContract {
               areValid(occurrences, in: original) else { return nil }
         var resolved = original
         let replacements = zip(occurrences, receipt.decisions)
-            .filter { $0.1.choice == .replace }
+            .compactMap { occurrence, decision -> (ContextualCorrectionOccurrence, String)? in
+                guard let index = replacementIndex(
+                    for: decision.choice,
+                    optionCount: occurrence.alternatives.count
+                ) else { return nil }
+                return (occurrence, occurrence.alternatives[index].value)
+            }
             .sorted { $0.0.range.lowerBound > $1.0.range.lowerBound }
-        for (occurrence, _) in replacements {
-            resolved.replaceSubrange(occurrence.range, with: occurrence.canonical)
+        for (occurrence, replacement) in replacements {
+            resolved.replaceSubrange(occurrence.range, with: replacement)
         }
         return resolved
     }
@@ -972,9 +1357,14 @@ final class ContextualCorrectionResolver: ContextualCorrectionResolverContract {
     ) -> Bool {
         var previousUpperBound: String.Index?
         for (index, occurrence) in occurrences.enumerated() {
+            let expectedOptionIDs = occurrence.alternatives.indices.map { "replace_\($0 + 1)" }
             guard occurrence.questionID == "o\(index + 1)",
                   !occurrence.heard.isEmpty,
                   !occurrence.canonical.isEmpty,
+                  (1...3).contains(occurrence.alternatives.count),
+                  occurrence.alternatives.map(\.id) == expectedOptionIDs,
+                  occurrence.alternatives.first?.value == occurrence.canonical,
+                  occurrence.alternatives.allSatisfy({ !$0.value.isEmpty }),
                   occurrence.ordinal > 0,
                   occurrence.range.lowerBound.samePosition(in: text.utf16) != nil,
                   occurrence.range.upperBound.samePosition(in: text.utf16) != nil,
@@ -1010,16 +1400,18 @@ final class ContextualCorrectionResolver: ContextualCorrectionResolverContract {
     ) -> Bool {
         let negations = Set(["não", "nao", "nunca", "jamais", "sem"])
         return occurrences.allSatisfy { occurrence in
-            let heardDigits = occurrence.heard.filter(\.isNumber)
-            let canonicalDigits = occurrence.canonical.filter(\.isNumber)
-            guard heardDigits == canonicalDigits else { return false }
-            let heardWords = Set(occurrence.heard.lowercased().split(whereSeparator: { !$0.isLetter }).map(String.init))
-            let canonicalWords = Set(occurrence.canonical.lowercased().split(whereSeparator: { !$0.isLetter }).map(String.init))
-            guard heardWords.intersection(negations) == canonicalWords.intersection(negations) else { return false }
-            let protected = CharacterSet(charactersIn: "@:/\\")
-            let heardProtected = occurrence.heard.unicodeScalars.filter { protected.contains($0) }
-            let canonicalProtected = occurrence.canonical.unicodeScalars.filter { protected.contains($0) }
-            return heardProtected.elementsEqual(canonicalProtected)
+            occurrence.alternatives.allSatisfy { alternative in
+                let heardDigits = occurrence.heard.filter(\.isNumber)
+                let replacementDigits = alternative.value.filter(\.isNumber)
+                guard heardDigits == replacementDigits else { return false }
+                let heardWords = Set(occurrence.heard.lowercased().split(whereSeparator: { !$0.isLetter }).map(String.init))
+                let replacementWords = Set(alternative.value.lowercased().split(whereSeparator: { !$0.isLetter }).map(String.init))
+                guard heardWords.intersection(negations) == replacementWords.intersection(negations) else { return false }
+                let protected = CharacterSet(charactersIn: "@:/\\")
+                let heardProtected = occurrence.heard.unicodeScalars.filter { protected.contains($0) }
+                let replacementProtected = alternative.value.unicodeScalars.filter { protected.contains($0) }
+                return heardProtected.elementsEqual(replacementProtected)
+            }
         }
     }
 
@@ -1617,13 +2009,15 @@ actor OpenRouterDecisionsClient: OpenRouterDecisionsClientContract {
             )
         }
         let questions = Dictionary(uniqueKeysWithValues: occurrences.map { occurrence in
-            (occurrence.questionID, DecisionsRequestDTO.Question(
+            let replacements = occurrence.alternatives.map {
+                ($0.id, "Substituir exatamente por: \($0.value)")
+            }
+            return (occurrence.questionID, DecisionsRequestDTO.Question(
                 type: "choice",
                 instructions: "Escolha a forma correta para a ocorrência \(occurrence.ordinal) no contexto.",
-                criteria: [
-                    ContextualDecisionChoice.keepOriginal.rawValue: "Manter exatamente a forma ouvida no contexto.",
-                    ContextualDecisionChoice.replace.rawValue: "Aplicar somente a correção local confirmada."
-                ]
+                criteria: Dictionary(uniqueKeysWithValues: [
+                    (ContextualDecisionChoice.keepOriginal.rawValue, "Manter exatamente a forma ouvida no contexto.")
+                ] + replacements)
             ))
         })
         return .init(
@@ -1668,17 +2062,23 @@ actor OpenRouterDecisionsClient: OpenRouterDecisionsClientContract {
         }
         var decisions: [ContextualDecision] = []
         for occurrence in occurrences {
+            let expectedChoices = Set(
+                [ContextualDecisionChoice.keepOriginal.rawValue] + occurrence.alternatives.map(\.id)
+            )
             guard let answer = response.answers[occurrence.questionID],
                   answer.type == "choice",
-                  let choice = ContextualDecisionChoice(rawValue: answer.choice),
-                  Set(answer.probabilities.keys) == Set([
-                    ContextualDecisionChoice.keepOriginal.rawValue,
-                    ContextualDecisionChoice.replace.rawValue
-                  ]),
-                  let selected = answer.probabilities[choice.rawValue],
-                  let runnerUp = answer.probabilities.first(where: { $0.key != choice.rawValue })?.value else {
+                  expectedChoices.contains(answer.choice),
+                  Set(answer.probabilities.keys) == expectedChoices,
+                  answer.probabilities.values.allSatisfy({ $0.isFinite && (0...1).contains($0) }),
+                  abs(answer.probabilities.values.reduce(0, +) - 1) <= 0.000_001,
+                  let selected = answer.probabilities[answer.choice],
+                  let runnerUp = answer.probabilities
+                    .filter({ $0.key != answer.choice })
+                    .map(\.value)
+                    .max() else {
                 throw OpenRouterDecisionsError.malformedResponse
             }
+            let choice = ContextualDecisionChoice(rawValue: answer.choice)
             decisions.append(.init(
                 questionID: occurrence.questionID,
                 choice: choice,
@@ -2119,6 +2519,7 @@ final class PersonalRemoteAuthorizationOwner: PersonalRemoteAuthorizationManagin
     private let authorizationStateStore: any PersonalRemoteAuthorizationStateStore
     private let policy: ContextualCorrectionPolicy
     private let storeSnapshot: @MainActor @Sendable () -> ContextualCorrectionStoreSnapshot
+    private let proactiveEvidenceAvailable: @MainActor @Sendable () -> Bool
     private var revokedInProcess = false
 
     init(
@@ -2126,13 +2527,15 @@ final class PersonalRemoteAuthorizationOwner: PersonalRemoteAuthorizationManagin
         credentialStore: any ContextualCredentialStore,
         authorizationStateStore: any PersonalRemoteAuthorizationStateStore,
         policy: ContextualCorrectionPolicy,
-        storeSnapshot: @escaping @MainActor @Sendable () -> ContextualCorrectionStoreSnapshot
+        storeSnapshot: @escaping @MainActor @Sendable () -> ContextualCorrectionStoreSnapshot,
+        proactiveEvidenceAvailable: @escaping @MainActor @Sendable () -> Bool = { false }
     ) {
         self.optInStore = optInStore
         self.credentialStore = credentialStore
         self.authorizationStateStore = authorizationStateStore
         self.policy = policy
         self.storeSnapshot = storeSnapshot
+        self.proactiveEvidenceAvailable = proactiveEvidenceAvailable
     }
 
     func authorizePersonalRemote(explicitConsent: Bool, credential: String) throws {
@@ -2226,7 +2629,8 @@ final class PersonalRemoteAuthorizationOwner: PersonalRemoteAuthorizationManagin
     private var isLocallyEligible: Bool {
         let snapshot = storeSnapshot()
         return optInStore.contextualCorrectionsEnabled
-            && snapshot.health == .healthy && !snapshot.examples.isEmpty
+            && snapshot.health == .healthy
+            && (!snapshot.examples.isEmpty || proactiveEvidenceAvailable())
     }
 }
 

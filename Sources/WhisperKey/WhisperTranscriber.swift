@@ -100,12 +100,37 @@ final class WhisperExecutionControl: @unchecked Sendable {
     }
 }
 
+struct WhisperAlternativeToken: Equatable, Sendable {
+    let tokenID: Int32
+    let text: String
+    let logit: Float
+}
+
+struct WhisperTokenEvidence: Equatable, Sendable {
+    let tokenID: Int32
+    let text: String
+    let probability: Float
+    let alternatives: [WhisperAlternativeToken]
+}
+
+struct WhisperInferenceResult: Equatable, Sendable {
+    let text: String
+    let tokenEvidence: [WhisperTokenEvidence]
+}
+
+struct WhisperTranscription: Equatable, Sendable {
+    let text: String
+    let tokenEvidence: [WhisperTokenEvidence]
+}
+
 struct WhisperTranscriber: Sendable {
-    typealias Inference = @Sendable ([Float], String, String, WhisperExecutionControl) throws -> String
+    typealias Inference = @Sendable ([Float], String, String, WhisperExecutionControl) throws -> WhisperInferenceResult
+    typealias LegacyInference = @Sendable ([Float], String, String, WhisperExecutionControl) throws -> String
     static let maximumRuntime: TimeInterval = 10 * 60
+    static let supportsProactiveEvidence = true
     private static let engine = EmbeddedWhisperEngine()
     private static let defaultInference: Inference = { samples, language, prompt, control in
-        try WhisperTranscriber.engine.transcribe(samples: samples, model: WhisperPaths.resolve().model,
+        try WhisperTranscriber.engine.transcribeWithEvidence(samples: samples, model: WhisperPaths.resolve().model,
             language: language, prompt: prompt, control: control)
     }
     private static let defaultRollingScheduler = RollingWhisperScheduler(infer: defaultInference)
@@ -127,14 +152,31 @@ struct WhisperTranscriber: Sendable {
     }
 
     init(
-        infer: @escaping Inference,
+        resultInference: @escaping Inference,
         removeAudio: @escaping @Sendable (URL) throws -> Void = WhisperTranscriber.defaultRemoveAudio,
         supportsRollingInference: Bool = true
     ) {
-        self.infer = infer
+        infer = resultInference
         self.removeAudio = removeAudio
         self.supportsRollingInference = supportsRollingInference
-        rollingScheduler = RollingWhisperScheduler(infer: infer)
+        rollingScheduler = RollingWhisperScheduler(infer: resultInference)
+    }
+
+    init(
+        infer: @escaping LegacyInference,
+        removeAudio: @escaping @Sendable (URL) throws -> Void = WhisperTranscriber.defaultRemoveAudio,
+        supportsRollingInference: Bool = true
+    ) {
+        self.init(
+            resultInference: { samples, language, prompt, control in
+                WhisperInferenceResult(
+                    text: try infer(samples, language, prompt, control),
+                    tokenEvidence: []
+                )
+            },
+            removeAudio: removeAudio,
+            supportsRollingInference: supportsRollingInference
+        )
     }
 
     // Consumes the captured WAV; callers that need a reusable fixture must pass a copy.
@@ -144,14 +186,36 @@ struct WhisperTranscriber: Sendable {
         glossaryText: String = TranscriptionGlossary.defaultText,
         control: WhisperExecutionControl = WhisperExecutionControl()
     ) async throws -> String {
+        try await transcribeWithEvidence(
+            audioURL: audioURL,
+            language: language,
+            glossaryText: glossaryText,
+            control: control
+        ).text
+    }
+
+    func transcribeWithEvidence(
+        audioURL: URL,
+        language: TranscriptionLanguage = .portuguese,
+        glossaryText: String = TranscriptionGlossary.defaultText,
+        promptTerms: [String] = [],
+        control: WhisperExecutionControl = WhisperExecutionControl()
+    ) async throws -> WhisperTranscription {
         try await withTaskCancellationHandler {
-            try consumeRecording(audioURL: audioURL, language: language, glossaryText: glossaryText, control: control)
+            try consumeRecording(
+                audioURL: audioURL,
+                language: language,
+                glossaryText: glossaryText,
+                promptTerms: promptTerms,
+                control: control
+            )
         } onCancel: { control.cancel() }
     }
 
     func makeRollingRecognizer(
         language: TranscriptionLanguage = .portuguese,
         glossaryText: String = TranscriptionGlossary.defaultText,
+        promptTerms: @escaping @Sendable () -> [String] = { [] },
         maximumRuntime: TimeInterval = WhisperTranscriber.maximumRuntime,
         clock: @escaping @Sendable () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
         onHypothesis: @escaping @Sendable (RollingWhisperHypothesis) -> Void
@@ -160,7 +224,8 @@ struct WhisperTranscriber: Sendable {
         return RollingWhisperRecognizer(
             scheduler: rollingScheduler,
             language: language.rawValue,
-            prompt: TranscriptionGlossary(text: glossaryText).prompt,
+            baseGlossaryText: glossaryText,
+            promptTerms: promptTerms,
             maximumRuntime: maximumRuntime,
             clock: clock,
             onHypothesis: onHypothesis
@@ -168,7 +233,8 @@ struct WhisperTranscriber: Sendable {
     }
 
     private func consumeRecording(audioURL: URL, language: TranscriptionLanguage,
-                                  glossaryText: String, control: WhisperExecutionControl) throws -> String {
+                                  glossaryText: String, promptTerms: [String],
+                                  control: WhisperExecutionControl) throws -> WhisperTranscription {
         var removed = false
         func removeRecording() throws {
             guard !removed else { return }
@@ -181,12 +247,36 @@ struct WhisperTranscriber: Sendable {
         let samples = try Self.readSamples(from: audioURL)
         try removeRecording()
         try control.check()
-        let raw = try infer(samples, language.rawValue, glossary.prompt, control)
+        let raw = try infer(
+            samples,
+            language.rawValue,
+            Self.prompt(glossaryText: glossaryText, adding: promptTerms),
+            control
+        )
         try control.check()
-        let transcript = TranscriptPostprocessor.process(raw, glossary: glossary)
+        let transcript = TranscriptPostprocessor.process(raw.text, glossary: glossary)
         try control.check()
         guard !transcript.isEmpty else { throw WhisperError.emptyTranscript }
-        return transcript
+        return WhisperTranscription(text: transcript, tokenEvidence: raw.tokenEvidence)
+    }
+
+    static func prompt(glossaryText: String, adding terms: [String]) -> String {
+        let base = TranscriptionGlossary(text: glossaryText).terms
+        var seen = Set<String>()
+        var accepted: [String] = []
+        for term in base + terms {
+            let trimmed = term.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { continue }
+            let key = trimmed.folding(
+                options: [.caseInsensitive, .diacriticInsensitive],
+                locale: Locale(identifier: "pt_BR")
+            )
+            guard seen.insert(key).inserted else { continue }
+            let candidate = (accepted + [trimmed]).joined(separator: ", ")
+            guard candidate.count <= TranscriptionGlossary.maximumPromptCharacters else { continue }
+            accepted.append(trimmed)
+        }
+        return accepted.joined(separator: ", ")
     }
 
     private static func readSamples(from url: URL) throws -> [Float] {
@@ -209,7 +299,26 @@ struct RollingWhisperHypothesis: Equatable, Sendable {
     let capturedAt: TimeInterval
     let candidateAt: TimeInterval
     let text: String
+    let tokenEvidence: [WhisperTokenEvidence]
     let isStale: Bool
+
+    init(
+        snapshotID: UInt64,
+        sampleRange: Range<Int64>,
+        capturedAt: TimeInterval,
+        candidateAt: TimeInterval,
+        text: String,
+        tokenEvidence: [WhisperTokenEvidence] = [],
+        isStale: Bool = false
+    ) {
+        self.snapshotID = snapshotID
+        self.sampleRange = sampleRange
+        self.capturedAt = capturedAt
+        self.candidateAt = candidateAt
+        self.text = text
+        self.tokenEvidence = tokenEvidence
+        self.isStale = isStale
+    }
 
     var isProvisional: Bool { true }
 }
@@ -221,7 +330,8 @@ final class RollingWhisperRecognizer: @unchecked Sendable {
     init(
         scheduler: RollingWhisperScheduler,
         language: String,
-        prompt: String,
+        baseGlossaryText: String,
+        promptTerms: @escaping @Sendable () -> [String],
         maximumRuntime: TimeInterval,
         clock: @escaping @Sendable () -> TimeInterval,
         onHypothesis: @escaping @Sendable (RollingWhisperHypothesis) -> Void
@@ -229,7 +339,8 @@ final class RollingWhisperRecognizer: @unchecked Sendable {
         self.scheduler = scheduler
         sessionID = scheduler.register(
             language: language,
-            prompt: prompt,
+            baseGlossaryText: baseGlossaryText,
+            promptTerms: promptTerms,
             maximumRuntime: maximumRuntime,
             clock: clock,
             onHypothesis: onHypothesis
@@ -254,7 +365,8 @@ final class RollingWhisperRecognizer: @unchecked Sendable {
 final class RollingWhisperScheduler: @unchecked Sendable {
     private struct Session: Sendable {
         let language: String
-        let prompt: String
+        let baseGlossaryText: String
+        let promptTerms: @Sendable () -> [String]
         let maximumRuntime: TimeInterval
         let clock: @Sendable () -> TimeInterval
         let onHypothesis: @Sendable (RollingWhisperHypothesis) -> Void
@@ -286,7 +398,8 @@ final class RollingWhisperScheduler: @unchecked Sendable {
 
     func register(
         language: String,
-        prompt: String,
+        baseGlossaryText: String,
+        promptTerms: @escaping @Sendable () -> [String],
         maximumRuntime: TimeInterval,
         clock: @escaping @Sendable () -> TimeInterval,
         onHypothesis: @escaping @Sendable (RollingWhisperHypothesis) -> Void
@@ -295,7 +408,8 @@ final class RollingWhisperScheduler: @unchecked Sendable {
         lock.withLock {
             sessions[id] = Session(
                 language: language,
-                prompt: prompt,
+                baseGlossaryText: baseGlossaryText,
+                promptTerms: promptTerms,
                 maximumRuntime: maximumRuntime,
                 clock: clock,
                 onHypothesis: onHypothesis
@@ -357,16 +471,22 @@ final class RollingWhisperScheduler: @unchecked Sendable {
                 let raw = try self.infer(
                     item.work.snapshot.samples,
                     session.language,
-                    session.prompt,
+                    WhisperTranscriber.prompt(
+                        glossaryText: session.baseGlossaryText,
+                        adding: session.promptTerms()
+                    ),
                     item.control
                 )
-                return TranscriptNormalizer.normalize(raw)
+                return WhisperInferenceResult(
+                    text: TranscriptNormalizer.normalize(raw.text),
+                    tokenEvidence: raw.tokenEvidence
+                )
             }
             self.finish(item, result: result)
         }
     }
 
-    private func finish(_ completed: Active, result: Result<String, Error>) {
+    private func finish(_ completed: Active, result: Result<WhisperInferenceResult, Error>) {
         var hypothesis: RollingWhisperHypothesis?
         var callback: (@Sendable (RollingWhisperHypothesis) -> Void)?
         var next: Active?
@@ -376,19 +496,20 @@ final class RollingWhisperScheduler: @unchecked Sendable {
                 || completed.work.generation != session.generation
                 || active?.work.sessionID != completed.work.sessionID
                 || active?.work.snapshot.id != completed.work.snapshot.id
-            if case .success(let text) = result, !text.isEmpty,
-               (stale || session.lastDeliveredText != text) {
+            if case .success(let result) = result, !result.text.isEmpty,
+               (stale || session.lastDeliveredText != result.text) {
                 hypothesis = RollingWhisperHypothesis(
                     snapshotID: completed.work.snapshot.id,
                     sampleRange: completed.work.snapshot.sampleRange,
                     capturedAt: completed.work.snapshot.capturedAt,
                     candidateAt: session.clock(),
-                    text: text,
+                    text: result.text,
+                    tokenEvidence: result.tokenEvidence,
                     isStale: stale
                 )
                 callback = session.onHypothesis
                 if !stale {
-                    session.lastDeliveredText = text
+                    session.lastDeliveredText = result.text
                     sessions[completed.work.sessionID] = session
                 }
             }
@@ -416,17 +537,117 @@ final class RollingWhisperScheduler: @unchecked Sendable {
     }
 }
 
+final class WhisperLogitCollector: @unchecked Sendable {
+    struct Snapshot: Equatable, Sendable {
+        let prefixSuffix: [Int32]
+        let alternatives: [WhisperAlternativeToken]
+    }
+
+    private let lock = NSLock()
+    private var snapshots: [Snapshot] = []
+
+    init(snapshots: [Snapshot] = []) {
+        self.snapshots = snapshots
+    }
+
+    func record(
+        context: OpaquePointer,
+        tokens: UnsafePointer<whisper_token_data>?,
+        tokenCount: Int32,
+        logits: UnsafeMutablePointer<Float>?
+    ) {
+        guard let logits else { return }
+        let vocabularyCount = Int(whisper_n_vocab(context))
+        let endOfText = Int(whisper_token_eot(context))
+        guard vocabularyCount > 0, endOfText > 0 else { return }
+
+        var ranked = Array(repeating: ResenhaLogitCandidate(token_id: 0, logit: 0), count: 16)
+        let retained = ranked.withUnsafeMutableBufferPointer { output in
+            resenha_top_logits(logits, Int32(min(vocabularyCount, endOfText)), 16, output.baseAddress)
+        }
+        let alternatives = ranked.prefix(Int(retained)).compactMap { candidate -> WhisperAlternativeToken? in
+            guard let pointer = whisper_token_to_str(context, candidate.token_id),
+                  let text = String(validatingCString: pointer),
+                  !text.hasPrefix("<|"),
+                  text.unicodeScalars.contains(where: CharacterSet.alphanumerics.contains) else { return nil }
+            return WhisperAlternativeToken(tokenID: candidate.token_id, text: text, logit: candidate.logit)
+        }.prefix(4)
+        guard !alternatives.isEmpty else { return }
+        let start = max(0, Int(tokenCount) - 128)
+        let prefix = tokens.map { pointer in
+            (start..<Int(tokenCount)).map { pointer[$0].id }
+        } ?? []
+        lock.withLock {
+            snapshots.append(Snapshot(prefixSuffix: prefix, alternatives: Array(alternatives)))
+            if snapshots.count > 256 { snapshots.removeFirst(snapshots.count - 256) }
+        }
+    }
+
+    func align(
+        tokenIDs: [Int32],
+        tokenTexts: [String],
+        probabilities: [Float],
+        endOfText: Int32
+    ) -> [WhisperTokenEvidence] {
+        guard tokenIDs.count == tokenTexts.count, tokenIDs.count == probabilities.count else { return [] }
+        let aligned: [WhisperTokenEvidence] = tokenIDs.indices.compactMap { index in
+            let tokenID = tokenIDs[index]
+            let text = tokenTexts[index]
+            guard tokenID < endOfText,
+                  !text.hasPrefix("<|"),
+                  text.unicodeScalars.contains(where: CharacterSet.alphanumerics.contains) else { return nil }
+            let prior = Array(tokenIDs[..<index])
+            let alternatives = bestSnapshot(matching: prior)?.alternatives ?? []
+            return WhisperTokenEvidence(
+                tokenID: tokenID,
+                text: text,
+                probability: probabilities[index],
+                alternatives: alternatives
+            )
+        }
+        var characterCount = 0
+        var retained: [WhisperTokenEvidence] = []
+        for item in aligned.suffix(128).reversed() {
+            guard characterCount + item.text.count <= 600 else { break }
+            characterCount += item.text.count
+            retained.append(item)
+        }
+        return retained.reversed()
+    }
+
+    private func bestSnapshot(matching prior: [Int32]) -> Snapshot? {
+        guard !prior.isEmpty else { return nil }
+        let snapshots = lock.withLock { self.snapshots }
+        var best: (score: Int, snapshot: Snapshot)?
+        for snapshot in snapshots {
+            let limit = min(prior.count, snapshot.prefixSuffix.count)
+            var score = 0
+            while score < limit,
+                  prior[prior.count - 1 - score] == snapshot.prefixSuffix[snapshot.prefixSuffix.count - 1 - score] {
+                score += 1
+            }
+            let required = min(prior.count, 128)
+            guard score == required, score >= (best?.score ?? 0) else { continue }
+            best = (score, snapshot)
+        }
+        return best?.snapshot
+    }
+}
+
 final class EmbeddedWhisperEngine: @unchecked Sendable {
     private let access = DispatchSemaphore(value: 1)
     private let inference: (@Sendable (whisper_full_params, [Float]) throws -> String)?
     private let onWait: (@Sendable () -> Void)?
+    private let collectsTokenEvidence: Bool
     private var context: OpaquePointer?
     private var modelPath: String?
 
     init(inference: (@Sendable (whisper_full_params, [Float]) throws -> String)? = nil,
-         onWait: (@Sendable () -> Void)? = nil) {
+         onWait: (@Sendable () -> Void)? = nil,
+         collectsTokenEvidence: Bool = true) {
         self.inference = inference
         self.onWait = onWait
+        self.collectsTokenEvidence = collectsTokenEvidence
     }
 
     deinit {
@@ -440,6 +661,22 @@ final class EmbeddedWhisperEngine: @unchecked Sendable {
         prompt: String,
         control: WhisperExecutionControl
     ) throws -> String {
+        try transcribeWithEvidence(
+            samples: samples,
+            model: model,
+            language: language,
+            prompt: prompt,
+            control: control
+        ).text
+    }
+
+    func transcribeWithEvidence(
+        samples: [Float],
+        model: URL,
+        language: String,
+        prompt: String,
+        control: WhisperExecutionControl
+    ) throws -> WhisperInferenceResult {
         try control.check()
         while access.wait(timeout: .now() + .milliseconds(10)) == .timedOut {
             onWait?()
@@ -470,7 +707,7 @@ final class EmbeddedWhisperEngine: @unchecked Sendable {
             do {
                 let result = try inference(params, samples)
                 try control.check()
-                return result
+                return WhisperInferenceResult(text: result, tokenEvidence: [])
             } catch {
                 try control.check()
                 throw error
@@ -478,6 +715,21 @@ final class EmbeddedWhisperEngine: @unchecked Sendable {
         }
         let context = try loadContext(model: model)
         try control.check()
+        let collector = collectsTokenEvidence ? WhisperLogitCollector() : nil
+        let retainedCollector = collector.map(Unmanaged.passRetained)
+        defer { retainedCollector?.release() }
+        if let retainedCollector {
+            params.logits_filter_callback_user_data = retainedCollector.toOpaque()
+            params.logits_filter_callback = { context, _, tokens, tokenCount, logits, userData in
+                guard let context, let userData else { return }
+                Unmanaged<WhisperLogitCollector>.fromOpaque(userData).takeUnretainedValue().record(
+                    context: context,
+                    tokens: tokens,
+                    tokenCount: tokenCount,
+                    logits: logits
+                )
+            }
+        }
 
         let status = language.withCString { languagePointer in
             prompt.withCString { promptPointer in
@@ -492,9 +744,30 @@ final class EmbeddedWhisperEngine: @unchecked Sendable {
         try control.check()
         guard status == 0 else { throw WhisperError.failed(status, "embedded whisper.cpp inference failed") }
 
-        return (0..<whisper_full_n_segments(context)).compactMap { index in
+        let text = (0..<whisper_full_n_segments(context)).compactMap { index in
             whisper_full_get_segment_text(context, index).map(String.init(cString:))
         }.joined()
+        var tokenIDs: [Int32] = []
+        var tokenTexts: [String] = []
+        var probabilities: [Float] = []
+        for segment in 0..<whisper_full_n_segments(context) {
+            for token in 0..<whisper_full_n_tokens(context, segment) {
+                tokenIDs.append(whisper_full_get_token_id(context, segment, token))
+                tokenTexts.append(
+                    whisper_full_get_token_text(context, segment, token).map(String.init(cString:)) ?? ""
+                )
+                probabilities.append(whisper_full_get_token_p(context, segment, token))
+            }
+        }
+        return WhisperInferenceResult(
+            text: text,
+            tokenEvidence: collector?.align(
+                tokenIDs: tokenIDs,
+                tokenTexts: tokenTexts,
+                probabilities: probabilities,
+                endOfText: whisper_token_eot(context)
+            ) ?? []
+        )
     }
 
     private func loadContext(model: URL) throws -> OpaquePointer {

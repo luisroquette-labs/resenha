@@ -25,7 +25,9 @@
 		6DC19E1366479BEA93600203 /* ContextualCorrections.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95005FE135F7FC2ECCFC4182 /* ContextualCorrections.swift */; };
 		726C0EFD16B67C19F84BC57B /* TextInjector.swift in Sources */ = {isa = PBXBuildFile; fileRef = 733DACDEB4AB93D5CF9C3903 /* TextInjector.swift */; };
 		73B3AA17549C4AF0E03C6F25 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = B63B342300F9037E5752DC51 /* PrivacyInfo.xcprivacy */; };
+		76EBD090D429FF5B918B33C2 /* proactive-context-guidance.json in Resources */ = {isa = PBXBuildFile; fileRef = 9F7B2A5790A893847A23D31D /* proactive-context-guidance.json */; };
 		7F9F3C3D5F62A5C2C00065D1 /* ContinuousContextSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02DFABC055D13DE01C25E2F0 /* ContinuousContextSession.swift */; };
+		86AEB417894A466CFE5F3D31 /* LogitTopK.c in Sources */ = {isa = PBXBuildFile; fileRef = 0EBDCEE76BBEAC0FBDCEEE31 /* LogitTopK.c */; };
 		86DFF8F34B535D75107AB91C /* AudioRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA553ED088000409A1534B10 /* AudioRecorder.swift */; };
 		8A12E0347CA26301459DABDD /* MenuPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E88ECFDFC9BE5A2B95ED500 /* MenuPresentation.swift */; };
 		9CB3B868A339A2ABAB2B44CE /* continuous-context-events.json in Resources */ = {isa = PBXBuildFile; fileRef = 1C11C1398C6FAE6E4CB06E53 /* continuous-context-events.json */; };
@@ -60,6 +62,7 @@
 		02DFABC055D13DE01C25E2F0 /* ContinuousContextSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContinuousContextSession.swift; sourceTree = "<group>"; };
 		06A6C0A3CA2A532832FE5EA2 /* FloatingStatusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatingStatusView.swift; sourceTree = "<group>"; };
 		08C6D6EE682FF41296ABF618 /* Accelerate.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Accelerate.framework; path = System/Library/Frameworks/Accelerate.framework; sourceTree = SDKROOT; };
+		0EBDCEE76BBEAC0FBDCEEE31 /* LogitTopK.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = LogitTopK.c; sourceTree = "<group>"; };
 		134C1BDCDE10F8CF85B7E4CF /* HotkeyMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotkeyMonitor.swift; sourceTree = "<group>"; };
 		1C11C1398C6FAE6E4CB06E53 /* continuous-context-events.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "continuous-context-events.json"; sourceTree = "<group>"; };
 		1E88ECFDFC9BE5A2B95ED500 /* MenuPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuPresentation.swift; sourceTree = "<group>"; };
@@ -76,6 +79,8 @@
 		75D558D773F2BC3AB3159027 /* SoundLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoundLibrary.swift; sourceTree = "<group>"; };
 		82C866CD9730D225ABB0F72B /* WhisperKeyTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = WhisperKeyTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		95005FE135F7FC2ECCFC4182 /* ContextualCorrections.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContextualCorrections.swift; sourceTree = "<group>"; };
+		9F7B2A5790A893847A23D31D /* proactive-context-guidance.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "proactive-context-guidance.json"; sourceTree = "<group>"; };
+		A0FF94A022402D7F902ECAC2 /* LogitTopK.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = LogitTopK.h; sourceTree = "<group>"; };
 		A7127B7D90D717FFC9B8794D /* WhisperKey.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = WhisperKey.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA553ED088000409A1534B10 /* AudioRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioRecorder.swift; sourceTree = "<group>"; };
 		AAC1740D72EC6212C4303041 /* WhisperTranscriber.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhisperTranscriber.swift; sourceTree = "<group>"; };
@@ -114,6 +119,7 @@
 			children = (
 				B37F99010A42725CC6F7CAEE /* contextual-corrections.json */,
 				1C11C1398C6FAE6E4CB06E53 /* continuous-context-events.json */,
+				9F7B2A5790A893847A23D31D /* proactive-context-guidance.json */,
 			);
 			name = Fixtures;
 			path = Tests/Fixtures;
@@ -191,6 +197,8 @@
 				F90F5A838310B1F6007F64FE /* FloatingPanel.swift */,
 				06A6C0A3CA2A532832FE5EA2 /* FloatingStatusView.swift */,
 				134C1BDCDE10F8CF85B7E4CF /* HotkeyMonitor.swift */,
+				0EBDCEE76BBEAC0FBDCEEE31 /* LogitTopK.c */,
+				A0FF94A022402D7F902ECAC2 /* LogitTopK.h */,
 				1E88ECFDFC9BE5A2B95ED500 /* MenuPresentation.swift */,
 				523F074FCFE5942E2581895F /* NativeMenuController.swift */,
 				F6D551801267264DB250896E /* PanelPlacement.swift */,
@@ -310,6 +318,7 @@
 				FD7E2301B6500BD3FE29F902 /* contextual-corrections.json in Resources */,
 				9CB3B868A339A2ABAB2B44CE /* continuous-context-events.json in Resources */,
 				C2AE8F8BDE3F2909C47F5A3E /* jfk.wav in Resources */,
+				76EBD090D429FF5B918B33C2 /* proactive-context-guidance.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -337,6 +346,7 @@
 				D853F8CE772EBAB3FED1F4F7 /* FloatingPanel.swift in Sources */,
 				4D275811B61D4D4E11E8E920 /* FloatingStatusView.swift in Sources */,
 				215BEFC1AEC743FF631DB269 /* HotkeyMonitor.swift in Sources */,
+				86AEB417894A466CFE5F3D31 /* LogitTopK.c in Sources */,
 				8A12E0347CA26301459DABDD /* MenuPresentation.swift in Sources */,
 				689D5145FF1FCF328F843A75 /* NativeMenuController.swift in Sources */,
 				591DD42A9F96EBA7F0FDDC8E /* PanelPlacement.swift in Sources */,
@@ -484,6 +494,7 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
 				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OBJC_BRIDGING_HEADER = "Config/WhisperKey-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 5.0;
 			};
@@ -547,6 +558,7 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = macosx;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OBJC_BRIDGING_HEADER = "Config/WhisperKey-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
 			};

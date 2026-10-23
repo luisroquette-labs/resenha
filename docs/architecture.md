@@ -64,8 +64,9 @@ The app requests permissions only after explicit user action and exposes separat
 - Synthetic diagnostic: ephemeral HTTPS session to OpenRouter/TypeSafe using
   `typesafe/jev-1.14`; no personal dictation, examples, history or clipboard.
 - Personal contextual evaluation: optional HTTPS text-only requests to the same
-  provider using a distinct Keychain account; no audio, history, clipboard or
-  target-app content.
+  provider using a distinct Keychain account; current bounded sentence and up
+  to three exact options only, with at most six dispatches per dictation; no
+  audio, logits, probabilities, full vocabulary, history, clipboard or target-app content.
 - Personal evaluation proof: local bounded metadata only (time, status, model,
   provider request ID, decision, confidence, latency, tokens, cost and sanitized
   failure); no dictated text, correction pair or credential.
@@ -77,14 +78,17 @@ second insertion path: only the completed-WAV final candidate reaches the
 existing single-commit output sink. Jev is a bounded decision evaluator, not an
 ASR engine or next-token generator. It may only keep or select allowlisted
 alternatives tied to an exact recognized occurrence. Invalid, late, cancelled
-or unauthorized work preserves the local candidate.
+or unauthorized work preserves the local candidate. Accepted options feed a
+five-term, per-attempt prompt used by later rolling inference and the completed
+WAV pass, then are erased.
 
 `PersonalRemoteReleaseDecision.current` is available, but personal requests
-require a separate disabled-by-default opt-in, credential, healthy examples and
-current policy/store generations. The synthetic diagnostic cannot upgrade that
-scope. The 500/100/50/750 ms
-figures in the task are acceptance targets until acoustic hardware evidence is
-recorded; deterministic clocks prove orchestration, not physical latency.
+require a separate disabled-by-default opt-in, credential, healthy local store
+and current policy/store generations. Either a learned example or proactive
+Whisper evidence may produce a candidate, but a concrete candidate is mandatory
+for dispatch. The synthetic diagnostic cannot upgrade that scope. The 1,200 ms
+rolling deadline remains an acceptance target until acoustic hardware evidence
+is recorded; deterministic clocks prove orchestration, not physical latency.
 
 ## Validation boundary
 

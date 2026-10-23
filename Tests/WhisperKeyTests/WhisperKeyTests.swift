@@ -2394,6 +2394,25 @@ final class WhisperKeyTests: XCTestCase {
         var peakInferences: Int { lock.withLock { peakInferenceCount } }
     }
 
+    private final class WhisperPromptProbe: @unchecked Sendable {
+        private let lock = NSLock()
+        private var currentTerms: [String] = []
+        private var capturedPrompts: [String] = []
+        private var hypothesisCount = 0
+        var terms: [String] { lock.withLock { currentTerms } }
+        var prompts: [String] { lock.withLock { capturedPrompts } }
+        func setTerms(_ terms: [String]) { lock.withLock { currentTerms = terms } }
+        func record(prompt: String) -> Int {
+            lock.withLock {
+                capturedPrompts.append(prompt)
+                return capturedPrompts.count
+            }
+        }
+        func nextHypothesis() -> Int {
+            lock.withLock { hypothesisCount += 1; return hypothesisCount }
+        }
+    }
+
     private final class FakeAudioRecordingBackend: AudioRecordingBackend {
         var isMeteringEnabled = false
         private(set) var isRecording = false
@@ -2630,6 +2649,44 @@ final class WhisperKeyTests: XCTestCase {
         XCTAssertEqual(recognizer.queuedInferenceCount, 0)
     }
 
+    func testAcceptedPromptTermIsLateBoundForRollingAndCompletedWAV() async throws {
+        let first = expectation(description: "Base rolling prompt")
+        let second = expectation(description: "Enriched rolling prompt")
+        let probe = WhisperPromptProbe()
+        let transcriber = WhisperTranscriber(resultInference: { samples, _, prompt, _ in
+            let call = probe.record(prompt: prompt)
+            return .init(text: "fala \(call)-\(samples.count)", tokenEvidence: [])
+        })
+        let recognizer = try XCTUnwrap(transcriber.makeRollingRecognizer(
+            glossaryText: "Resenha",
+            promptTerms: { probe.terms }
+        ) { _ in
+            if probe.nextHypothesis() == 1 { first.fulfill() } else { second.fulfill() }
+        })
+        recognizer.submit(.init(id: 1, samples: [1], sampleRange: 0..<1, capturedAt: 1))
+        await fulfillment(of: [first], timeout: 1)
+        probe.setTerms(["Hostel"])
+        recognizer.submit(.init(id: 2, samples: [1, 2], sampleRange: 0..<2, capturedAt: 2))
+        await fulfillment(of: [second], timeout: 1)
+
+        let recording = try temporaryWhisperRecording()
+        defer { try? FileManager.default.removeItem(at: recording.directory) }
+        _ = try await transcriber.transcribeWithEvidence(
+            audioURL: recording.audio,
+            glossaryText: "Resenha",
+            promptTerms: ["Hostel"]
+        )
+
+        XCTAssertEqual(probe.prompts, ["Resenha", "Resenha, Hostel", "Resenha, Hostel"])
+        XCTAssertEqual(
+            WhisperTranscriber.prompt(
+                glossaryText: "",
+                adding: [String(repeating: "x", count: 8_001), "COESA"]
+            ),
+            "COESA"
+        )
+    }
+
     func testRollingWhisperCancellationTagsNoncooperativeLateResultAsStale() async throws {
         let started = expectation(description: "Rolling inference started")
         let staleResult = expectation(description: "Late result tagged stale")
@@ -2717,7 +2774,26 @@ final class WhisperKeyTests: XCTestCase {
         let capturedAt: TimeInterval
         let candidateAt: TimeInterval
         let text: String
+        let tokenEvidence: [WhisperTokenEvidence]
         var isStale = false
+
+        init(
+            snapshotID: UInt64,
+            sampleRange: Range<Int64>,
+            capturedAt: TimeInterval,
+            candidateAt: TimeInterval,
+            text: String,
+            tokenEvidence: [WhisperTokenEvidence] = [],
+            isStale: Bool = false
+        ) {
+            self.snapshotID = snapshotID
+            self.sampleRange = sampleRange
+            self.capturedAt = capturedAt
+            self.candidateAt = candidateAt
+            self.text = text
+            self.tokenEvidence = tokenEvidence
+            self.isStale = isStale
+        }
     }
 
     private actor RevisionLoopProvider: ContextualDecisionProvider {
@@ -2941,9 +3017,25 @@ final class WhisperKeyTests: XCTestCase {
         }
     }
 
+    func testContinuousContextWorkExpiresFromCandidateTime() throws {
+        let uptime = RevisionUptime()
+        let session = ContinuousContextSession(now: { uptime.now() })
+        XCTAssertTrue(session.start(attemptID: UUID(), language: "pt"))
+        uptime.set(milliseconds: 300)
+        _ = session.ingest(SessionEvent(
+            snapshotID: 1, sampleRange: 0..<100, capturedAt: 0,
+            candidateAt: 0, text: "Reservei um rosto."
+        ))
+
+        let work = try XCTUnwrap(session.takeNextWork())
+        XCTAssertEqual(work.eligibleAt, 0.3, accuracy: 0.001)
+        XCTAssertEqual(work.expiresAt, 1.2, accuracy: 0.001)
+        XCTAssertNotNil(session.remainingDuration(of: work))
+    }
+
     @MainActor
-    func testRevisionBoundLoopAccepts199AndRejects200And201Milliseconds() async throws {
-        for boundary in [199, 200, 201] {
+    func testRevisionBoundLoopAccepts1199AndRejects1200And1201Milliseconds() async throws {
+        for boundary in [1_199, 1_200, 1_201] {
             let uptime = RevisionUptime()
             let time = ManualContextualTime()
             let provider = RevisionLoopProvider(.suspended)
@@ -2965,21 +3057,170 @@ final class WhisperKeyTests: XCTestCase {
             )
             let task = Task { await loop.evaluateNext(scope: .testDouble) }
             await provider.waitUntilStarted()
-            uptime.set(milliseconds: boundary)
             time.advance(milliseconds: Int64(boundary))
             await provider.resume(revisionReceipt())
             let result = await task.value
             XCTAssertEqual(
                 result?.text,
-                boundary == 199 ? "Reservei um Hostel." : "Reservei um rosto.",
+                boundary == 1_199 ? "Reservei um Hostel." : "Reservei um rosto.",
                 "boundary-\(boundary)"
             )
             XCTAssertEqual(
                 session.contextualPreviewText,
-                boundary == 199 ? "Reservei um Hostel." : nil,
+                boundary == 1_199 ? "Reservei um Hostel." : "Reservei um rosto.",
                 "boundary-\(boundary)"
             )
         }
+    }
+
+    @MainActor
+    func testRevisionBoundLoopDeadlineIncludesCandidateQueueAge() async throws {
+        for providerMilliseconds in [899, 900] {
+            let uptime = RevisionUptime()
+            let time = ManualContextualTime()
+            let provider = RevisionLoopProvider(.suspended)
+            let session = ContinuousContextSession(now: { uptime.now() })
+            XCTAssertTrue(session.start(attemptID: UUID(), language: "pt"))
+            uptime.set(milliseconds: 300)
+            _ = session.ingest(SessionEvent(
+                snapshotID: 1, sampleRange: 0..<100, capturedAt: 0,
+                candidateAt: 0, text: "Reservei um rosto."
+            ))
+            let snapshot = ContextualCorrectionStoreSnapshot(
+                examples: [revisionExample], generation: 7, health: .healthy
+            )
+            let loop = RevisionBoundJevLoop(
+                session: session,
+                provider: provider,
+                time: time,
+                storeSnapshot: { snapshot },
+                policyGeneration: { 11 }
+            )
+            let task = Task { await loop.evaluateNext(scope: .testDouble) }
+            await provider.waitUntilStarted()
+            uptime.set(milliseconds: 300 + providerMilliseconds)
+            time.advance(milliseconds: Int64(providerMilliseconds))
+            await provider.resume(revisionReceipt())
+
+            let result = await task.value
+            XCTAssertEqual(
+                result?.text,
+                providerMilliseconds == 899 ? "Reservei um Hostel." : "Reservei um rosto.",
+                "provider-\(providerMilliseconds)"
+            )
+        }
+    }
+
+    @MainActor
+    func testProactiveLoopDispatchesOnlyAfterSecondIdenticalCandidate() async throws {
+        let uptime = RevisionUptime()
+        let session = ContinuousContextSession(now: { uptime.now() })
+        let provider = RevisionLoopProvider(.immediate(revisionReceipt()))
+        let snapshot = ContextualCorrectionStoreSnapshot(examples: [], generation: 1, health: .healthy)
+        let loop = RevisionBoundJevLoop(
+            session: session,
+            provider: provider,
+            time: ManualContextualTime(),
+            storeSnapshot: { snapshot },
+            policyGeneration: { 1 },
+            glossaryTerms: { ["Hostel"] }
+        )
+        let evidence = [WhisperTokenEvidence(
+            tokenID: 1, text: " rosto", probability: 0.20, alternatives: []
+        )]
+        XCTAssertTrue(session.start(attemptID: UUID(), language: "pt"))
+        _ = session.ingest(SessionEvent(
+            snapshotID: 1, sampleRange: 0..<100, capturedAt: 0,
+            candidateAt: 0, text: "Reservei uma cama no rosto.", tokenEvidence: evidence
+        ))
+        _ = await loop.evaluateNext(scope: .testDouble)
+        let firstRequestCount = await provider.requestCount
+        XCTAssertEqual(firstRequestCount, 0)
+
+        uptime.set(milliseconds: 500)
+        _ = session.ingest(SessionEvent(
+            snapshotID: 2, sampleRange: 0..<200, capturedAt: 0.4,
+            candidateAt: 0.5, text: "Reservei uma cama no rosto hoje.", tokenEvidence: evidence
+        ))
+        let result = await loop.evaluateNext(scope: .testDouble)
+        let secondRequestCount = await provider.requestCount
+        XCTAssertEqual(secondRequestCount, 1)
+        XCTAssertEqual(result?.text, "Reservei uma cama no Hostel hoje.")
+        XCTAssertEqual(session.ephemeralTerms, ["Hostel"])
+    }
+
+    func testAcceptedTermsAreAtomicDeduplicatedCappedAndClearedOnCancel() throws {
+        let uptime = RevisionUptime()
+        let session = ContinuousContextSession(now: { uptime.now() })
+        XCTAssertTrue(session.start(attemptID: UUID(), language: "pt"))
+
+        for index in 1...7 {
+            uptime.set(milliseconds: (index - 1) * 500)
+            let heard = "termo\(index)"
+            let replacement = ["Destino1", "Destino1", "Destino2", "Destino3", "Destino4", "Destino5", "Destino6"][index - 1]
+            let text = "Usei \(heard)."
+            _ = session.ingest(SessionEvent(
+                snapshotID: UInt64(index), sampleRange: 0..<Int64(index * 100),
+                capturedAt: uptime.now(), candidateAt: uptime.now(), text: text
+            ))
+            let work = try XCTUnwrap(session.takeNextWork())
+            let range = try XCTUnwrap(text.range(of: heard))
+            let occurrence = ContextualCorrectionOccurrence(
+                questionID: "o1", heard: heard, canonical: replacement,
+                alternatives: [.init(id: "replace_1", value: replacement, source: .vocabulary)],
+                ordinal: 1, range: range
+            )
+            let result = RevisionBoundContextualResult(
+                identity: work.identity(policyGeneration: 1, storeGeneration: 1),
+                originalText: text,
+                text: text.replacingCharacters(in: range, with: replacement),
+                outcome: .init(category: .replaced, decisions: [.init(
+                    questionID: "o1", choice: .replace,
+                    selectedProbability: 0.99, runnerUpProbability: 0.01
+                )])
+            )
+            XCTAssertNotNil(session.applyContextualResult(result, occurrence: occurrence, for: work))
+        }
+
+        XCTAssertEqual(session.ephemeralTerms, ["Destino1", "Destino2", "Destino3", "Destino4", "Destino5"])
+        session.cancel()
+        XCTAssertTrue(session.ephemeralTerms.isEmpty)
+    }
+
+    @MainActor
+    func testRevisionBoundLoopReturnsCorrectionRebasedOntoAppendedSpeech() async throws {
+        let uptime = RevisionUptime()
+        let provider = RevisionLoopProvider(.suspended)
+        let session = ContinuousContextSession(now: { uptime.now() })
+        let snapshot = ContextualCorrectionStoreSnapshot(
+            examples: [revisionExample], generation: 7, health: .healthy
+        )
+        let loop = RevisionBoundJevLoop(
+            session: session,
+            provider: provider,
+            time: ManualContextualTime(),
+            storeSnapshot: { snapshot },
+            policyGeneration: { 11 }
+        )
+        XCTAssertTrue(session.start(attemptID: UUID(), language: "pt"))
+        _ = session.ingest(SessionEvent(
+            snapshotID: 1, sampleRange: 0..<100, capturedAt: 0,
+            candidateAt: 0, text: "Reservei um rosto."
+        ))
+
+        let task = Task { await loop.evaluateNext(scope: .testDouble) }
+        await provider.waitUntilStarted()
+        uptime.set(milliseconds: 100)
+        _ = session.ingest(SessionEvent(
+            snapshotID: 2, sampleRange: 0..<200, capturedAt: 0.05,
+            candidateAt: 0.1, text: "Reservei um rosto. O quarto estava limpo."
+        ))
+        await provider.resume(revisionReceipt())
+
+        let completed = await task.value
+        let result = try XCTUnwrap(completed)
+        XCTAssertEqual(result.text, "Reservei um Hostel. O quarto estava limpo.")
+        XCTAssertEqual(session.contextualPreviewText, result.text)
     }
 
     @MainActor
@@ -3039,8 +3280,8 @@ final class WhisperKeyTests: XCTestCase {
             time: ManualContextualTime(),
             storeSnapshot: { snapshot },
             policyGeneration: { 11 },
-            onAttemptDisposition: { id, disposition in
-                audit.consume(.resolved(id: id, disposition: disposition))
+            onAttemptDisposition: { id, disposition, context in
+                audit.consume(.resolved(id: id, disposition: disposition, context: context))
             }
         )
 
@@ -3048,6 +3289,10 @@ final class WhisperKeyTests: XCTestCase {
 
         XCTAssertEqual(result?.text, "Reservei um Hostel.")
         XCTAssertEqual(audit.latest?.disposition, .appliedReplacement)
+        XCTAssertEqual(audit.latest?.stage, .rolling)
+        XCTAssertEqual(audit.latest?.revision, 1)
+        XCTAssertEqual(audit.latest?.dispatchOrdinal, 1)
+        XCTAssertEqual(audit.latest?.candidateToDecisionMilliseconds, 0)
     }
 
     @MainActor
@@ -3361,6 +3606,7 @@ final class WhisperKeyTests: XCTestCase {
         let stale = await task.value
         XCTAssertEqual(stale?.text, "Reservei um rosto.")
         XCTAssertNil(session.contextualPreviewText)
+        XCTAssertTrue(session.ephemeralTerms.isEmpty)
 
         uptime.set(milliseconds: 500)
         let blocked = await loop.evaluateNext(scope: .disabled)
@@ -3505,14 +3751,14 @@ final class WhisperKeyTests: XCTestCase {
         )
         _ = session.ingest(partial)
         let expiring = try XCTUnwrap(session.takeNextWork())
-        uptime = 4.201
+        uptime = 5.201
         XCTAssertFalse(session.completeWork(expiring))
 
         let final = try XCTUnwrap(session.finalize(SessionEvent(
             snapshotID: 2,
             sampleRange: 0..<200,
             capturedAt: 3.5,
-            candidateAt: 4.2,
+            candidateAt: 5.2,
             text: "mesmo texto"
         ), attemptID: attemptID))
         XCTAssertEqual(final.mutableSourceCharacterRange, final.sourceText.count..<final.sourceText.count)
@@ -3592,6 +3838,115 @@ final class WhisperKeyTests: XCTestCase {
         }
     }
 
+    func testTextOnlyInferenceProducesEmptyEvidenceAndCompatibilityText() async throws {
+        let first = try temporaryWhisperRecording()
+        let second = try temporaryWhisperRecording()
+        defer {
+            try? FileManager.default.removeItem(at: first.directory)
+            try? FileManager.default.removeItem(at: second.directory)
+        }
+        let transcriber = WhisperTranscriber(infer: { _, _, _, _ in "Texto compatível." })
+
+        let enriched = try await transcriber.transcribeWithEvidence(audioURL: first.audio, glossaryText: "")
+        let textOnly = try await transcriber.transcribe(audioURL: second.audio, glossaryText: "")
+
+        XCTAssertEqual(enriched, WhisperTranscription(text: "Texto compatível.", tokenEvidence: []))
+        XCTAssertEqual(textOnly, enriched.text)
+    }
+
+    func testRollingHypothesisCarriesBoundedEvidenceIntoRevisionAndWork() {
+        let evidence = [WhisperTokenEvidence(
+            tokenID: 20,
+            text: " rosto",
+            probability: 0.42,
+            alternatives: [.init(tokenID: 90, text: " Hostel", logit: 7.2)]
+        )]
+        let session = ContinuousContextSession(now: { 1 })
+        let attemptID = UUID()
+        XCTAssertTrue(session.start(attemptID: attemptID, language: "pt"))
+
+        let revision = session.ingest(RollingWhisperHypothesis(
+            snapshotID: 1,
+            sampleRange: 0..<16_000,
+            capturedAt: 0,
+            candidateAt: 0.5,
+            text: "Reservei uma cama no rosto.",
+            tokenEvidence: evidence
+        ))
+
+        XCTAssertEqual(revision?.tokenEvidence, evidence)
+        XCTAssertEqual(session.takeNextWork()?.tokenEvidence, evidence)
+    }
+
+    func testWhisperLogitCollectorAlignsAlternativesWithoutChangingChosenTokens() {
+        let hostel = WhisperAlternativeToken(tokenID: 90, text: " Hostel", logit: 7.2)
+        let rosto = WhisperAlternativeToken(tokenID: 20, text: " rosto", logit: 6.8)
+        let collector = WhisperLogitCollector(snapshots: [
+            .init(prefixSuffix: [2, 10], alternatives: [
+                .init(tokenID: 91, text: " decoy", logit: 9.9)
+            ]),
+            .init(prefixSuffix: [1, 10], alternatives: [hostel, rosto]),
+            .init(prefixSuffix: [1, 10, 20], alternatives: [
+                .init(tokenID: 30, text: " perto", logit: 8.1)
+            ])
+        ])
+
+        let evidence = collector.align(
+            tokenIDs: [1, 10, 20, 30],
+            tokenTexts: ["<|start|>", " Eu", " rosto", " perto"],
+            probabilities: [1, 0.99, 0.42, 0.96],
+            endOfText: 100
+        )
+
+        XCTAssertEqual(evidence.map(\.tokenID), [10, 20, 30])
+        XCTAssertEqual(evidence.map(\.text), [" Eu", " rosto", " perto"])
+        XCTAssertEqual(evidence[1].alternatives, [hostel, rosto])
+        XCTAssertEqual(evidence[2].alternatives.map(\.text), [" perto"])
+    }
+
+    func testWhisperLogitCollectorRejectsUnmatchedPrefixesAndBoundsSelectedEvidence() {
+        let decoy = WhisperAlternativeToken(tokenID: 90, text: " Hostel", logit: 7.2)
+        let collector = WhisperLogitCollector(snapshots: [
+            .init(prefixSuffix: [999, 10], alternatives: [decoy])
+        ])
+        let unmatched = collector.align(
+            tokenIDs: [1, 10, 20],
+            tokenTexts: ["<|start|>", " Eu", " rosto"],
+            probabilities: [1, 0.99, 0.42],
+            endOfText: 1_000
+        )
+        XCTAssertEqual(unmatched.last?.alternatives, [])
+
+        let ids = Array(1...140).map(Int32.init)
+        let bounded = WhisperLogitCollector().align(
+            tokenIDs: ids,
+            tokenTexts: Array(repeating: " a", count: ids.count),
+            probabilities: Array(repeating: 0.5, count: ids.count),
+            endOfText: 1_000
+        )
+        XCTAssertEqual(bounded.count, 128)
+        XCTAssertEqual(bounded.first?.tokenID, 13)
+        XCTAssertTrue(bounded.allSatisfy { $0.probability.isFinite && (0...1).contains($0.probability) })
+    }
+
+    func testCTopLogitsReturnsDescendingFiniteCandidatesWithoutMutatingInput() {
+        let original: [Float] = [1, .nan, 9, 3, .infinity, 7, 5]
+        var logits = original
+        var output = Array(repeating: ResenhaLogitCandidate(token_id: -1, logit: 0), count: 4)
+        let count = logits.withUnsafeMutableBufferPointer { values in
+            output.withUnsafeMutableBufferPointer { candidates in
+                resenha_top_logits(values.baseAddress, Int32(values.count), 4, candidates.baseAddress)
+            }
+        }
+
+        XCTAssertEqual(count, 4)
+        XCTAssertEqual(output.map(\.token_id), [2, 5, 6, 3])
+        XCTAssertEqual(logits[0], original[0])
+        XCTAssertTrue(logits[1].isNaN)
+        XCTAssertTrue(logits[4].isInfinite)
+        XCTAssertEqual(Array(logits[5...]), Array(original[5...]))
+    }
+
     func testEmbeddedWhisperTranscribesOfficialFixtureWhenLocalModelIsAvailable() async throws {
         let home = FileManager.default.homeDirectoryForCurrentUser
         let model = home.appendingPathComponent(
@@ -3604,15 +3959,78 @@ final class WhisperKeyTests: XCTestCase {
         let recording = try temporaryWhisperRecording()
         defer { try? FileManager.default.removeItem(at: recording.directory) }
 
-        let transcript = try await WhisperTranscriber().transcribe(
+        let result = try await WhisperTranscriber().transcribeWithEvidence(
             audioURL: recording.audio,
             language: .english,
             glossaryText: ""
-        ).lowercased()
+        )
+        let transcript = result.text.lowercased()
 
         XCTAssertTrue(transcript.contains("fellow americans"), transcript)
         XCTAssertTrue(transcript.contains("country"), transcript)
+        XCTAssertFalse(result.tokenEvidence.isEmpty)
+        XCTAssertTrue(result.tokenEvidence.contains { !$0.alternatives.isEmpty })
+        XCTAssertLessThanOrEqual(result.tokenEvidence.count, 128)
+        XCTAssertTrue(result.tokenEvidence.allSatisfy {
+            $0.probability.isFinite && (0...1).contains($0.probability) && $0.alternatives.count <= 4
+        })
         XCTAssertFalse(FileManager.default.fileExists(atPath: recording.audio.path))
+    }
+
+    func testRealWhisperEvidenceCollectionP95OverheadStaysBelowFifteenPercent() async throws {
+        let model = WhisperPaths.modelDirectory.appendingPathComponent("ggml-small-q5_1.bin")
+        guard FileManager.default.fileExists(atPath: model.path) else {
+            throw XCTSkip("Local Whisper benchmark model is not installed")
+        }
+        let baselineEngine = EmbeddedWhisperEngine(collectsTokenEvidence: false)
+        let evidenceEngine = EmbeddedWhisperEngine()
+
+        func measure(_ engine: EmbeddedWhisperEngine) async throws -> (TimeInterval, WhisperTranscription) {
+            let recording = try temporaryWhisperRecording()
+            defer { try? FileManager.default.removeItem(at: recording.directory) }
+            let transcriber = WhisperTranscriber(resultInference: { samples, language, prompt, control in
+                try engine.transcribeWithEvidence(
+                    samples: samples,
+                    model: model,
+                    language: language,
+                    prompt: prompt,
+                    control: control
+                )
+            })
+            let started = ProcessInfo.processInfo.systemUptime
+            let result = try await transcriber.transcribeWithEvidence(
+                audioURL: recording.audio,
+                language: .english,
+                glossaryText: ""
+            )
+            return (ProcessInfo.processInfo.systemUptime - started, result)
+        }
+
+        _ = try await measure(baselineEngine)
+        _ = try await measure(evidenceEngine)
+        var baseline: [TimeInterval] = []
+        var evidence: [TimeInterval] = []
+        for iteration in 0..<20 {
+            if iteration.isMultiple(of: 2) {
+                baseline.append(try await measure(baselineEngine).0)
+                let measured = try await measure(evidenceEngine)
+                evidence.append(measured.0)
+                XCTAssertFalse(measured.1.tokenEvidence.isEmpty)
+            } else {
+                let measured = try await measure(evidenceEngine)
+                evidence.append(measured.0)
+                XCTAssertFalse(measured.1.tokenEvidence.isEmpty)
+                baseline.append(try await measure(baselineEngine).0)
+            }
+        }
+        func p95(_ values: [TimeInterval]) -> TimeInterval {
+            let sorted = values.sorted()
+            return sorted[max(0, Int(ceil(Double(sorted.count) * 0.95)) - 1)]
+        }
+        let baselineP95 = p95(baseline)
+        let evidenceP95 = p95(evidence)
+        print("WHISPER_EVIDENCE_BENCHMARK baseline_ms=\(baseline.map { Int($0 * 1_000) }) evidence_ms=\(evidence.map { Int($0 * 1_000) }) p95_baseline_ms=\(Int(baselineP95 * 1_000)) p95_evidence_ms=\(Int(evidenceP95 * 1_000))")
+        XCTAssertLessThanOrEqual(evidenceP95, baselineP95 * 1.15)
     }
 
     func testWhisperRuntimePolicyHasAnExactBound() {
@@ -4377,8 +4795,8 @@ final class ContextualResolverTests: XCTestCase {
         matcher: ContextualCorrectionResolver.CandidateMatcher? = nil,
         fileManager: FileManager = .default,
         onAttemptDisposition: @escaping @MainActor @Sendable (
-            UUID, ContextualAttemptDisposition
-        ) -> Void = { _, _ in }
+            UUID, ContextualAttemptDisposition, ContextualAttemptContext
+        ) -> Void = { _, _, _ in }
     ) -> (ContextualCorrectionResolver, ContextualCorrectionStore, ContextualCorrectionPolicy, ManualContextualTime, URL) {
         let file = FileManager.default.temporaryDirectory
             .appendingPathComponent("ResenhaTests/\(UUID().uuidString)/ContextualCorrections/v1.json")
@@ -4485,14 +4903,17 @@ final class ContextualResolverTests: XCTestCase {
         let provider = ResolverDecisionProviderStub(
             [decision("o1", .replace)], localAttemptID: attemptID
         )
-        let item = fixture(provider: provider, onAttemptDisposition: { id, disposition in
-            audit.consume(.resolved(id: id, disposition: disposition))
+        let item = fixture(provider: provider, onAttemptDisposition: { id, disposition, context in
+            audit.consume(.resolved(id: id, disposition: disposition, context: context))
         })
 
         let output = await item.0.resolve(request("Reservei um rosto.", store: item.1, policy: item.2))
 
         XCTAssertEqual(output, "Reservei um Hostel.")
         XCTAssertEqual(audit.latest?.disposition, .appliedReplacement)
+        XCTAssertEqual(audit.latest?.stage, .final)
+        XCTAssertNil(audit.latest?.revision)
+        XCTAssertEqual(audit.latest?.dispatchOrdinal, 1)
     }
 
     func testResolverOrdersMultiPairOccurrencesByRangeAndAssignsUniqueQuestionIDs() async {
@@ -5187,6 +5608,177 @@ private enum ContextualCorpusOutcomeKind: String, Codable {
 }
 private enum ContextualCorpusChoice: String, Codable { case keepOriginal = "keep_original", replace = "replace_1" }
 
+private struct ProactiveContextFixture: Decodable {
+    struct Token: Decodable {
+        let text: String
+        let probability: Float
+    }
+
+    struct Alternative: Decodable {
+        let text: String
+        let logit: Float
+    }
+
+    struct Row: Decodable {
+        let id: String
+        let semanticKey: String
+        let partition: String
+        let family: String
+        let language: String
+        let recognizedText: String
+        let token: Token
+        let alternatives: [Alternative]
+        let vocabulary: [String]
+        let expectedChoice: String
+        let expectedText: String
+        let protectedSemantics: String
+    }
+
+    let schemaVersion: Int
+    let corpusVersion: String
+    let provenance: String
+    let language: String
+    let frozenSHA256: String
+    let thresholds: ProactiveCandidateThresholds
+    var calibration: [Row]
+    var evaluation: [Row]
+    var controls: [Row]
+
+    static let fileSHA256 = "563e70806d2d980767943e49a0243d27b90755ccb7256be0494ce811785975b4"
+
+    static func load(bundle: Bundle) throws -> (fixture: Self, data: Data) {
+        let url = try XCTUnwrap(bundle.url(forResource: "proactive-context-guidance", withExtension: "json"))
+        let data = try Data(contentsOf: url)
+        return (try JSONDecoder().decode(Self.self, from: data), data)
+    }
+
+    func calibrationThresholds() -> ProactiveCandidateThresholds? {
+        calibration.isEmpty ? nil : thresholds
+    }
+
+    func validate() -> Bool {
+        let rows = calibration + evaluation + controls
+        guard schemaVersion == 1,
+              corpusVersion == "2026-10-22.1",
+              provenance == "synthetic_invented_no_personal_dictation",
+              language == "pt-BR",
+              frozenSHA256.count == 64,
+              calibration.count >= 15,
+              evaluation.count >= 60,
+              controls.count >= 30,
+              Set(evaluation.map(\.family)).count >= 15,
+              Set(rows.map(\.id)).count == rows.count,
+              Set(rows.map(\.semanticKey)).count == rows.count,
+              thresholds.tokenProbability.isFinite,
+              (0...1).contains(thresholds.tokenProbability),
+              thresholds.maximumLogitGap.isFinite,
+              thresholds.maximumLogitGap >= 0,
+              thresholds.minimumVocabularySimilarity.isFinite,
+              (0...1).contains(thresholds.minimumVocabularySimilarity) else { return false }
+
+        for (partition, partitionRows) in [
+            ("calibration", calibration),
+            ("evaluation", evaluation),
+            ("controls", controls)
+        ] {
+            for row in partitionRows {
+                guard row.partition == partition,
+                      row.language == "pt",
+                      !row.id.isEmpty,
+                      !row.semanticKey.isEmpty,
+                      !row.family.isEmpty,
+                      !row.recognizedText.isEmpty,
+                      !row.token.text.isEmpty,
+                      row.token.probability.isFinite,
+                      (0...1).contains(row.token.probability),
+                      row.recognizedText.localizedCaseInsensitiveContains(row.token.text),
+                      (1...3).contains(row.alternatives.count),
+                      row.alternatives.allSatisfy({ !$0.text.isEmpty && $0.logit.isFinite }),
+                      !row.vocabulary.isEmpty,
+                      ["keep_original", "replace_1", "replace_2", "replace_3"].contains(row.expectedChoice),
+                      !row.expectedText.isEmpty,
+                      !row.protectedSemantics.isEmpty else { return false }
+            }
+        }
+        return true
+    }
+}
+
+private struct ProactiveEvaluationReport: Equatable {
+    let baselineErrors: Int
+    let currentErrors: Int
+    let unauthorizedChanges: Int
+    let controlRegressions: Int
+    let coveredFamilies: Int
+    let acousticCandidates: Int
+    let vocabularyCandidates: Int
+    let fallbackCount: Int
+    let partitionSHA256: String
+}
+
+private enum ProactiveEvaluationRunner {
+    static func run(_ fixture: ProactiveContextFixture) -> ProactiveEvaluationReport {
+        var baselineErrors = 0
+        var currentErrors = 0
+        var unauthorizedChanges = 0
+        var controlRegressions = 0
+        var acousticCandidates = 0
+        var vocabularyCandidates = 0
+        var fallbackCount = 0
+
+        for row in fixture.evaluation + fixture.controls {
+            if row.recognizedText != row.expectedText { baselineErrors += 1 }
+            let evidence = WhisperTokenEvidence(
+                tokenID: 1,
+                text: row.token.text,
+                probability: row.token.probability,
+                alternatives: row.alternatives.enumerated().map { index, alternative in
+                    .init(tokenID: Int32(index + 2), text: alternative.text, logit: alternative.logit)
+                }
+            )
+            let candidate = ProactiveContextualCandidateGenerator.candidate(
+                text: row.recognizedText,
+                language: row.language,
+                tokenEvidence: [evidence],
+                glossaryTerms: row.vocabulary,
+                examples: [],
+                thresholds: .frozen
+            )
+            switch candidate?.alternatives.first?.source {
+            case .acoustic: acousticCandidates += 1
+            case .vocabulary: vocabularyCandidates += 1
+            default: if candidate == nil { fallbackCount += 1 }
+            }
+
+            var output = row.recognizedText
+            if row.expectedChoice != ContextualDecisionChoice.keepOriginal.rawValue,
+               let candidate,
+               let index = replacementIndex(
+                for: .init(rawValue: row.expectedChoice),
+                optionCount: candidate.alternatives.count
+               ) {
+                output.replaceSubrange(candidate.range, with: candidate.alternatives[index].value)
+            }
+            if output != row.expectedText { currentErrors += 1 }
+            if row.expectedChoice == ContextualDecisionChoice.keepOriginal.rawValue,
+               output != row.recognizedText { unauthorizedChanges += 1 }
+            if row.partition == "controls", output != row.expectedText { controlRegressions += 1 }
+        }
+
+        return .init(
+            baselineErrors: baselineErrors,
+            currentErrors: currentErrors,
+            unauthorizedChanges: unauthorizedChanges,
+            controlRegressions: controlRegressions,
+            coveredFamilies: Set(fixture.evaluation.map(\.family)).count,
+            acousticCandidates: acousticCandidates,
+            vocabularyCandidates: vocabularyCandidates,
+            fallbackCount: fallbackCount,
+            partitionSHA256: ProactiveContextFixture.fileSHA256
+        )
+    }
+}
+
 private struct ContinuousContextEventsFixture: Decodable {
     struct Event: Decodable {
         let revision: Int
@@ -5633,6 +6225,186 @@ private struct ContextualCorpusFixture: Decodable {
 }
 
 extension ContextualTransportCorpusTests {
+    func testProactiveEvaluationImprovesWithoutControlRegressions() throws {
+        let fixture = try ProactiveContextFixture.load(
+            bundle: Bundle(for: ContextualTransportCorpusTests.self)
+        ).fixture
+        let first = ProactiveEvaluationRunner.run(fixture)
+        let second = ProactiveEvaluationRunner.run(fixture)
+
+        XCTAssertEqual(first, second)
+        XCTAssertGreaterThan(first.baselineErrors, 0)
+        XCTAssertLessThanOrEqual(
+            first.currentErrors * 5,
+            first.baselineErrors * 4,
+            "Requires at least 20% relative error reduction"
+        )
+        XCTAssertEqual(first.unauthorizedChanges, 0)
+        XCTAssertEqual(first.controlRegressions, 0)
+        XCTAssertEqual(first.coveredFamilies, 15)
+        XCTAssertEqual(first.partitionSHA256, ProactiveContextFixture.fileSHA256)
+    }
+
+    func testProactiveContextFixtureIsFrozenPartitionedAndValid() throws {
+        let bundle = Bundle(for: ContextualTransportCorpusTests.self)
+        let loaded = try ProactiveContextFixture.load(bundle: bundle)
+        let rows = loaded.fixture.calibration + loaded.fixture.evaluation + loaded.fixture.controls
+
+        XCTAssertTrue(loaded.fixture.validate())
+        XCTAssertEqual(loaded.fixture.calibration.count, 15)
+        XCTAssertEqual(loaded.fixture.evaluation.count, 60)
+        XCTAssertEqual(loaded.fixture.controls.count, 30)
+        XCTAssertEqual(Set(loaded.fixture.evaluation.map(\.family)).count, 15)
+        XCTAssertEqual(Set(rows.map(\.id)).count, rows.count)
+        XCTAssertEqual(Set(rows.map(\.semanticKey)).count, rows.count)
+        XCTAssertEqual(
+            SHA256.hash(data: loaded.data).map { String(format: "%02x", $0) }.joined(),
+            ProactiveContextFixture.fileSHA256,
+            "The proactive corpus changed. Re-plan and freeze a new baseline before implementation."
+        )
+    }
+
+    func testProactiveThresholdsAcceptBoundaryAndRejectOutside() throws {
+        let thresholds = try XCTUnwrap(
+            ProactiveContextFixture.load(bundle: Bundle(for: ContextualTransportCorpusTests.self))
+                .fixture.calibrationThresholds()
+        )
+        XCTAssertEqual(thresholds, .frozen)
+
+        XCTAssertTrue(thresholds.accepts(
+            tokenProbability: thresholds.tokenProbability,
+            logitGap: thresholds.maximumLogitGap,
+            vocabularySimilarity: thresholds.minimumVocabularySimilarity
+        ))
+        XCTAssertFalse(thresholds.accepts(
+            tokenProbability: thresholds.tokenProbability.nextUp,
+            logitGap: thresholds.maximumLogitGap,
+            vocabularySimilarity: thresholds.minimumVocabularySimilarity
+        ))
+        XCTAssertFalse(thresholds.accepts(
+            tokenProbability: thresholds.tokenProbability,
+            logitGap: thresholds.maximumLogitGap.nextUp,
+            vocabularySimilarity: thresholds.minimumVocabularySimilarity
+        ))
+        XCTAssertFalse(thresholds.accepts(
+            tokenProbability: thresholds.tokenProbability,
+            logitGap: thresholds.maximumLogitGap,
+            vocabularySimilarity: thresholds.minimumVocabularySimilarity.nextDown
+        ))
+    }
+
+    func testProactiveThresholdSelectionCannotReadEvaluationRows() throws {
+        var fixture = try ProactiveContextFixture.load(
+            bundle: Bundle(for: ContextualTransportCorpusTests.self)
+        ).fixture
+        let selected = fixture.calibrationThresholds()
+        fixture.evaluation.removeAll()
+        fixture.controls.removeAll()
+        XCTAssertEqual(fixture.calibrationThresholds(), selected)
+    }
+
+    func testProactiveCandidateUsesLearnedThenAcousticThenVocabularyEvidence() throws {
+        let thresholds = try XCTUnwrap(
+            ProactiveContextFixture.load(bundle: Bundle(for: ContextualTransportCorpusTests.self))
+                .fixture.calibrationThresholds()
+        )
+        let text = "Reservei uma cama no rosto."
+        let acousticEvidence = [WhisperTokenEvidence(
+            tokenID: 1,
+            text: " rosto",
+            probability: 0.40,
+            alternatives: [
+                .init(tokenID: 2, text: " Hostel", logit: 8),
+                .init(tokenID: 3, text: " posto", logit: 7)
+            ]
+        )]
+        let learned = ContextualCorrectionExample(
+            id: UUID(), language: "pt", heard: "rosto", canonical: "Hostel",
+            sentence: text, occurrenceOrdinal: 1
+        )
+
+        let learnedCandidate = try XCTUnwrap(ProactiveContextualCandidateGenerator.candidate(
+            text: text, language: "pt", tokenEvidence: [], glossaryTerms: [],
+            examples: [learned], thresholds: thresholds
+        ))
+        XCTAssertEqual(learnedCandidate.alternatives.map(\.source), [.learned])
+
+        let acousticCandidate = try XCTUnwrap(ProactiveContextualCandidateGenerator.candidate(
+            text: text, language: "pt", tokenEvidence: acousticEvidence, glossaryTerms: ["Hostel"],
+            examples: [], thresholds: thresholds
+        ))
+        XCTAssertEqual(acousticCandidate.alternatives.map(\.value), ["Hostel", "posto"])
+        XCTAssertTrue(acousticCandidate.alternatives.allSatisfy { $0.source == .acoustic })
+
+        let vocabularyEvidence = [WhisperTokenEvidence(
+            tokenID: 1, text: " rosto", probability: 0.40, alternatives: []
+        )]
+        let vocabularyCandidate = try XCTUnwrap(ProactiveContextualCandidateGenerator.candidate(
+            text: text, language: "pt-BR", tokenEvidence: vocabularyEvidence,
+            glossaryTerms: ["Hostel"], examples: [], thresholds: thresholds
+        ))
+        XCTAssertEqual(vocabularyCandidate.canonical, "Hostel")
+        XCTAssertEqual(vocabularyCandidate.alternatives.map(\.source), [.vocabulary])
+    }
+
+    func testProactiveCandidateRequiresLowConfidencePortugueseAndExactBinding() throws {
+        let thresholds = try XCTUnwrap(
+            ProactiveContextFixture.load(bundle: Bundle(for: ContextualTransportCorpusTests.self))
+                .fixture.calibrationThresholds()
+        )
+        func candidate(text: String, language: String, probability: Float) -> ContextualCorrectionOccurrence? {
+            ProactiveContextualCandidateGenerator.candidate(
+                text: text,
+                language: language,
+                tokenEvidence: [.init(tokenID: 1, text: " rosto", probability: probability, alternatives: [])],
+                glossaryTerms: ["Hostel"], examples: [], thresholds: thresholds
+            )
+        }
+
+        XCTAssertNil(candidate(text: "Reservei no rosto.", language: "en", probability: 0.40))
+        XCTAssertNotNil(candidate(text: "Reservei no rosto.", language: "pt", probability: 0.84))
+        XCTAssertNil(candidate(text: "Reservei no rosto.", language: "pt", probability: 0.86))
+        XCTAssertNil(candidate(text: "Reservei no rosto e lavei o rosto.", language: "pt", probability: 0.40))
+        XCTAssertNil(candidate(text: "Reservei no posto.", language: "pt", probability: 0.40))
+    }
+
+    func testProactiveCandidateRejectsProtectedAndNonLexicalTerms() throws {
+        let thresholds = try XCTUnwrap(
+            ProactiveContextFixture.load(bundle: Bundle(for: ContextualTransportCorpusTests.self))
+                .fixture.calibrationThresholds()
+        )
+        for term in ["123", "R$", "a@b.com", "https://a.com", "user_name", "não", "rosto!", "rosto�"] {
+            let candidate = ProactiveContextualCandidateGenerator.candidate(
+                text: "Teste \(term)", language: "pt",
+                tokenEvidence: [.init(tokenID: 1, text: term, probability: 0.20, alternatives: [])],
+                glossaryTerms: ["Hostel"], examples: [], thresholds: thresholds
+            )
+            XCTAssertNil(candidate, term)
+        }
+        let caseOnly = ProactiveContextualCandidateGenerator.candidate(
+            text: "Teste rosto", language: "pt",
+            tokenEvidence: [.init(tokenID: 1, text: "rosto", probability: 0.20, alternatives: [])],
+            glossaryTerms: ["ROSTO"], examples: [], thresholds: thresholds
+        )
+        XCTAssertNil(caseOnly)
+        XCTAssertNil(ProactiveContextualCandidateGenerator.candidate(
+            text: "Teste rosto", language: "pt", tokenEvidence: [],
+            glossaryTerms: ["Hostel"], examples: [], thresholds: thresholds
+        ))
+        XCTAssertNil(ProactiveContextualCandidateGenerator.candidate(
+            text: "Teste rosto", language: "pt",
+            tokenEvidence: [.init(tokenID: 1, text: "rosto", probability: 0.20, alternatives: [])],
+            glossaryTerms: [], examples: [], thresholds: thresholds
+        ))
+
+        let deterministicTie = try XCTUnwrap(ProactiveContextualCandidateGenerator.candidate(
+            text: "Teste mato", language: "pt",
+            tokenEvidence: [.init(tokenID: 1, text: "mato", probability: 0.20, alternatives: [])],
+            glossaryTerms: ["rato", "pato"], examples: [], thresholds: thresholds
+        ))
+        XCTAssertEqual(deterministicTie.canonical, "pato")
+    }
+
     func testContinuousContextCorpusIsBundledFrozenAndSchemaValid() throws {
         let testBundle = Bundle(for: ContextualTransportCorpusTests.self)
         let loaded = try ContinuousContextEventsFixture.load(bundle: testBundle)
@@ -5853,7 +6625,15 @@ final class ContextualAttemptAuditTests: XCTestCase {
                 ))
             } else {
                 if index == 24 {
-                    store.consume(.resolved(id: id, disposition: .appliedReplacement))
+                    store.consume(.resolved(
+                        id: id,
+                        disposition: .appliedReplacement,
+                        context: .init(
+                            dictationAttemptID: UUID(), stage: .rolling,
+                            revision: 7, dispatchOrdinal: 3,
+                            candidateToDecisionMilliseconds: 777
+                        )
+                    ))
                 }
                 store.consume(.succeeded(
                     id: id, startedAt: start, completedAt: start.addingTimeInterval(0.125),
@@ -5872,6 +6652,10 @@ final class ContextualAttemptAuditTests: XCTestCase {
         XCTAssertEqual(latest.costUSD, Decimal(string: "0.000014994"))
         XCTAssertEqual(latest.providerRequestID, "jev-proof-24")
         XCTAssertEqual(latest.disposition, .appliedReplacement)
+        XCTAssertEqual(latest.stage, .rolling)
+        XCTAssertEqual(latest.revision, 7)
+        XCTAssertEqual(latest.dispatchOrdinal, 3)
+        XCTAssertEqual(latest.candidateToDecisionMilliseconds, 777)
         XCTAssertEqual(try FileManager.default.attributesOfItem(atPath: file.path)[.posixPermissions] as? NSNumber, 0o600)
 
         let failureID = UUID()
@@ -5884,7 +6668,10 @@ final class ContextualAttemptAuditTests: XCTestCase {
         ))
         XCTAssertEqual(store.latest?.status, .failed)
         XCTAssertEqual(store.latest?.failure, .unknown)
-        XCTAssertFalse(String(decoding: try Data(contentsOf: file), as: UTF8.self).contains("SECRET-SENTINEL"))
+        let persistedAudit = String(decoding: try Data(contentsOf: file), as: UTF8.self)
+        for forbidden in ["SECRET-SENTINEL", "dictated sentence", "api key", "rosto", "Hostel"] {
+            XCTAssertFalse(persistedAudit.localizedCaseInsensitiveContains(forbidden), forbidden)
+        }
 
         let reloaded = ContextualAttemptStore(fileURL: file)
         XCTAssertEqual(reloaded.records, store.records)
@@ -5899,6 +6686,27 @@ final class ContextualAttemptAuditTests: XCTestCase {
         let oversized = ContextualAttemptStore(fileURL: file)
         XCTAssertTrue(oversized.records.isEmpty)
         XCTAssertFalse(oversized.storageAvailable)
+
+        let corrupt = String(decoding: try JSONEncoder().encode(
+            ContextualAttemptRecord(
+                id: UUID(), startedAt: Date(), completedAt: Date(), status: .succeeded,
+                resolvedModel: "test", decisions: [], minimumConfidence: nil,
+                minimumProbability: nil, latencyMilliseconds: 1, inputTokens: nil,
+                outputTokens: nil, costUSD: nil, dictationAttemptID: UUID(),
+                stage: .rolling, revision: 1, dispatchOrdinal: 7,
+                candidateToDecisionMilliseconds: 1, failure: nil
+            )
+        ), as: UTF8.self)
+        try Data(#"{"schemaVersion":1,"records":["#.utf8)
+            .write(to: file, options: .atomic)
+        let handle = try FileHandle(forWritingTo: file)
+        try handle.seekToEnd()
+        try handle.write(Data(corrupt.utf8))
+        try handle.write(Data("]}".utf8))
+        try handle.close()
+        let invalidContext = ContextualAttemptStore(fileURL: file)
+        XCTAssertTrue(invalidContext.records.isEmpty)
+        XCTAssertFalse(invalidContext.storageAvailable)
     }
 
     func testPersonalClientEmitsCorrelatedProviderConfirmedAttemptWithUsage() async throws {
@@ -6100,7 +6908,7 @@ final class ContextualCoordinatorTests: XCTestCase {
             onContinuousPreview: {
                 if continuousMode { probe.events.append(.preview($0?.sourceText)) }
             },
-            continuousContextLoopFactory: { session in
+            continuousContextLoopFactory: { session, budget in
                 guard wiresContinuousRemote else { return nil }
                 return RevisionBoundJevLoop(
                     session: session,
@@ -6108,7 +6916,8 @@ final class ContextualCoordinatorTests: XCTestCase {
                     time: time,
                     storeSnapshot: { actualStore.snapshot },
                     policyGeneration: { actualPolicy.generation },
-                    policy: actualPolicy
+                    policy: actualPolicy,
+                    dispatchBudget: budget
                 )
             },
             onContinuousContextualPreview: { _, _, text in
@@ -6148,12 +6957,13 @@ final class ContextualCoordinatorTests: XCTestCase {
         attemptID: UUID,
         snapshotID: UInt64 = 1
     ) {
+        let candidateAt = ProcessInfo.processInfo.systemUptime
         harness.coordinator.receiveContinuousHypothesis(
             .init(
                 snapshotID: snapshotID,
                 sampleRange: 0..<8_000,
-                capturedAt: 1,
-                candidateAt: 2,
+                capturedAt: candidateAt,
+                candidateAt: candidateAt,
                 text: text,
                 isStale: false
             ),
@@ -6987,7 +7797,7 @@ final class ContextualFeedbackSettingsTests: XCTestCase {
         defer { fixture.defaults.removePersistentDomain(forName: fixture.suiteName) }
         XCTAssertEqual(ContextualSettingsModel.disclosureLines, [
             "Correções contextuais (beta)",
-            "Beta local, desligado por padrão: salva e organiza exemplos confirmados neste Mac.",
+            "Beta local, desligado por padrão: usa incerteza do Whisper, glossário e exemplos confirmados.",
             "Avaliação remota pessoal é separada e começa desligada.",
             "Diagnóstico de infraestrutura: envia somente a frase sintética identificada ao OpenRouter/TypeSafe, uma única vez.",
             "O diagnóstico não recebe nem corrige seu ditado pessoal."
@@ -7007,8 +7817,9 @@ final class ContextualFeedbackSettingsTests: XCTestCase {
             KeychainContextualCredentialConstants.syntheticAccount,
             KeychainContextualCredentialConstants.personalAccount
         )
-        XCTAssertTrue(ContextualSettingsModel.personalDisclosure.contains("somente a frase transcrita"))
-        XCTAssertTrue(ContextualSettingsModel.personalDisclosure.contains("Nunca envia áudio"))
+        XCTAssertTrue(ContextualSettingsModel.personalDisclosure.contains("somente a frase atual"))
+        XCTAssertTrue(ContextualSettingsModel.personalDisclosure.localizedCaseInsensitiveContains("nunca áudio"))
+        XCTAssertTrue(ContextualSettingsModel.personalDisclosure.contains("no máximo seis envios"))
         XCTAssertTrue(ContextualSettingsModel.personalDisclosure.contains("500 ms"))
         XCTAssertTrue(ContextualSettingsModel.personalDisclosure.contains("4096 bytes"))
         XCTAssertFalse(ContextualSettingsModel.personalDisclosure.localizedCaseInsensitiveContains("ZDR"))
@@ -7327,6 +8138,148 @@ private actor InvalidatingBeforeOpenProvider: SyntheticDiagnosticDecisionProvide
         }
         openCount += 1
         throw OpenRouterDecisionsError.transportUnavailable
+    }
+}
+
+extension ContextualResolverTests {
+    @MainActor
+    func testFinalResolverUsesProactiveEvidenceWithoutFeedbackExample() async {
+        let provider = ResolverDecisionProviderStub([decision("o1", .replace)])
+        let item = fixture(examples: [], provider: provider)
+        let output = await item.0.resolve(.init(
+            attemptID: UUID(),
+            text: "Reservei uma cama no rosto.",
+            language: "pt",
+            policyToken: item.2.issueToken(scope: .testDouble),
+            storeGenerationAtStart: item.1.generation,
+            tokenEvidence: [.init(
+                tokenID: 1, text: " rosto", probability: 0.20, alternatives: []
+            )],
+            glossaryTerms: ["Hostel"]
+        ))
+
+        XCTAssertEqual(output, "Reservei uma cama no Hostel.")
+
+        let blockedProvider = ResolverDecisionProviderStub([decision("o1", .replace)])
+        let blocked = fixture(examples: [], provider: blockedProvider)
+        let unchanged = await blocked.0.resolve(.init(
+            attemptID: UUID(),
+            text: "Texto comum sem candidato.",
+            language: "pt",
+            policyToken: blocked.2.issueToken(scope: .personalDictation),
+            storeGenerationAtStart: blocked.1.generation
+        ))
+        XCTAssertEqual(unchanged, "Texto comum sem candidato.")
+        let blockedRequestCount = await blockedProvider.requestCount
+        XCTAssertEqual(blockedRequestCount, 0)
+    }
+
+    func testProactiveStabilityRequiresTwoIdenticalSightingsAndResetsOnChange() throws {
+        let text = "Reservei uma cama no rosto."
+        let range = try XCTUnwrap(text.range(of: "rosto"))
+        func occurrence(_ value: String, source: ContextualCandidateSource) -> ContextualCorrectionOccurrence {
+            .init(
+                questionID: "o1", heard: "rosto", canonical: value,
+                alternatives: [.init(id: "replace_1", value: value, source: source)],
+                ordinal: 1, range: range
+            )
+        }
+        let session = ContinuousContextSession()
+        XCTAssertFalse(session.isStableForDispatch(occurrence("Hostel", source: .vocabulary)))
+        XCTAssertTrue(session.isStableForDispatch(occurrence("Hostel", source: .vocabulary)))
+        XCTAssertFalse(session.isStableForDispatch(occurrence("posto", source: .vocabulary)))
+        session.resetProactiveStability()
+        XCTAssertFalse(session.isStableForDispatch(occurrence("posto", source: .vocabulary)))
+        XCTAssertTrue(session.isStableForDispatch(occurrence("Hostel", source: .learned)))
+    }
+
+    func testContextualDispatchBudgetAllowsExactlySixConcurrentAttemptsWithoutRefund() async {
+        let budget = ContextualDispatchBudget()
+        let accepted = await withTaskGroup(of: Bool.self, returning: Int.self) { group in
+            for _ in 0..<40 { group.addTask { budget.consume() } }
+            var count = 0
+            for await value in group where value { count += 1 }
+            return count
+        }
+        XCTAssertEqual(accepted, 6)
+        XCTAssertEqual(budget.consumed, 6)
+        XCTAssertFalse(budget.consume())
+    }
+
+    func testContextualDispatchBudgetReturnsUniqueOrdinals() async {
+        let budget = ContextualDispatchBudget()
+        let ordinals = await withTaskGroup(of: Int?.self, returning: [Int].self) { group in
+            for _ in 0..<40 { group.addTask { budget.consumeOrdinal() } }
+            var values: [Int] = []
+            for await value in group { if let value { values.append(value) } }
+            return values.sorted()
+        }
+        XCTAssertEqual(ordinals, Array(1...6))
+    }
+
+    func testContextualRevisionRebaseAcceptsOnlyAppendedSuffix() throws {
+        let source = "Reservei uma cama no rosto."
+        let range = try XCTUnwrap(source.range(of: "rosto"))
+        let occurrence = ContextualCorrectionOccurrence(
+            questionID: "o1", heard: "rosto", canonical: "Hostel",
+            alternatives: [.init(id: "replace_1", value: "Hostel", source: .vocabulary)],
+            ordinal: 1, range: range
+        )
+        let identity = ContextualRevisionWindowIdentity(
+            attemptID: UUID(), revision: 1, snapshotID: 1, sampleRange: 0..<1,
+            mutableSourceCharacterRange: 0..<source.count,
+            generationIDs: .init(session: 1, work: 1), policyGeneration: 1, storeGeneration: 1
+        )
+        let result = RevisionBoundContextualResult(
+            identity: identity, originalText: source,
+            text: "Reservei uma cama no Hostel.",
+            outcome: .init(category: .replaced, decisions: [])
+        )
+        XCTAssertEqual(ContextualRevisionRebase.apply(
+            result: result, evaluatedSource: source, occurrence: occurrence,
+            to: source + " O quarto estava limpo."
+        ), "Reservei uma cama no Hostel. O quarto estava limpo.")
+        XCTAssertNil(ContextualRevisionRebase.apply(
+            result: result, evaluatedSource: source, occurrence: occurrence,
+            to: "Reservei duas camas no rosto."
+        ))
+    }
+}
+
+extension ContextualCoordinatorTests {
+    @MainActor
+    func testPersonalRemoteCanAuthorizeWithProactiveEvidenceAndNoExample() throws {
+        let optIn = PersonalRemoteOptInStoreStub()
+        let credential = InMemoryCredentialStore()
+        let store = ContextualCorrectionStore(fileURL: FileManager.default.temporaryDirectory
+            .appendingPathComponent("ResenhaTests/\(UUID().uuidString)/contextual.json"))
+        let owner = PersonalRemoteAuthorizationOwner(
+            optInStore: optIn,
+            credentialStore: credential,
+            authorizationStateStore: InMemoryPersonalRemoteAuthorizationStateStore(
+                backing: PersonalRemoteAuthorizationStateBacking()
+            ),
+            policy: ContextualCorrectionPolicy(),
+            storeSnapshot: { store.snapshot },
+            proactiveEvidenceAvailable: { true }
+        )
+
+        try owner.authorizePersonalRemote(explicitConsent: true, credential: "temporary-test-key")
+        XCTAssertTrue(owner.personalRemoteHealth().canDispatch)
+
+        let unavailable = PersonalRemoteAuthorizationOwner(
+            optInStore: PersonalRemoteOptInStoreStub(),
+            credentialStore: InMemoryCredentialStore(),
+            authorizationStateStore: InMemoryPersonalRemoteAuthorizationStateStore(
+                backing: PersonalRemoteAuthorizationStateBacking()
+            ),
+            policy: ContextualCorrectionPolicy(),
+            storeSnapshot: { store.snapshot },
+            proactiveEvidenceAvailable: { false }
+        )
+        XCTAssertThrowsError(
+            try unavailable.authorizePersonalRemote(explicitConsent: true, credential: "temporary-test-key")
+        ) { XCTAssertEqual($0 as? PersonalRemoteAuthorizationError, .locallyIneligible) }
     }
 }
 
@@ -7933,6 +8886,102 @@ private extension JSONEncoder {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
         return encoder
+    }
+}
+
+extension ContextualResolverTests {
+    func testProactiveAlternativesMustUseContiguousOptionIDs() throws {
+        let text = "Reservei o quarto 12."
+        let range = try XCTUnwrap(text.range(of: "quarto 12"))
+        let receipt = ContextualDecisionReceipt(
+            decisions: [.init(
+                questionID: "o1", choice: .keepOriginal, confidence: 0.99,
+                chosenProbability: 0.99, runnerUpProbability: 0.01
+            )],
+            resolvedModel: "test", inputTokens: nil, outputTokens: nil, costUSD: nil
+        )
+        let invalidID = ContextualCorrectionOccurrence(
+            questionID: "o1", heard: "quarto 12", canonical: "quarto 12",
+            alternatives: [
+                .init(id: "replace_2", value: "quarto 12", source: .acoustic)
+            ],
+            ordinal: 1, range: range
+        )
+        XCTAssertNil(ContextualCorrectionResolver.applying(
+            receipt: receipt, occurrences: [invalidID], to: text
+        ))
+    }
+}
+
+extension ContextualTransportCorpusTests {
+    func testJevRequestAndReceiptUseOnlySuppliedReplacementOptions() throws {
+        let sentence = "Reservei uma cama no rosto."
+        let range = try XCTUnwrap(sentence.range(of: "rosto"))
+        let occurrence = ContextualCorrectionOccurrence(
+            questionID: "o1", heard: "rosto", canonical: "Hostel",
+            alternatives: [
+                .init(id: "replace_1", value: "Hostel", source: .acoustic),
+                .init(id: "replace_2", value: "posto", source: .acoustic),
+                .init(id: "replace_3", value: "rosto", source: .acoustic)
+            ],
+            ordinal: 1, range: range
+        )
+        let dto = OpenRouterDecisionsClient.requestDTO(
+            sentence: sentence, language: "pt", occurrences: [occurrence]
+        )
+        XCTAssertEqual(Set(try XCTUnwrap(dto.questions["o1"]?.criteria.keys)), Set([
+            "keep_original", "replace_1", "replace_2", "replace_3"
+        ]))
+
+        let response = Data(#"{"model":"typesafe/jev-1.14","answers":{"o1":{"type":"choice","choice":"replace_2","probabilities":{"keep_original":0.01,"replace_1":0.02,"replace_2":0.96,"replace_3":0.01},"confidence":0.97}}}"#.utf8)
+        let receipt = try OpenRouterDecisionsClient.receipt(from: response, occurrences: [occurrence])
+        XCTAssertEqual(receipt.decisions.first?.choice.rawValue, "replace_2")
+        XCTAssertEqual(receipt.decisions.first?.runnerUpProbability, 0.02)
+        XCTAssertEqual(
+            ContextualCorrectionResolver.applying(receipt: receipt, occurrences: [occurrence], to: sentence),
+            "Reservei uma cama no posto."
+        )
+    }
+
+    func testJevReceiptRejectsUnknownMissingAndExtraChoices() throws {
+        let sentence = "Reservei uma cama no rosto."
+        let range = try XCTUnwrap(sentence.range(of: "rosto"))
+        let occurrence = ContextualCorrectionOccurrence(
+            questionID: "o1", heard: "rosto", canonical: "Hostel",
+            alternatives: [
+                .init(id: "replace_1", value: "Hostel", source: .acoustic),
+                .init(id: "replace_2", value: "posto", source: .acoustic)
+            ],
+            ordinal: 1, range: range
+        )
+        let probabilityObjects = [
+            #"{"keep_original":0.01,"replace_1":0.01,"replace_2":0.97,"replace_3":0.01}"#,
+            #"{"keep_original":0.01,"replace_2":0.99}"#,
+            #"{"keep_original":0.01,"replace_1":0.01,"replace_2":0.98,"extra":0.0}"#
+        ]
+        let choices = ["replace_3", "replace_2", "replace_2"]
+        for (choice, probabilities) in zip(choices, probabilityObjects) {
+            let response = Data("""
+                {"model":"typesafe/jev-1.14","answers":{"o1":{"type":"choice","choice":"\(choice)","probabilities":\(probabilities),"confidence":0.99}}}
+                """.utf8)
+            XCTAssertThrowsError(try OpenRouterDecisionsClient.receipt(
+                from: response, occurrences: [occurrence]
+            )) { error in
+                XCTAssertEqual(error as? OpenRouterDecisionsError, .malformedResponse)
+            }
+        }
+
+        let unsupported = ContextualDecisionReceipt(
+            decisions: [.init(
+                questionID: "o1", choice: .init(rawValue: "replace_3"), confidence: 0.99,
+                chosenProbability: 0.99, runnerUpProbability: 0.01
+            )],
+            resolvedModel: "test", inputTokens: nil, outputTokens: nil, costUSD: nil
+        )
+        XCTAssertEqual(
+            ContextualDecisionValidator().validate(receipt: unsupported, occurrences: [occurrence]).category,
+            .abstained
+        )
     }
 }
 
