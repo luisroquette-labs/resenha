@@ -5,9 +5,9 @@ Status: automated candidate validation complete; physical/provider proof partial
 ## Frozen inputs
 
 - Corpus: `Tests/Fixtures/proactive-context-guidance.json`
-- File SHA-256: `a5a2c1f25be5c6270f7f5c5c07f4cd2fef473560e732794e247383b432254dff`
+- File SHA-256: `563e70806d2d980767943e49a0243d27b90755ccb7256be0494ce811785975b4`
 - Calibration: 15 rows; evaluation: 60 rows across 15 families; controls: 30 rows.
-- Runtime thresholds: token probability 0.65, maximum logit gap 1.5, vocabulary similarity 0.45.
+- Runtime thresholds: token probability 0.85, maximum logit gap 1.5, vocabulary similarity 0.45. The probability ceiling increased from 0.65 after physical false-negative probes produced confident wrong homophones without a candidate; 0.93 controls remain excluded.
 
 ## Automated evidence
 

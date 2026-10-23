@@ -4,7 +4,7 @@ import Security
 
 struct ProactiveCandidateThresholds: Codable, Equatable, Sendable {
     static let frozen = Self(
-        tokenProbability: 0.65,
+        tokenProbability: 0.85,
         maximumLogitGap: 1.5,
         minimumVocabularySimilarity: 0.45
     )

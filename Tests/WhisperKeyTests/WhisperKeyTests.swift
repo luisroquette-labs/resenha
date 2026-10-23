@@ -5644,7 +5644,7 @@ private struct ProactiveContextFixture: Decodable {
     var evaluation: [Row]
     var controls: [Row]
 
-    static let fileSHA256 = "a5a2c1f25be5c6270f7f5c5c07f4cd2fef473560e732794e247383b432254dff"
+    static let fileSHA256 = "563e70806d2d980767943e49a0243d27b90755ccb7256be0494ce811785975b4"
 
     static func load(bundle: Bundle) throws -> (fixture: Self, data: Data) {
         let url = try XCTUnwrap(bundle.url(forResource: "proactive-context-guidance", withExtension: "json"))
@@ -6362,7 +6362,8 @@ extension ContextualTransportCorpusTests {
         }
 
         XCTAssertNil(candidate(text: "Reservei no rosto.", language: "en", probability: 0.40))
-        XCTAssertNil(candidate(text: "Reservei no rosto.", language: "pt", probability: 0.90))
+        XCTAssertNotNil(candidate(text: "Reservei no rosto.", language: "pt", probability: 0.84))
+        XCTAssertNil(candidate(text: "Reservei no rosto.", language: "pt", probability: 0.86))
         XCTAssertNil(candidate(text: "Reservei no rosto e lavei o rosto.", language: "pt", probability: 0.40))
         XCTAssertNil(candidate(text: "Reservei no posto.", language: "pt", probability: 0.40))
     }
