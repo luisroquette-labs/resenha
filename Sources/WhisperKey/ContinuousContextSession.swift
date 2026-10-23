@@ -357,7 +357,7 @@ final class ContinuousContextSession: @unchecked Sendable {
                     generationIDs: generations,
                     candidateAt: revision.candidateAt,
                     eligibleAt: eligibleAt,
-                    expiresAt: eligibleAt + configuration.maximumWorkAge,
+                    expiresAt: revision.candidateAt + configuration.maximumWorkAge,
                     tokenEvidence: revision.tokenEvidence
                 )
                 storage.nextWorkID &+= 1
@@ -543,6 +543,11 @@ final class ContinuousContextSession: @unchecked Sendable {
 
     func millisecondsSinceCandidate(of work: ContinuousContextWork) -> Int {
         max(0, Int(((now() - work.candidateAt) * 1_000).rounded()))
+    }
+
+    func remainingDuration(of work: ContinuousContextWork) -> Duration? {
+        let nanoseconds = Int64(((work.expiresAt - now()) * 1_000_000_000).rounded(.down))
+        return nanoseconds > 0 ? .nanoseconds(nanoseconds) : nil
     }
     var retainedContext: String { lock.withLock { storage.retainedContext } }
     var retainedContextCharacterCount: Int { lock.withLock { storage.retainedContext.count } }
@@ -784,13 +789,17 @@ final class RevisionBoundJevLoop {
             return abstained
         }
 
+        guard let remainingDuration = session.remainingDuration(of: work) else {
+            _ = session.applyContextualResult(abstained, for: work)
+            return abstained
+        }
         let request = RevisionBoundContextualRequest(
             identity: identity,
             originalText: work.sourceText,
             sentence: input.sentence,
             language: work.language,
             occurrences: input.occurrences,
-            deadline: .init(offset: time.now().offset + .milliseconds(1_200))
+            deadline: .init(offset: time.now().offset + remainingDuration)
         )
         let race = RevisionBoundDecisionRace()
         let policyCancellation = RevisionBoundTaskCancellation()
@@ -846,8 +855,10 @@ final class RevisionBoundJevLoop {
         }
         timeoutTask.cancel()
 
+        let candidateToDecisionMilliseconds = session.millisecondsSinceCandidate(of: work)
         guard let raced,
               case .success(let receipt) = raced,
+              candidateToDecisionMilliseconds < 1_200,
               policyGeneration() == policyAtStart else {
             providerTask.cancel()
             _ = session.applyContextualResult(abstained, for: work)
@@ -907,7 +918,7 @@ final class RevisionBoundJevLoop {
                 stage: .rolling,
                 revision: identity.revision,
                 dispatchOrdinal: dispatchOrdinal,
-                candidateToDecisionMilliseconds: session.millisecondsSinceCandidate(of: work)
+                candidateToDecisionMilliseconds: candidateToDecisionMilliseconds
             )
         }
     }

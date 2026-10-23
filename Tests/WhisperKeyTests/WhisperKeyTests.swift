@@ -3017,6 +3017,22 @@ final class WhisperKeyTests: XCTestCase {
         }
     }
 
+    func testContinuousContextWorkExpiresFromCandidateTime() throws {
+        let uptime = RevisionUptime()
+        let session = ContinuousContextSession(now: { uptime.now() })
+        XCTAssertTrue(session.start(attemptID: UUID(), language: "pt"))
+        uptime.set(milliseconds: 300)
+        _ = session.ingest(SessionEvent(
+            snapshotID: 1, sampleRange: 0..<100, capturedAt: 0,
+            candidateAt: 0, text: "Reservei um rosto."
+        ))
+
+        let work = try XCTUnwrap(session.takeNextWork())
+        XCTAssertEqual(work.eligibleAt, 0.3, accuracy: 0.001)
+        XCTAssertEqual(work.expiresAt, 1.2, accuracy: 0.001)
+        XCTAssertNotNil(session.remainingDuration(of: work))
+    }
+
     @MainActor
     func testRevisionBoundLoopAccepts1199AndRejects1200And1201Milliseconds() async throws {
         for boundary in [1_199, 1_200, 1_201] {
@@ -3053,6 +3069,44 @@ final class WhisperKeyTests: XCTestCase {
                 session.contextualPreviewText,
                 boundary == 1_199 ? "Reservei um Hostel." : "Reservei um rosto.",
                 "boundary-\(boundary)"
+            )
+        }
+    }
+
+    @MainActor
+    func testRevisionBoundLoopDeadlineIncludesCandidateQueueAge() async throws {
+        for providerMilliseconds in [899, 900] {
+            let uptime = RevisionUptime()
+            let time = ManualContextualTime()
+            let provider = RevisionLoopProvider(.suspended)
+            let session = ContinuousContextSession(now: { uptime.now() })
+            XCTAssertTrue(session.start(attemptID: UUID(), language: "pt"))
+            uptime.set(milliseconds: 300)
+            _ = session.ingest(SessionEvent(
+                snapshotID: 1, sampleRange: 0..<100, capturedAt: 0,
+                candidateAt: 0, text: "Reservei um rosto."
+            ))
+            let snapshot = ContextualCorrectionStoreSnapshot(
+                examples: [revisionExample], generation: 7, health: .healthy
+            )
+            let loop = RevisionBoundJevLoop(
+                session: session,
+                provider: provider,
+                time: time,
+                storeSnapshot: { snapshot },
+                policyGeneration: { 11 }
+            )
+            let task = Task { await loop.evaluateNext(scope: .testDouble) }
+            await provider.waitUntilStarted()
+            uptime.set(milliseconds: 300 + providerMilliseconds)
+            time.advance(milliseconds: Int64(providerMilliseconds))
+            await provider.resume(revisionReceipt())
+
+            let result = await task.value
+            XCTAssertEqual(
+                result?.text,
+                providerMilliseconds == 899 ? "Reservei um Hostel." : "Reservei um rosto.",
+                "provider-\(providerMilliseconds)"
             )
         }
     }
