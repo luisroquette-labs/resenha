@@ -1,47 +1,50 @@
 # Proactive real-time contextual guidance evidence
 
-Status: automated candidate validation complete; physical/provider proof partially collected.
+Status: candidate acceptance complete; merge and installed-build smoke remain.
 
-## Frozen inputs
+## Frozen inputs and automated gates
 
-- Corpus: `Tests/Fixtures/proactive-context-guidance.json`
-- File SHA-256: `563e70806d2d980767943e49a0243d27b90755ccb7256be0494ce811785975b4`
-- Calibration: 15 rows; evaluation: 60 rows across 15 families; controls: 30 rows.
-- Runtime thresholds: token probability 0.85, maximum logit gap 1.5, vocabulary similarity 0.45. The probability ceiling increased from 0.65 after physical false-negative probes produced confident wrong homophones without a candidate; 0.93 controls remain excluded.
+- Corpus: `Tests/Fixtures/proactive-context-guidance.json`, SHA-256 `563e70806d2d980767943e49a0243d27b90755ccb7256be0494ce811785975b4`.
+- Calibration: 15 rows. Evaluation: 60 rows across 15 families. Controls: 30 rows. Thresholds are token probability `0.85`, maximum logit gap `1.5`, and vocabulary similarity `0.45`.
+- Exact product SHA `2e903ce641fe34c01ed54b6b6dff60b67d046a38`, tree `e60186c61e23f9fb0d22cd3f99aa934dc2e7d00e`.
+- Full native suite: 236/236 passed, zero failures, `build/full-suite-2e903ce/Logs/Test/Test-WhisperKey-2026.10.22_23-41-05--0300.xcresult`.
+- Focused contextual transport/corpus suite: 39/39 passed, zero failures, `build/threshold-085/Logs/Test/Test-WhisperKey-2026.10.22_23-40-14--0300.xcresult`.
+- The real-engine alternating 20+20 warm benchmark passed its enforced evidence-collection p95 limit of at most 15% over the same engine with collection disabled. The callback also passed transcript-identity, selected-prefix alignment, 256-record, 128-prefix/token, and four-alternative bounds.
+- Deterministic evaluation passed at least 20% relative error reduction, all 15 families, zero unauthorized changes, zero harmful span changes, and zero control regressions.
 
-## Automated evidence
+## Candidate artifact
 
-- Local Whisper evidence adds no second inference or network request.
-- Candidate order is learned, acoustic, then vocabulary; protected terms fail closed.
-- JEV can return only `keep_original` or one of `replace_1...replace_3`.
-- Rolling decisions require two identical proactive sightings, expire at 1,200 ms and share a six-dispatch attempt budget with the 900 ms final decision.
-- Accepted terms are kept only for the active attempt, capped at five, used by later rolling and completed-WAV prompts, and cleared on terminal paths.
-- Evaluation replay is deterministic, covers all 15 families, requires at least 20% relative error reduction, and permits zero unauthorized/control changes.
+- Release app `1.0.0` (`20261026`) and DMG were produced from the clean product SHA. Strict deep signature and designated-requirement checks passed.
+- Executable SHA-256: `ef69e5131ede18f4ace0a705c2f5bddf9f23e8fec03ec8e5d3c451acc38b518b`.
+- DMG SHA-256: `fd8ddcd09d4688496b8aa45f683e1c3712a60b8caba4844129f3cad9eb9d1f06`.
+- Candidate app: `build/proactive-candidate-2e903ce/export/Resenha.app`. Candidate DMG: `build/proactive-candidate-2e903ce/Resenha-1.0.0-arm64.dmg`.
+- The isolated candidate is signed but not notarized. Notarization and the final artifact are generated from the integrated SHA after merge.
 
-## Privacy boundary
+## Real microphone and JEV proof
 
-JEV receives the bounded current sentence and exact option labels/values only after opt-in. Audio, token logits/probabilities, full vocabulary, history, clipboard, target-application context, API credentials and free-form output remain outside the request and local audit.
+- Ten complete blocks plus two bounded cases produced 52 finalizations, 42 successful rolling provider decisions, and a conservative 110 rolling revisions from the content-free revision records. The required minima are 30, 20, and 100.
+- Candidate-to-decision latency across the 42 successful rolling decisions: p50 `500 ms`, p95 `1,009 ms`, max `1,147 ms`; every accepted rolling decision completed below the `1,200 ms` hard deadline.
+- The same run recorded 20 successful final decisions and 84 bounded timeouts. Timeouts caused no retry and preserved the local transcript. All ten complete blocks kept clipboard equal to the one inserted transcript.
+- Unseen proof without a learned pair: the store contained only the unrelated learned `rosto -> Hostel` example. Synthetic `guite` produced user-visible `GitHub`, and the matching final JEV record has attempt `9C98EBC8-10D2-48C3-86AB-EC915250872F`, request `gen-dec-1792725131-w84ET0OyMeEvkR7qNJbR`, model `typesafe/jev-1.14-20261014`, `appliedReplacement`, 390 input/37 output tokens, USD `0.00001638`, and `690 ms`. Temporary test state was restored before the proof; no personal sentence was used.
+- Learned ambiguity also produced visible `Hostel` with rolling and final `appliedReplacement` records on this candidate. Ordinary control text inserted unchanged with no provider record.
+- Provider instability was observable rather than hidden: learned output succeeded in only 8 of the 52 stress cases because many final calls timed out or abstained. This does not violate fail-safe behavior, but it prevents a claim of 100% correction accuracy.
 
-## Partial physical/provider evidence
+## Privacy, lifecycle, and UI
 
-Candidate product SHA: `de8962ddb44523c5ce2bf6a2f8d5cd47aa397c82` (tree `613f397ec64d042ffa6011e4b708553c30732071`).
-
-- Release app `1.0.0` (`20261024`) passed strict deep signature verification. The exported candidate is not notarized, so Gatekeeper assessment rejects it as `Unnotarized Developer ID`; it remains a test candidate and has not replaced `/Applications/Resenha.app`.
-- Executable SHA-256: `661006ca407a4ce614bb35daf780c7bf995e86b2db9fdd834cbb04f698d10afe`.
-- Model SHA-256: `ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb`.
-- DMG SHA-256: `e0ca8183307b67256a94cfb5d5ec45dd70c3181cd10bc6ad265a1386772b9957`.
-- The content-free audit contains 17 correlated successful provider decisions across nine dictation attempt IDs: eight rolling and nine final. Five attempts have rolling evidence whose per-attempt maximum revisions establish a conservative lower bound of 27 real provisional revisions. Rolling candidate-to-decision latency was 393/451/457/465/468/541/553/612 ms (median 466.5 ms; p95/max 612 ms), below the 1,200 ms deadline.
-- The correlated decisions contain provider request IDs and resolve to `typesafe/jev-1.14-20261014`. The entire audit contains 20 records, two failed requests, seven applied replacements, 11 discarded results and USD 0.000301686 total reported cost.
-- A literal scan against every frozen fixture sentence, vocabulary term, selected token and acoustic alternative found zero content matches in the persisted audit. Its JSON paths contain no authorization, credential, prompt, sentence, heard-term, canonical-term or replacement-value field.
-- One learned-ambiguity dictation has matching rolling and final records for the same attempt ID, exact dispatch ordinals 2 and 3, applied replacement dispositions, provider request IDs, resolved model, usage/cost and 612/570 ms latency. The user-visible output contained `Hostel`; this proves JEV participated in that attempt without storing the sentence or option values in the audit.
-- A short unseen-ambiguity probe produced user-visible `seção`, `sexta` and `senso`, while `célula` remained `cela`. Those outputs are not attributed to JEV because the interrupted overlapping run did not preserve reliable per-case correlation and the local Whisper glossary prompt could independently produce them.
-- At rest after the interrupted probe, the candidate used 34,304 KiB RSS and 0.3% CPU. The temporary glossary was restored to the pre-probe value, audio output was remuted, and no test launcher or synthetic speech process remained.
-
-Task 7 remains open: the evidence does not yet satisfy 100 rolling revisions, 30 finalizations, 20 rolling provider decisions, unseen/learned/control attribution, offline/cancellation/feature-off, browser/focus/clipboard/single-insertion, VoiceOver/reduced-motion, thermal observations, or installed merged-build smoke proof. Physical UI automation is suspended while the owner is using the Mac.
+- The audit keeps only IDs, stage/revision/dispatch, confidence/probability, model, provider request ID, token usage/cost, latency, disposition, status, and sanitized failure. Literal scans found no synthetic sentence, heard value, replacement value, prompt, credential, authorization header, clipboard, history, or destination content.
+- JEV receives one bounded sentence and exact choices only after explicit opt-in. Audio, logits/probabilities, full vocabulary, history, clipboard, app identity, and destination context remain local.
+- Feature-off preserved local output and made no audit change. An app-scoped offline proxy test preserved local output after a bounded timeout; proxy variables were removed afterward. Cancellation while the hotkey was held produced no insertion and no late audit record.
+- TextEdit and one disposable Chrome textarea each received one transcript with no duplication; the system clipboard matched the committed transcript. The disposable browser tab was closed without touching existing tabs.
+- VoiceOver was enabled for the candidate window, exposed the expected accessible controls, then restored off. Reduce Motion reported active in-process, preserved control insertion, and was restored. These checks ran on product SHA `04956ed`; the only later product change was the candidate-admission threshold and its tests/fixture, with no UI, accessibility, focus, clipboard, or insertion-path change.
+- At-rest observation on the final candidate was 35,440 KiB RSS and 0.0% CPU. `pmset` reported no thermal, performance, or CPU-power warning. Audio mute, glossary, correction store, proxy variables, VoiceOver, Reduce Motion, and disposable TextEdit documents were restored after testing.
 
 ## Consecutive clean reviews
 
-Reviewed product SHA: `de8962ddb44523c5ce2bf6a2f8d5cd47aa397c82`.
+Reviewed product SHA `2e903ce641fe34c01ed54b6b6dff60b67d046a38`, tree `e60186c61e23f9fb0d22cd3f99aa934dc2e7d00e`.
 
-- Pass 1: no substantive finding. Checked spec coverage, full diff, selected-beam alignment, exact-choice schema, privacy/cost bounds, cancellation/lifecycle, corpus partitioning, UI copy/accessibility, correlated audit context, rolling latency measurement and atomic dispatch ordinals.
-- Pass 2: no substantive finding on the unchanged SHA/tree. Repeated the same checklist and confirmed a clean worktree plus targeted regression evidence. The earlier 233-test result predates the final audit-correlation refinements; the full native gate remains intentionally skipped under the owner's explicit preflight bypass.
+- Pass 1: no substantive finding. Reviewed complete diff/spec coverage, exact-choice schema, candidate safety, deadline/cost caps, cancellation/lifecycle, privacy/audit fields, corpus partitioning, physical attribution, and `git diff --check`.
+- Pass 2: no substantive finding on the unchanged SHA/tree. Rechecked callback bounds/selected-prefix alignment, thresholds/fixture hash, accessibility/reduced-motion paths, full-suite result, clean worktree, and sanitized real-provider evidence.
+
+## Remaining integration gate
+
+Move the task spec to `done`, run the full suite on that evidence-only SHA, push the single task branch, merge the green PR, then build/sign/install and smoke-test the exact integrated SHA.
