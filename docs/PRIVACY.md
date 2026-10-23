@@ -27,9 +27,11 @@ Mac. A avaliação contextual remota de texto é opcional e começa desligada.
 
 Com consentimento separado e uma chave pessoal do OpenRouter, o Resenha envia
 ao OpenRouter/TypeSafe (JEV) somente a frase já transcrita e as alternativas dos
-exemplos locais pertinentes, enquanto você dita. Nunca envia áudio, histórico, clipboard ou
-conteúdo do aplicativo de destino. O envio é limitado a 4096 bytes, uma
-avaliação ativa e uma pendente substituível, com intervalo mínimo de 500 ms.
+termos localmente elegíveis, enquanto você dita. Nunca envia áudio, logits,
+probabilidades, vocabulário completo, histórico, clipboard ou conteúdo do
+aplicativo de destino. O envio é limitado a 4096 bytes, no máximo seis tentativas
+por ditado, uma avaliação ativa e uma pendente substituível, com intervalo mínimo
+de 500 ms. A avaliação expira em 1,2 s durante a fala e em 900 ms na finalização.
 Falha, atraso ou indisponibilidade preservam a transcrição local.
 
 Para permitir a verificação pelo próprio usuário, o Resenha mantém neste Mac
@@ -41,7 +43,8 @@ transcrição, termos candidatos, chave ou conteúdo do aplicativo de destino.
 Esses registros ficam em arquivo separado, podem ser apagados nos Ajustes e
 não são enviados pelo Resenha a nenhum serviço adicional.
 
-A função começa desligada e exige ao menos um exemplo local elegível. Sua chave
+A função começa desligada e exige evidência local concreta do Whisper, glossário
+ou exemplo confirmado antes de cada envio. Sua chave
 fica em uma conta separada no Keychain e a autorização do diagnóstico sintético
 não pode ativá-la. OpenRouter/TypeSafe podem medir tokens, cobrar pelo uso e
 reter dados ou metadados conforme suas políticas. O Resenha não estima o custo

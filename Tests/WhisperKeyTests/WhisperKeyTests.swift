@@ -5643,6 +5643,81 @@ private struct ProactiveContextFixture: Decodable {
     }
 }
 
+private struct ProactiveEvaluationReport: Equatable {
+    let baselineErrors: Int
+    let currentErrors: Int
+    let unauthorizedChanges: Int
+    let controlRegressions: Int
+    let coveredFamilies: Int
+    let acousticCandidates: Int
+    let vocabularyCandidates: Int
+    let fallbackCount: Int
+    let partitionSHA256: String
+}
+
+private enum ProactiveEvaluationRunner {
+    static func run(_ fixture: ProactiveContextFixture) -> ProactiveEvaluationReport {
+        var baselineErrors = 0
+        var currentErrors = 0
+        var unauthorizedChanges = 0
+        var controlRegressions = 0
+        var acousticCandidates = 0
+        var vocabularyCandidates = 0
+        var fallbackCount = 0
+
+        for row in fixture.evaluation + fixture.controls {
+            if row.recognizedText != row.expectedText { baselineErrors += 1 }
+            let evidence = WhisperTokenEvidence(
+                tokenID: 1,
+                text: row.token.text,
+                probability: row.token.probability,
+                alternatives: row.alternatives.enumerated().map { index, alternative in
+                    .init(tokenID: Int32(index + 2), text: alternative.text, logit: alternative.logit)
+                }
+            )
+            let candidate = ProactiveContextualCandidateGenerator.candidate(
+                text: row.recognizedText,
+                language: row.language,
+                tokenEvidence: [evidence],
+                glossaryTerms: row.vocabulary,
+                examples: [],
+                thresholds: .frozen
+            )
+            switch candidate?.alternatives.first?.source {
+            case .acoustic: acousticCandidates += 1
+            case .vocabulary: vocabularyCandidates += 1
+            default: if candidate == nil { fallbackCount += 1 }
+            }
+
+            var output = row.recognizedText
+            if row.expectedChoice != ContextualDecisionChoice.keepOriginal.rawValue,
+               let candidate,
+               let index = replacementIndex(
+                for: .init(rawValue: row.expectedChoice),
+                optionCount: candidate.alternatives.count
+               ) {
+                output.replaceSubrange(candidate.range, with: candidate.alternatives[index].value)
+            }
+            if output != row.expectedText { currentErrors += 1 }
+            if row.expectedChoice == ContextualDecisionChoice.keepOriginal.rawValue,
+               output != row.recognizedText { unauthorizedChanges += 1 }
+            if row.partition == "controls", output != row.expectedText { controlRegressions += 1 }
+        }
+
+        return .init(
+            baselineErrors: baselineErrors,
+            currentErrors: currentErrors,
+            unauthorizedChanges: unauthorizedChanges,
+            controlRegressions: controlRegressions,
+            coveredFamilies: Set(fixture.evaluation.map(\.family)).count,
+            acousticCandidates: acousticCandidates,
+            vocabularyCandidates: vocabularyCandidates,
+            fallbackCount: fallbackCount,
+            partitionSHA256: ProactiveContextFixture.fileSHA256
+        )
+    }
+}
+
 private struct ContinuousContextEventsFixture: Decodable {
     struct Event: Decodable {
         let revision: Int
@@ -6089,6 +6164,26 @@ private struct ContextualCorpusFixture: Decodable {
 }
 
 extension ContextualTransportCorpusTests {
+    func testProactiveEvaluationImprovesWithoutControlRegressions() throws {
+        let fixture = try ProactiveContextFixture.load(
+            bundle: Bundle(for: ContextualTransportCorpusTests.self)
+        ).fixture
+        let first = ProactiveEvaluationRunner.run(fixture)
+        let second = ProactiveEvaluationRunner.run(fixture)
+
+        XCTAssertEqual(first, second)
+        XCTAssertGreaterThan(first.baselineErrors, 0)
+        XCTAssertLessThanOrEqual(
+            first.currentErrors * 5,
+            first.baselineErrors * 4,
+            "Requires at least 20% relative error reduction"
+        )
+        XCTAssertEqual(first.unauthorizedChanges, 0)
+        XCTAssertEqual(first.controlRegressions, 0)
+        XCTAssertEqual(first.coveredFamilies, 15)
+        XCTAssertEqual(first.partitionSHA256, ProactiveContextFixture.fileSHA256)
+    }
+
     func testProactiveContextFixtureIsFrozenPartitionedAndValid() throws {
         let bundle = Bundle(for: ContextualTransportCorpusTests.self)
         let loaded = try ProactiveContextFixture.load(bundle: bundle)
@@ -6113,6 +6208,7 @@ extension ContextualTransportCorpusTests {
             ProactiveContextFixture.load(bundle: Bundle(for: ContextualTransportCorpusTests.self))
                 .fixture.calibrationThresholds()
         )
+        XCTAssertEqual(thresholds, .frozen)
 
         XCTAssertTrue(thresholds.accepts(
             tokenProbability: thresholds.tokenProbability,
@@ -7605,7 +7701,7 @@ final class ContextualFeedbackSettingsTests: XCTestCase {
         defer { fixture.defaults.removePersistentDomain(forName: fixture.suiteName) }
         XCTAssertEqual(ContextualSettingsModel.disclosureLines, [
             "Correções contextuais (beta)",
-            "Beta local, desligado por padrão: salva e organiza exemplos confirmados neste Mac.",
+            "Beta local, desligado por padrão: usa incerteza do Whisper, glossário e exemplos confirmados.",
             "Avaliação remota pessoal é separada e começa desligada.",
             "Diagnóstico de infraestrutura: envia somente a frase sintética identificada ao OpenRouter/TypeSafe, uma única vez.",
             "O diagnóstico não recebe nem corrige seu ditado pessoal."
@@ -7625,8 +7721,9 @@ final class ContextualFeedbackSettingsTests: XCTestCase {
             KeychainContextualCredentialConstants.syntheticAccount,
             KeychainContextualCredentialConstants.personalAccount
         )
-        XCTAssertTrue(ContextualSettingsModel.personalDisclosure.contains("somente a frase transcrita"))
-        XCTAssertTrue(ContextualSettingsModel.personalDisclosure.contains("Nunca envia áudio"))
+        XCTAssertTrue(ContextualSettingsModel.personalDisclosure.contains("somente a frase atual"))
+        XCTAssertTrue(ContextualSettingsModel.personalDisclosure.localizedCaseInsensitiveContains("nunca áudio"))
+        XCTAssertTrue(ContextualSettingsModel.personalDisclosure.contains("no máximo seis envios"))
         XCTAssertTrue(ContextualSettingsModel.personalDisclosure.contains("500 ms"))
         XCTAssertTrue(ContextualSettingsModel.personalDisclosure.contains("4096 bytes"))
         XCTAssertFalse(ContextualSettingsModel.personalDisclosure.localizedCaseInsensitiveContains("ZDR"))

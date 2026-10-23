@@ -320,12 +320,12 @@ func runSyntheticDiagnostic(
 final class ContextualSettingsModel: ObservableObject {
     static let disclosureLines = [
         "Correções contextuais (beta)",
-        "Beta local, desligado por padrão: salva e organiza exemplos confirmados neste Mac.",
+        "Beta local, desligado por padrão: usa incerteza do Whisper, glossário e exemplos confirmados.",
         "Avaliação remota pessoal é separada e começa desligada.",
         "Diagnóstico de infraestrutura: envia somente a frase sintética identificada ao OpenRouter/TypeSafe, uma única vez.",
         "O diagnóstico não recebe nem corrige seu ditado pessoal."
     ]
-    static let personalDisclosure = "Ao ativar, o Resenha avalia durante o ditado e envia somente a frase transcrita e as alternativas dos exemplos locais pertinentes ao OpenRouter/TypeSafe (JEV). Nunca envia áudio, histórico, clipboard ou conteúdo do aplicativo de destino. Há no máximo uma avaliação ativa e uma pendente, com intervalo mínimo de 500 ms e payload de até 4096 bytes. O provedor pode cobrar conforme uso; o Resenha não estima o custo total. Revogar remove a chave deste Mac e volta imediatamente ao modo local."
+    static let personalDisclosure = "Ao ativar, o Resenha usa o JEV para escolher entre manter uma palavra já transcrita ou aplicar até três alternativas locais durante a fala. Envia somente a frase atual e essas opções ao OpenRouter/TypeSafe — nunca áudio, probabilidades, vocabulário completo, histórico, clipboard ou conteúdo do aplicativo de destino. São no máximo seis envios por ditado, com intervalo mínimo de 500 ms, prazo de 1,2 s durante a fala, 900 ms na finalização e payload de até 4096 bytes. O provedor pode cobrar conforme uso; o Resenha não estima o custo total. Revogar remove a chave deste Mac e volta imediatamente ao modo local."
     static let diagnosticAccessibilityLabel = "Executar diagnóstico sintético uma vez"
     static let authorizePersonalAccessibilityLabel = "Ativar avaliação remota pessoal"
     static let revokePersonalAccessibilityLabel = "Desativar avaliação remota e remover chave"
