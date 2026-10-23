@@ -68,7 +68,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         credentialStore: personalCredentialStore,
         authorizationStateStore: personalAuthorizationStateStore,
         policy: contextualPolicy,
-        storeSnapshot: { [contextualStore] in contextualStore.snapshot }
+        storeSnapshot: { [contextualStore] in contextualStore.snapshot },
+        proactiveEvidenceAvailable: { WhisperTranscriber.supportsProactiveEvidence }
     )
     private lazy var personalClient: OpenRouterDecisionsClient = {
         let authorization = personalAuthorization

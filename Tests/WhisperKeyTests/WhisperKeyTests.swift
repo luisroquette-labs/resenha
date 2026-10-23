@@ -2394,6 +2394,25 @@ final class WhisperKeyTests: XCTestCase {
         var peakInferences: Int { lock.withLock { peakInferenceCount } }
     }
 
+    private final class WhisperPromptProbe: @unchecked Sendable {
+        private let lock = NSLock()
+        private var currentTerms: [String] = []
+        private var capturedPrompts: [String] = []
+        private var hypothesisCount = 0
+        var terms: [String] { lock.withLock { currentTerms } }
+        var prompts: [String] { lock.withLock { capturedPrompts } }
+        func setTerms(_ terms: [String]) { lock.withLock { currentTerms = terms } }
+        func record(prompt: String) -> Int {
+            lock.withLock {
+                capturedPrompts.append(prompt)
+                return capturedPrompts.count
+            }
+        }
+        func nextHypothesis() -> Int {
+            lock.withLock { hypothesisCount += 1; return hypothesisCount }
+        }
+    }
+
     private final class FakeAudioRecordingBackend: AudioRecordingBackend {
         var isMeteringEnabled = false
         private(set) var isRecording = false
@@ -2628,6 +2647,44 @@ final class WhisperKeyTests: XCTestCase {
         XCTAssertTrue(probe.events.contains("result-3-mais recente"))
         XCTAssertFalse(probe.events.contains { $0.contains("result-2-") })
         XCTAssertEqual(recognizer.queuedInferenceCount, 0)
+    }
+
+    func testAcceptedPromptTermIsLateBoundForRollingAndCompletedWAV() async throws {
+        let first = expectation(description: "Base rolling prompt")
+        let second = expectation(description: "Enriched rolling prompt")
+        let probe = WhisperPromptProbe()
+        let transcriber = WhisperTranscriber(resultInference: { samples, _, prompt, _ in
+            let call = probe.record(prompt: prompt)
+            return .init(text: "fala \(call)-\(samples.count)", tokenEvidence: [])
+        })
+        let recognizer = try XCTUnwrap(transcriber.makeRollingRecognizer(
+            glossaryText: "Resenha",
+            promptTerms: { probe.terms }
+        ) { _ in
+            if probe.nextHypothesis() == 1 { first.fulfill() } else { second.fulfill() }
+        })
+        recognizer.submit(.init(id: 1, samples: [1], sampleRange: 0..<1, capturedAt: 1))
+        await fulfillment(of: [first], timeout: 1)
+        probe.setTerms(["Hostel"])
+        recognizer.submit(.init(id: 2, samples: [1, 2], sampleRange: 0..<2, capturedAt: 2))
+        await fulfillment(of: [second], timeout: 1)
+
+        let recording = try temporaryWhisperRecording()
+        defer { try? FileManager.default.removeItem(at: recording.directory) }
+        _ = try await transcriber.transcribeWithEvidence(
+            audioURL: recording.audio,
+            glossaryText: "Resenha",
+            promptTerms: ["Hostel"]
+        )
+
+        XCTAssertEqual(probe.prompts, ["Resenha", "Resenha, Hostel", "Resenha, Hostel"])
+        XCTAssertEqual(
+            WhisperTranscriber.prompt(
+                glossaryText: "",
+                adding: [String(repeating: "x", count: 8_001), "COESA"]
+            ),
+            "COESA"
+        )
     }
 
     func testRollingWhisperCancellationTagsNoncooperativeLateResultAsStale() async throws {
@@ -3035,6 +3092,45 @@ final class WhisperKeyTests: XCTestCase {
         let secondRequestCount = await provider.requestCount
         XCTAssertEqual(secondRequestCount, 1)
         XCTAssertEqual(result?.text, "Reservei uma cama no Hostel hoje.")
+        XCTAssertEqual(session.ephemeralTerms, ["Hostel"])
+    }
+
+    func testAcceptedTermsAreAtomicDeduplicatedCappedAndClearedOnCancel() throws {
+        let uptime = RevisionUptime()
+        let session = ContinuousContextSession(now: { uptime.now() })
+        XCTAssertTrue(session.start(attemptID: UUID(), language: "pt"))
+
+        for index in 1...7 {
+            uptime.set(milliseconds: (index - 1) * 500)
+            let heard = "termo\(index)"
+            let replacement = ["Destino1", "Destino1", "Destino2", "Destino3", "Destino4", "Destino5", "Destino6"][index - 1]
+            let text = "Usei \(heard)."
+            _ = session.ingest(SessionEvent(
+                snapshotID: UInt64(index), sampleRange: 0..<Int64(index * 100),
+                capturedAt: uptime.now(), candidateAt: uptime.now(), text: text
+            ))
+            let work = try XCTUnwrap(session.takeNextWork())
+            let range = try XCTUnwrap(text.range(of: heard))
+            let occurrence = ContextualCorrectionOccurrence(
+                questionID: "o1", heard: heard, canonical: replacement,
+                alternatives: [.init(id: "replace_1", value: replacement, source: .vocabulary)],
+                ordinal: 1, range: range
+            )
+            let result = RevisionBoundContextualResult(
+                identity: work.identity(policyGeneration: 1, storeGeneration: 1),
+                originalText: text,
+                text: text.replacingCharacters(in: range, with: replacement),
+                outcome: .init(category: .replaced, decisions: [.init(
+                    questionID: "o1", choice: .replace,
+                    selectedProbability: 0.99, runnerUpProbability: 0.01
+                )])
+            )
+            XCTAssertNotNil(session.applyContextualResult(result, occurrence: occurrence, for: work))
+        }
+
+        XCTAssertEqual(session.ephemeralTerms, ["Destino1", "Destino2", "Destino3", "Destino4", "Destino5"])
+        session.cancel()
+        XCTAssertTrue(session.ephemeralTerms.isEmpty)
     }
 
     @MainActor
@@ -3452,6 +3548,7 @@ final class WhisperKeyTests: XCTestCase {
         let stale = await task.value
         XCTAssertEqual(stale?.text, "Reservei um rosto.")
         XCTAssertNil(session.contextualPreviewText)
+        XCTAssertTrue(session.ephemeralTerms.isEmpty)
 
         uptime.set(milliseconds: 500)
         let blocked = await loop.evaluateNext(scope: .disabled)
@@ -3596,14 +3693,14 @@ final class WhisperKeyTests: XCTestCase {
         )
         _ = session.ingest(partial)
         let expiring = try XCTUnwrap(session.takeNextWork())
-        uptime = 4.201
+        uptime = 5.201
         XCTAssertFalse(session.completeWork(expiring))
 
         let final = try XCTUnwrap(session.finalize(SessionEvent(
             snapshotID: 2,
             sampleRange: 0..<200,
             capturedAt: 3.5,
-            candidateAt: 4.2,
+            candidateAt: 5.2,
             text: "mesmo texto"
         ), attemptID: attemptID))
         XCTAssertEqual(final.mutableSourceCharacterRange, final.sourceText.count..<final.sourceText.count)
@@ -7852,6 +7949,38 @@ private actor InvalidatingBeforeOpenProvider: SyntheticDiagnosticDecisionProvide
 }
 
 extension ContextualResolverTests {
+    @MainActor
+    func testFinalResolverUsesProactiveEvidenceWithoutFeedbackExample() async {
+        let provider = ResolverDecisionProviderStub([decision("o1", .replace)])
+        let item = fixture(examples: [], provider: provider)
+        let output = await item.0.resolve(.init(
+            attemptID: UUID(),
+            text: "Reservei uma cama no rosto.",
+            language: "pt",
+            policyToken: item.2.issueToken(scope: .testDouble),
+            storeGenerationAtStart: item.1.generation,
+            tokenEvidence: [.init(
+                tokenID: 1, text: " rosto", probability: 0.20, alternatives: []
+            )],
+            glossaryTerms: ["Hostel"]
+        ))
+
+        XCTAssertEqual(output, "Reservei uma cama no Hostel.")
+
+        let blockedProvider = ResolverDecisionProviderStub([decision("o1", .replace)])
+        let blocked = fixture(examples: [], provider: blockedProvider)
+        let unchanged = await blocked.0.resolve(.init(
+            attemptID: UUID(),
+            text: "Texto comum sem candidato.",
+            language: "pt",
+            policyToken: blocked.2.issueToken(scope: .personalDictation),
+            storeGenerationAtStart: blocked.1.generation
+        ))
+        XCTAssertEqual(unchanged, "Texto comum sem candidato.")
+        let blockedRequestCount = await blockedProvider.requestCount
+        XCTAssertEqual(blockedRequestCount, 0)
+    }
+
     func testProactiveStabilityRequiresTwoIdenticalSightingsAndResetsOnChange() throws {
         let text = "Reservei uma cama no rosto."
         let range = try XCTUnwrap(text.range(of: "rosto"))
@@ -7910,6 +8039,43 @@ extension ContextualResolverTests {
             result: result, evaluatedSource: source, occurrence: occurrence,
             to: "Reservei duas camas no rosto."
         ))
+    }
+}
+
+extension ContextualCoordinatorTests {
+    @MainActor
+    func testPersonalRemoteCanAuthorizeWithProactiveEvidenceAndNoExample() throws {
+        let optIn = PersonalRemoteOptInStoreStub()
+        let credential = InMemoryCredentialStore()
+        let store = ContextualCorrectionStore(fileURL: FileManager.default.temporaryDirectory
+            .appendingPathComponent("ResenhaTests/\(UUID().uuidString)/contextual.json"))
+        let owner = PersonalRemoteAuthorizationOwner(
+            optInStore: optIn,
+            credentialStore: credential,
+            authorizationStateStore: InMemoryPersonalRemoteAuthorizationStateStore(
+                backing: PersonalRemoteAuthorizationStateBacking()
+            ),
+            policy: ContextualCorrectionPolicy(),
+            storeSnapshot: { store.snapshot },
+            proactiveEvidenceAvailable: { true }
+        )
+
+        try owner.authorizePersonalRemote(explicitConsent: true, credential: "temporary-test-key")
+        XCTAssertTrue(owner.personalRemoteHealth().canDispatch)
+
+        let unavailable = PersonalRemoteAuthorizationOwner(
+            optInStore: PersonalRemoteOptInStoreStub(),
+            credentialStore: InMemoryCredentialStore(),
+            authorizationStateStore: InMemoryPersonalRemoteAuthorizationStateStore(
+                backing: PersonalRemoteAuthorizationStateBacking()
+            ),
+            policy: ContextualCorrectionPolicy(),
+            storeSnapshot: { store.snapshot },
+            proactiveEvidenceAvailable: { false }
+        )
+        XCTAssertThrowsError(
+            try unavailable.authorizePersonalRemote(explicitConsent: true, credential: "temporary-test-key")
+        ) { XCTAssertEqual($0 as? PersonalRemoteAuthorizationError, .locallyIneligible) }
     }
 }
 

@@ -127,6 +127,7 @@ struct WhisperTranscriber: Sendable {
     typealias Inference = @Sendable ([Float], String, String, WhisperExecutionControl) throws -> WhisperInferenceResult
     typealias LegacyInference = @Sendable ([Float], String, String, WhisperExecutionControl) throws -> String
     static let maximumRuntime: TimeInterval = 10 * 60
+    static let supportsProactiveEvidence = true
     private static let engine = EmbeddedWhisperEngine()
     private static let defaultInference: Inference = { samples, language, prompt, control in
         try WhisperTranscriber.engine.transcribeWithEvidence(samples: samples, model: WhisperPaths.resolve().model,
@@ -197,16 +198,24 @@ struct WhisperTranscriber: Sendable {
         audioURL: URL,
         language: TranscriptionLanguage = .portuguese,
         glossaryText: String = TranscriptionGlossary.defaultText,
+        promptTerms: [String] = [],
         control: WhisperExecutionControl = WhisperExecutionControl()
     ) async throws -> WhisperTranscription {
         try await withTaskCancellationHandler {
-            try consumeRecording(audioURL: audioURL, language: language, glossaryText: glossaryText, control: control)
+            try consumeRecording(
+                audioURL: audioURL,
+                language: language,
+                glossaryText: glossaryText,
+                promptTerms: promptTerms,
+                control: control
+            )
         } onCancel: { control.cancel() }
     }
 
     func makeRollingRecognizer(
         language: TranscriptionLanguage = .portuguese,
         glossaryText: String = TranscriptionGlossary.defaultText,
+        promptTerms: @escaping @Sendable () -> [String] = { [] },
         maximumRuntime: TimeInterval = WhisperTranscriber.maximumRuntime,
         clock: @escaping @Sendable () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
         onHypothesis: @escaping @Sendable (RollingWhisperHypothesis) -> Void
@@ -215,7 +224,8 @@ struct WhisperTranscriber: Sendable {
         return RollingWhisperRecognizer(
             scheduler: rollingScheduler,
             language: language.rawValue,
-            prompt: TranscriptionGlossary(text: glossaryText).prompt,
+            baseGlossaryText: glossaryText,
+            promptTerms: promptTerms,
             maximumRuntime: maximumRuntime,
             clock: clock,
             onHypothesis: onHypothesis
@@ -223,7 +233,8 @@ struct WhisperTranscriber: Sendable {
     }
 
     private func consumeRecording(audioURL: URL, language: TranscriptionLanguage,
-                                  glossaryText: String, control: WhisperExecutionControl) throws -> WhisperTranscription {
+                                  glossaryText: String, promptTerms: [String],
+                                  control: WhisperExecutionControl) throws -> WhisperTranscription {
         var removed = false
         func removeRecording() throws {
             guard !removed else { return }
@@ -236,12 +247,36 @@ struct WhisperTranscriber: Sendable {
         let samples = try Self.readSamples(from: audioURL)
         try removeRecording()
         try control.check()
-        let raw = try infer(samples, language.rawValue, glossary.prompt, control)
+        let raw = try infer(
+            samples,
+            language.rawValue,
+            Self.prompt(glossaryText: glossaryText, adding: promptTerms),
+            control
+        )
         try control.check()
         let transcript = TranscriptPostprocessor.process(raw.text, glossary: glossary)
         try control.check()
         guard !transcript.isEmpty else { throw WhisperError.emptyTranscript }
         return WhisperTranscription(text: transcript, tokenEvidence: raw.tokenEvidence)
+    }
+
+    static func prompt(glossaryText: String, adding terms: [String]) -> String {
+        let base = TranscriptionGlossary(text: glossaryText).terms
+        var seen = Set<String>()
+        var accepted: [String] = []
+        for term in base + terms {
+            let trimmed = term.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { continue }
+            let key = trimmed.folding(
+                options: [.caseInsensitive, .diacriticInsensitive],
+                locale: Locale(identifier: "pt_BR")
+            )
+            guard seen.insert(key).inserted else { continue }
+            let candidate = (accepted + [trimmed]).joined(separator: ", ")
+            guard candidate.count <= TranscriptionGlossary.maximumPromptCharacters else { continue }
+            accepted.append(trimmed)
+        }
+        return accepted.joined(separator: ", ")
     }
 
     private static func readSamples(from url: URL) throws -> [Float] {
@@ -295,7 +330,8 @@ final class RollingWhisperRecognizer: @unchecked Sendable {
     init(
         scheduler: RollingWhisperScheduler,
         language: String,
-        prompt: String,
+        baseGlossaryText: String,
+        promptTerms: @escaping @Sendable () -> [String],
         maximumRuntime: TimeInterval,
         clock: @escaping @Sendable () -> TimeInterval,
         onHypothesis: @escaping @Sendable (RollingWhisperHypothesis) -> Void
@@ -303,7 +339,8 @@ final class RollingWhisperRecognizer: @unchecked Sendable {
         self.scheduler = scheduler
         sessionID = scheduler.register(
             language: language,
-            prompt: prompt,
+            baseGlossaryText: baseGlossaryText,
+            promptTerms: promptTerms,
             maximumRuntime: maximumRuntime,
             clock: clock,
             onHypothesis: onHypothesis
@@ -328,7 +365,8 @@ final class RollingWhisperRecognizer: @unchecked Sendable {
 final class RollingWhisperScheduler: @unchecked Sendable {
     private struct Session: Sendable {
         let language: String
-        let prompt: String
+        let baseGlossaryText: String
+        let promptTerms: @Sendable () -> [String]
         let maximumRuntime: TimeInterval
         let clock: @Sendable () -> TimeInterval
         let onHypothesis: @Sendable (RollingWhisperHypothesis) -> Void
@@ -360,7 +398,8 @@ final class RollingWhisperScheduler: @unchecked Sendable {
 
     func register(
         language: String,
-        prompt: String,
+        baseGlossaryText: String,
+        promptTerms: @escaping @Sendable () -> [String],
         maximumRuntime: TimeInterval,
         clock: @escaping @Sendable () -> TimeInterval,
         onHypothesis: @escaping @Sendable (RollingWhisperHypothesis) -> Void
@@ -369,7 +408,8 @@ final class RollingWhisperScheduler: @unchecked Sendable {
         lock.withLock {
             sessions[id] = Session(
                 language: language,
-                prompt: prompt,
+                baseGlossaryText: baseGlossaryText,
+                promptTerms: promptTerms,
                 maximumRuntime: maximumRuntime,
                 clock: clock,
                 onHypothesis: onHypothesis
@@ -431,7 +471,10 @@ final class RollingWhisperScheduler: @unchecked Sendable {
                 let raw = try self.infer(
                     item.work.snapshot.samples,
                     session.language,
-                    session.prompt,
+                    WhisperTranscriber.prompt(
+                        glossaryText: session.baseGlossaryText,
+                        adding: session.promptTerms()
+                    ),
                     item.control
                 )
                 return WhisperInferenceResult(

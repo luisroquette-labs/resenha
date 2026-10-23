@@ -817,6 +817,8 @@ struct ContextualResolutionRequest: Sendable {
     let policyToken: ContextualPolicyToken
     let storeGenerationAtStart: UInt64
     let revisionIdentity: ContextualRevisionWindowIdentity?
+    let tokenEvidence: [WhisperTokenEvidence]
+    let glossaryTerms: [String]
     let dispatchBudget: ContextualDispatchBudget
 
     init(
@@ -826,6 +828,8 @@ struct ContextualResolutionRequest: Sendable {
         policyToken: ContextualPolicyToken,
         storeGenerationAtStart: UInt64,
         revisionIdentity: ContextualRevisionWindowIdentity? = nil,
+        tokenEvidence: [WhisperTokenEvidence] = [],
+        glossaryTerms: [String] = [],
         dispatchBudget: ContextualDispatchBudget = ContextualDispatchBudget()
     ) {
         self.attemptID = attemptID
@@ -834,6 +838,8 @@ struct ContextualResolutionRequest: Sendable {
         self.policyToken = policyToken
         self.storeGenerationAtStart = storeGenerationAtStart
         self.revisionIdentity = revisionIdentity
+        self.tokenEvidence = tokenEvidence
+        self.glossaryTerms = glossaryTerms
         self.dispatchBudget = dispatchBudget
     }
 }
@@ -1117,7 +1123,22 @@ final class ContextualCorrectionResolver: ContextualCorrectionResolverContract {
               policy.isCurrent(request.policyToken),
               isProviderEligible(request.policyToken.scope) else { return original }
 
-        let occurrences = candidateMatcher(storeSnapshot.examples, request.text, request.language)
+        let learned = candidateMatcher(storeSnapshot.examples, request.text, request.language)
+        let occurrences: [ContextualCorrectionOccurrence]
+        if !learned.isEmpty {
+            occurrences = learned
+        } else if let proactive = ProactiveContextualCandidateGenerator.candidate(
+            text: request.text,
+            language: request.language,
+            tokenEvidence: request.tokenEvidence,
+            glossaryTerms: request.glossaryTerms,
+            examples: [],
+            thresholds: .frozen
+        ) {
+            occurrences = [proactive]
+        } else {
+            occurrences = []
+        }
         guard (1...3).contains(occurrences.count),
               Self.areValid(occurrences, in: request.text),
               let sentence = Self.decisionSentence(in: request.text, occurrences: occurrences),
@@ -2486,6 +2507,7 @@ final class PersonalRemoteAuthorizationOwner: PersonalRemoteAuthorizationManagin
     private let authorizationStateStore: any PersonalRemoteAuthorizationStateStore
     private let policy: ContextualCorrectionPolicy
     private let storeSnapshot: @MainActor @Sendable () -> ContextualCorrectionStoreSnapshot
+    private let proactiveEvidenceAvailable: @MainActor @Sendable () -> Bool
     private var revokedInProcess = false
 
     init(
@@ -2493,13 +2515,15 @@ final class PersonalRemoteAuthorizationOwner: PersonalRemoteAuthorizationManagin
         credentialStore: any ContextualCredentialStore,
         authorizationStateStore: any PersonalRemoteAuthorizationStateStore,
         policy: ContextualCorrectionPolicy,
-        storeSnapshot: @escaping @MainActor @Sendable () -> ContextualCorrectionStoreSnapshot
+        storeSnapshot: @escaping @MainActor @Sendable () -> ContextualCorrectionStoreSnapshot,
+        proactiveEvidenceAvailable: @escaping @MainActor @Sendable () -> Bool = { false }
     ) {
         self.optInStore = optInStore
         self.credentialStore = credentialStore
         self.authorizationStateStore = authorizationStateStore
         self.policy = policy
         self.storeSnapshot = storeSnapshot
+        self.proactiveEvidenceAvailable = proactiveEvidenceAvailable
     }
 
     func authorizePersonalRemote(explicitConsent: Bool, credential: String) throws {
@@ -2593,7 +2617,8 @@ final class PersonalRemoteAuthorizationOwner: PersonalRemoteAuthorizationManagin
     private var isLocallyEligible: Bool {
         let snapshot = storeSnapshot()
         return optInStore.contextualCorrectionsEnabled
-            && snapshot.health == .healthy && !snapshot.examples.isEmpty
+            && snapshot.health == .healthy
+            && (!snapshot.examples.isEmpty || proactiveEvidenceAvailable())
     }
 }
 

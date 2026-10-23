@@ -177,13 +177,13 @@ final class ContinuousContextSession: @unchecked Sendable {
         init(
             maximumContextAge: TimeInterval = 30,
             maximumContextCharacters: Int = 600,
-            maximumWorkAge: TimeInterval = 0.2,
+            maximumWorkAge: TimeInterval = 1.2,
             minimumWorkInterval: TimeInterval = 0.5,
             sampleRate: Int = 16_000
         ) {
             precondition(maximumContextAge > 0 && maximumContextAge <= 30)
             precondition(maximumContextCharacters > 0 && maximumContextCharacters <= 600)
-            precondition(maximumWorkAge > 0 && maximumWorkAge <= 0.2)
+            precondition(maximumWorkAge > 0 && maximumWorkAge <= 1.2)
             precondition(minimumWorkInterval >= 0.5)
             precondition(sampleRate > 0)
             self.maximumContextAge = maximumContextAge
@@ -222,6 +222,7 @@ final class ContinuousContextSession: @unchecked Sendable {
         var finalCandidate: ContinuousContextFinalCandidate?
         var proactiveSignature: ProactiveCandidateSignature?
         var proactiveSignatureCount = 0
+        var ephemeralTerms: [String] = []
     }
 
     private let configuration: Configuration
@@ -492,6 +493,19 @@ final class ContinuousContextSession: @unchecked Sendable {
             case .direct(let text), .rebased(let text): text
             }
             storage.contextualPreviewText = text
+            if let occurrence,
+               let decision = result.outcome.decisions.first(where: { $0.questionID == occurrence.questionID }),
+               let index = replacementIndex(
+                for: decision.choice,
+                optionCount: occurrence.alternatives.count
+               ) {
+                let term = occurrence.alternatives[index].value
+                let folded = Self.foldedTerm(term)
+                if storage.ephemeralTerms.count < 5,
+                   !storage.ephemeralTerms.contains(where: { Self.foldedTerm($0) == folded }) {
+                    storage.ephemeralTerms.append(term)
+                }
+            }
             return application
         }
     }
@@ -521,6 +535,7 @@ final class ContinuousContextSession: @unchecked Sendable {
     var latestRevision: ContinuousContextRevision? { lock.withLock { storage.latestRevision } }
     var finalCandidate: ContinuousContextFinalCandidate? { lock.withLock { storage.finalCandidate } }
     var contextualPreviewText: String? { lock.withLock { storage.contextualPreviewText } }
+    var ephemeralTerms: [String] { lock.withLock { storage.ephemeralTerms } }
     var retainedContext: String { lock.withLock { storage.retainedContext } }
     var retainedContextCharacterCount: Int { lock.withLock { storage.retainedContext.count } }
     var retainedAudioSampleCount: Int { lock.withLock { storage.retainedAudio.count } }
@@ -569,7 +584,12 @@ final class ContinuousContextSession: @unchecked Sendable {
         storage.latestRevision = nil
         storage.attemptID = nil
         storage.language = ""
+        storage.ephemeralTerms.removeAll(keepingCapacity: false)
         return cancellation
+    }
+
+    private static func foldedTerm(_ value: String) -> String {
+        value.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: Locale(identifier: "pt_BR"))
     }
 
     private static func commonPrefixCharacterCount(_ lhs: String, _ rhs: String) -> Int {
