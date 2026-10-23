@@ -995,7 +995,7 @@ protocol ContextualCorrectionResolverContract: ContextualResolving {
         ) -> [ContextualCorrectionOccurrence],
         time: any ContextualMonotonicTime,
         onAttemptDisposition: @escaping @MainActor @Sendable (
-            UUID, ContextualAttemptDisposition
+            UUID, ContextualAttemptDisposition, ContextualAttemptContext
         ) -> Void
     )
     nonisolated static func matchCandidates(
@@ -1048,7 +1048,7 @@ final class ContextualCorrectionResolver: ContextualCorrectionResolverContract {
     private let validator: ContextualDecisionValidator
     private let onProviderError: @MainActor @Sendable (Error) -> Void
     private let onAttemptDisposition: @MainActor @Sendable (
-        UUID, ContextualAttemptDisposition
+        UUID, ContextualAttemptDisposition, ContextualAttemptContext
     ) -> Void
 
     init(
@@ -1065,8 +1065,8 @@ final class ContextualCorrectionResolver: ContextualCorrectionResolverContract {
         },
         time: any ContextualMonotonicTime,
         onAttemptDisposition: @escaping @MainActor @Sendable (
-            UUID, ContextualAttemptDisposition
-        ) -> Void = { _, _ in }
+            UUID, ContextualAttemptDisposition, ContextualAttemptContext
+        ) -> Void = { _, _, _ in }
     ) {
         self.store = store
         self.policy = policy
@@ -1087,8 +1087,8 @@ final class ContextualCorrectionResolver: ContextualCorrectionResolverContract {
         time: any ContextualMonotonicTime,
         onProviderError: @escaping @MainActor @Sendable (Error) -> Void,
         onAttemptDisposition: @escaping @MainActor @Sendable (
-            UUID, ContextualAttemptDisposition
-        ) -> Void = { _, _ in }
+            UUID, ContextualAttemptDisposition, ContextualAttemptContext
+        ) -> Void = { _, _, _ in }
     ) {
         self.store = store
         self.policy = policy
@@ -1144,6 +1144,12 @@ final class ContextualCorrectionResolver: ContextualCorrectionResolverContract {
               let sentence = Self.decisionSentence(in: request.text, occurrences: occurrences),
               sentence.count <= ContextualCorrectionStore.maximumSentenceCharacters,
               request.dispatchBudget.consume() else { return original }
+        let attemptContext = ContextualAttemptContext(
+            dictationAttemptID: request.attemptID,
+            stage: .final,
+            revision: request.revisionIdentity?.revision,
+            dispatchOrdinal: request.dispatchBudget.consumed
+        )
 
         let provider = provider
         let race = ContextualDecisionRace()
@@ -1188,17 +1194,17 @@ final class ContextualCorrectionResolver: ContextualCorrectionResolverContract {
               currentSnapshot.generation == storeSnapshot.generation,
               request.storeGenerationAtStart == storeGeneration(),
               policy.isCurrent(request.policyToken) else {
-            report(receipt, .discarded)
+            report(receipt, .discarded, context: attemptContext)
             return original
         }
 
         let outcome = validator.validate(receipt: receipt, occurrences: occurrences)
         guard outcome.category != .abstained else {
-            report(receipt, .discarded)
+            report(receipt, .discarded, context: attemptContext)
             return original
         }
         guard outcome.category == .replaced else {
-            report(receipt, .keptOriginal)
+            report(receipt, .keptOriginal, context: attemptContext)
             return .init(text: request.text, outcome: outcome, revisionIdentity: request.revisionIdentity)
         }
         var resolved = request.text
@@ -1214,16 +1220,17 @@ final class ContextualCorrectionResolver: ContextualCorrectionResolverContract {
         for (occurrence, replacement) in replacements {
             resolved.replaceSubrange(occurrence.range, with: replacement)
         }
-        report(receipt, .appliedReplacement)
+        report(receipt, .appliedReplacement, context: attemptContext)
         return .init(text: resolved, outcome: outcome, revisionIdentity: request.revisionIdentity)
     }
 
     private func report(
         _ receipt: ContextualDecisionReceipt,
-        _ disposition: ContextualAttemptDisposition
+        _ disposition: ContextualAttemptDisposition,
+        context: ContextualAttemptContext
     ) {
         guard let attemptID = receipt.localAttemptID else { return }
-        onAttemptDisposition(attemptID, disposition)
+        onAttemptDisposition(attemptID, disposition, context)
     }
 
     nonisolated static func matchCandidates(

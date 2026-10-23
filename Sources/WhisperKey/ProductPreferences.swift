@@ -835,6 +835,11 @@ private struct TranscriptionSettingsPane: View {
     private func attemptDetails(_ attempt: ContextualAttemptRecord) -> String {
         var parts = [attempt.startedAt.formatted(date: .abbreviated, time: .standard)]
         if let latency = attempt.latencyMilliseconds { parts.append("\(latency) ms") }
+        if let stage = attempt.stage {
+            let revision = attempt.revision.map { " r\($0)" } ?? ""
+            let dispatch = attempt.dispatchOrdinal.map { " #\($0)" } ?? ""
+            parts.append("\(stage.rawValue)\(revision)\(dispatch)")
+        }
         if !attempt.decisions.isEmpty { parts.append(attempt.decisions.map(\.rawValue).joined(separator: ", ")) }
         if let confidence = attempt.minimumConfidence { parts.append(String(format: "conf. %.0f%%", confidence * 100)) }
         if let cost = attempt.costUSD { parts.append("US$ \(NSDecimalNumber(decimal: cost).stringValue)") }

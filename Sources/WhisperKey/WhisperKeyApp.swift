@@ -98,9 +98,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         provider: personalClient,
         storeGeneration: { [contextualStore] in contextualStore.generation },
         time: contextualTimeComposition.shared,
-        onAttemptDisposition: { [contextualAttemptStore] id, disposition in
+        onAttemptDisposition: { [contextualAttemptStore] id, disposition, context in
             Task { @MainActor in
-                contextualAttemptStore.consume(.resolved(id: id, disposition: disposition))
+                contextualAttemptStore.consume(.resolved(
+                    id: id, disposition: disposition, context: context
+                ))
             }
         }
     )
@@ -196,9 +198,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                             text: preferences?.transcriptionGlossary ?? TranscriptionGlossary.defaultText
                         ).terms
                     },
-                    onAttemptDisposition: { [contextualAttemptStore] id, disposition in
+                    onAttemptDisposition: { [contextualAttemptStore] id, disposition, context in
                         Task { @MainActor in
-                            contextualAttemptStore.consume(.resolved(id: id, disposition: disposition))
+                            contextualAttemptStore.consume(.resolved(
+                                id: id, disposition: disposition, context: context
+                            ))
                         }
                     }
                 )

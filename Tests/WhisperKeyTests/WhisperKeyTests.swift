@@ -3226,8 +3226,8 @@ final class WhisperKeyTests: XCTestCase {
             time: ManualContextualTime(),
             storeSnapshot: { snapshot },
             policyGeneration: { 11 },
-            onAttemptDisposition: { id, disposition in
-                audit.consume(.resolved(id: id, disposition: disposition))
+            onAttemptDisposition: { id, disposition, context in
+                audit.consume(.resolved(id: id, disposition: disposition, context: context))
             }
         )
 
@@ -3235,6 +3235,9 @@ final class WhisperKeyTests: XCTestCase {
 
         XCTAssertEqual(result?.text, "Reservei um Hostel.")
         XCTAssertEqual(audit.latest?.disposition, .appliedReplacement)
+        XCTAssertEqual(audit.latest?.stage, .rolling)
+        XCTAssertEqual(audit.latest?.revision, 1)
+        XCTAssertEqual(audit.latest?.dispatchOrdinal, 1)
     }
 
     @MainActor
@@ -4737,8 +4740,8 @@ final class ContextualResolverTests: XCTestCase {
         matcher: ContextualCorrectionResolver.CandidateMatcher? = nil,
         fileManager: FileManager = .default,
         onAttemptDisposition: @escaping @MainActor @Sendable (
-            UUID, ContextualAttemptDisposition
-        ) -> Void = { _, _ in }
+            UUID, ContextualAttemptDisposition, ContextualAttemptContext
+        ) -> Void = { _, _, _ in }
     ) -> (ContextualCorrectionResolver, ContextualCorrectionStore, ContextualCorrectionPolicy, ManualContextualTime, URL) {
         let file = FileManager.default.temporaryDirectory
             .appendingPathComponent("ResenhaTests/\(UUID().uuidString)/ContextualCorrections/v1.json")
@@ -4845,14 +4848,17 @@ final class ContextualResolverTests: XCTestCase {
         let provider = ResolverDecisionProviderStub(
             [decision("o1", .replace)], localAttemptID: attemptID
         )
-        let item = fixture(provider: provider, onAttemptDisposition: { id, disposition in
-            audit.consume(.resolved(id: id, disposition: disposition))
+        let item = fixture(provider: provider, onAttemptDisposition: { id, disposition, context in
+            audit.consume(.resolved(id: id, disposition: disposition, context: context))
         })
 
         let output = await item.0.resolve(request("Reservei um rosto.", store: item.1, policy: item.2))
 
         XCTAssertEqual(output, "Reservei um Hostel.")
         XCTAssertEqual(audit.latest?.disposition, .appliedReplacement)
+        XCTAssertEqual(audit.latest?.stage, .final)
+        XCTAssertNil(audit.latest?.revision)
+        XCTAssertEqual(audit.latest?.dispatchOrdinal, 1)
     }
 
     func testResolverOrdersMultiPairOccurrencesByRangeAndAssignsUniqueQuestionIDs() async {
@@ -6563,7 +6569,14 @@ final class ContextualAttemptAuditTests: XCTestCase {
                 ))
             } else {
                 if index == 24 {
-                    store.consume(.resolved(id: id, disposition: .appliedReplacement))
+                    store.consume(.resolved(
+                        id: id,
+                        disposition: .appliedReplacement,
+                        context: .init(
+                            dictationAttemptID: UUID(), stage: .rolling,
+                            revision: 7, dispatchOrdinal: 3
+                        )
+                    ))
                 }
                 store.consume(.succeeded(
                     id: id, startedAt: start, completedAt: start.addingTimeInterval(0.125),
@@ -6582,6 +6595,9 @@ final class ContextualAttemptAuditTests: XCTestCase {
         XCTAssertEqual(latest.costUSD, Decimal(string: "0.000014994"))
         XCTAssertEqual(latest.providerRequestID, "jev-proof-24")
         XCTAssertEqual(latest.disposition, .appliedReplacement)
+        XCTAssertEqual(latest.stage, .rolling)
+        XCTAssertEqual(latest.revision, 7)
+        XCTAssertEqual(latest.dispatchOrdinal, 3)
         XCTAssertEqual(try FileManager.default.attributesOfItem(atPath: file.path)[.posixPermissions] as? NSNumber, 0o600)
 
         let failureID = UUID()
