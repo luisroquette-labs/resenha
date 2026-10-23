@@ -840,6 +840,9 @@ private struct TranscriptionSettingsPane: View {
             let dispatch = attempt.dispatchOrdinal.map { " #\($0)" } ?? ""
             parts.append("\(stage.rawValue)\(revision)\(dispatch)")
         }
+        if let latency = attempt.candidateToDecisionMilliseconds {
+            parts.append("hipótese→decisão \(latency) ms")
+        }
         if !attempt.decisions.isEmpty { parts.append(attempt.decisions.map(\.rawValue).joined(separator: ", ")) }
         if let confidence = attempt.minimumConfidence { parts.append(String(format: "conf. %.0f%%", confidence * 100)) }
         if let cost = attempt.costUSD { parts.append("US$ \(NSDecimalNumber(decimal: cost).stringValue)") }

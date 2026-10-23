@@ -3238,6 +3238,7 @@ final class WhisperKeyTests: XCTestCase {
         XCTAssertEqual(audit.latest?.stage, .rolling)
         XCTAssertEqual(audit.latest?.revision, 1)
         XCTAssertEqual(audit.latest?.dispatchOrdinal, 1)
+        XCTAssertEqual(audit.latest?.candidateToDecisionMilliseconds, 0)
     }
 
     @MainActor
@@ -6574,7 +6575,8 @@ final class ContextualAttemptAuditTests: XCTestCase {
                         disposition: .appliedReplacement,
                         context: .init(
                             dictationAttemptID: UUID(), stage: .rolling,
-                            revision: 7, dispatchOrdinal: 3
+                            revision: 7, dispatchOrdinal: 3,
+                            candidateToDecisionMilliseconds: 777
                         )
                     ))
                 }
@@ -6598,6 +6600,7 @@ final class ContextualAttemptAuditTests: XCTestCase {
         XCTAssertEqual(latest.stage, .rolling)
         XCTAssertEqual(latest.revision, 7)
         XCTAssertEqual(latest.dispatchOrdinal, 3)
+        XCTAssertEqual(latest.candidateToDecisionMilliseconds, 777)
         XCTAssertEqual(try FileManager.default.attributesOfItem(atPath: file.path)[.posixPermissions] as? NSNumber, 0o600)
 
         let failureID = UUID()

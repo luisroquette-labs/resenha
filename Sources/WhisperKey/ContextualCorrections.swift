@@ -1148,7 +1148,8 @@ final class ContextualCorrectionResolver: ContextualCorrectionResolverContract {
             dictationAttemptID: request.attemptID,
             stage: .final,
             revision: request.revisionIdentity?.revision,
-            dispatchOrdinal: request.dispatchBudget.consumed
+            dispatchOrdinal: request.dispatchBudget.consumed,
+            candidateToDecisionMilliseconds: nil
         )
 
         let provider = provider

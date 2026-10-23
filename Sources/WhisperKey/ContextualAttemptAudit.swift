@@ -23,6 +23,7 @@ struct ContextualAttemptContext: Equatable, Sendable {
     let stage: ContextualAttemptStage
     let revision: UInt64?
     let dispatchOrdinal: Int
+    let candidateToDecisionMilliseconds: Int?
 }
 
 enum ContextualAttemptFailure: String, Codable, Sendable {
@@ -69,6 +70,7 @@ struct ContextualAttemptRecord: Codable, Equatable, Identifiable, Sendable {
     var stage: ContextualAttemptStage? = nil
     var revision: UInt64? = nil
     var dispatchOrdinal: Int? = nil
+    var candidateToDecisionMilliseconds: Int? = nil
     var failure: ContextualAttemptFailure?
 
     var providerResponseConfirmed: Bool { status == .succeeded }
@@ -184,6 +186,7 @@ final class ContextualAttemptStore: ObservableObject {
         record.stage = resolution.1.stage
         record.revision = resolution.1.revision
         record.dispatchOrdinal = resolution.1.dispatchOrdinal
+        record.candidateToDecisionMilliseconds = resolution.1.candidateToDecisionMilliseconds
     }
 
     nonisolated static func defaultURL(fileManager: FileManager = .default) -> URL {
