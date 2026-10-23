@@ -613,10 +613,14 @@ final class ContextualDispatchBudget: @unchecked Sendable {
     }
 
     func consume() -> Bool {
+        consumeOrdinal() != nil
+    }
+
+    func consumeOrdinal() -> Int? {
         lock.withLock {
-            guard value < limit else { return false }
+            guard value < limit else { return nil }
             value += 1
-            return true
+            return value
         }
     }
 
@@ -1143,12 +1147,12 @@ final class ContextualCorrectionResolver: ContextualCorrectionResolverContract {
               Self.areValid(occurrences, in: request.text),
               let sentence = Self.decisionSentence(in: request.text, occurrences: occurrences),
               sentence.count <= ContextualCorrectionStore.maximumSentenceCharacters,
-              request.dispatchBudget.consume() else { return original }
+              let dispatchOrdinal = request.dispatchBudget.consumeOrdinal() else { return original }
         let attemptContext = ContextualAttemptContext(
             dictationAttemptID: request.attemptID,
             stage: .final,
             revision: request.revisionIdentity?.revision,
-            dispatchOrdinal: request.dispatchBudget.consumed,
+            dispatchOrdinal: dispatchOrdinal,
             candidateToDecisionMilliseconds: nil
         )
 

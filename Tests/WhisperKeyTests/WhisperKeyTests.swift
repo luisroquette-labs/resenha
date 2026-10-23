@@ -8150,6 +8150,17 @@ extension ContextualResolverTests {
         XCTAssertFalse(budget.consume())
     }
 
+    func testContextualDispatchBudgetReturnsUniqueOrdinals() async {
+        let budget = ContextualDispatchBudget()
+        let ordinals = await withTaskGroup(of: Int?.self, returning: [Int].self) { group in
+            for _ in 0..<40 { group.addTask { budget.consumeOrdinal() } }
+            var values: [Int] = []
+            for await value in group { if let value { values.append(value) } }
+            return values.sorted()
+        }
+        XCTAssertEqual(ordinals, Array(1...6))
+    }
+
     func testContextualRevisionRebaseAcceptsOnlyAppendedSuffix() throws {
         let source = "Reservei uma cama no rosto."
         let range = try XCTUnwrap(source.range(of: "rosto"))

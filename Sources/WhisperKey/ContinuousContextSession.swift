@@ -804,11 +804,10 @@ final class RevisionBoundJevLoop {
         defer {
             if let policyToken { policy?.finish(policyToken) }
         }
-        guard dispatchBudget.consume() else {
+        guard let dispatchOrdinal = dispatchBudget.consumeOrdinal() else {
             _ = session.applyContextualResult(abstained, for: work)
             return abstained
         }
-        let dispatchOrdinal = dispatchBudget.consumed
         let provider = provider
         let providerTask = Task { [time] in
             do {
