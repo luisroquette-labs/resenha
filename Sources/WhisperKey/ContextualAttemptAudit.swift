@@ -272,6 +272,27 @@ final class ContextualAttemptStore: ObservableObject {
             && record.outputTokens.map { $0 >= 0 } ?? true
             && cost(record.costUSD) == record.costUSD
             && record.providerRequestID.map { !$0.isEmpty && $0.count <= 128 } ?? true
+            && hasValidContext(record)
+    }
+
+    private static func hasValidContext(_ record: ContextualAttemptRecord) -> Bool {
+        let fieldsAreAbsent = record.dictationAttemptID == nil && record.stage == nil
+            && record.revision == nil && record.dispatchOrdinal == nil
+            && record.candidateToDecisionMilliseconds == nil
+        if fieldsAreAbsent { return true }
+        guard record.dictationAttemptID != nil,
+              let stage = record.stage,
+              let dispatch = record.dispatchOrdinal,
+              (1...6).contains(dispatch) else { return false }
+        switch stage {
+        case .rolling:
+            guard let revision = record.revision, revision > 0,
+                  let latency = record.candidateToDecisionMilliseconds,
+                  (0...60_000).contains(latency) else { return false }
+        case .final:
+            guard record.candidateToDecisionMilliseconds == nil else { return false }
+        }
+        return true
     }
 
     private static func isSafeChoice(_ choice: ContextualDecisionChoice) -> Bool {

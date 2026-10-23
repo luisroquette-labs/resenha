@@ -6631,6 +6631,27 @@ final class ContextualAttemptAuditTests: XCTestCase {
         let oversized = ContextualAttemptStore(fileURL: file)
         XCTAssertTrue(oversized.records.isEmpty)
         XCTAssertFalse(oversized.storageAvailable)
+
+        let corrupt = String(decoding: try JSONEncoder().encode(
+            ContextualAttemptRecord(
+                id: UUID(), startedAt: Date(), completedAt: Date(), status: .succeeded,
+                resolvedModel: "test", decisions: [], minimumConfidence: nil,
+                minimumProbability: nil, latencyMilliseconds: 1, inputTokens: nil,
+                outputTokens: nil, costUSD: nil, dictationAttemptID: UUID(),
+                stage: .rolling, revision: 1, dispatchOrdinal: 7,
+                candidateToDecisionMilliseconds: 1, failure: nil
+            )
+        ), as: UTF8.self)
+        try Data(#"{"schemaVersion":1,"records":["#.utf8)
+            .write(to: file, options: .atomic)
+        let handle = try FileHandle(forWritingTo: file)
+        try handle.seekToEnd()
+        try handle.write(Data(corrupt.utf8))
+        try handle.write(Data("]}".utf8))
+        try handle.close()
+        let invalidContext = ContextualAttemptStore(fileURL: file)
+        XCTAssertTrue(invalidContext.records.isEmpty)
+        XCTAssertFalse(invalidContext.storageAvailable)
     }
 
     func testPersonalClientEmitsCorrelatedProviderConfirmedAttemptWithUsage() async throws {
