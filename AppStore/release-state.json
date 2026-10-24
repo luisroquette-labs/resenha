@@ -9,8 +9,8 @@
   },
   "remoteMutationRequiresOwnerApproval": true,
   "candidate": {
-    "minimumBuild": 6,
-    "sourceCommit": "2302a707ac902f138c1386c7fa150b50287a01e8",
+    "minimumBuild": 7,
+    "sourceCommit": "d8bae8c8ea81493088ab2920213782b00d4a10d7",
     "version": "1.0.0"
   },
   "validationLimits": [
@@ -18,7 +18,7 @@
   ],
   "currentVersion": {
     "version": "1.0",
-    "statusObserved": "WAITING_FOR_REVIEW",
+    "statusObserved": "REJECTED",
     "releaseModeObserved": "MANUAL",
     "build": 6,
     "buildDeliveryID": "5da93b94-bb83-4a70-a1ff-31bb2e5f5264",
@@ -36,21 +36,20 @@
     "reviewSubmissionID": "1a459345-640e-4dea-b6e3-7e8585b34c7c"
   },
   "submitted": {
-    "build": 2,
-    "reviewDate": "2026-10-08",
-    "rejectionGuideline": "2.4.5(v)",
+    "build": 6,
+    "reviewDate": "2026-10-20",
+    "rejectionGuideline": "2.1.0",
     "eligibleForRelease": false,
-    "rejectionReason": "Input Monitoring requested by the Mac App Store build",
+    "rejectionReason": "Recording started but the reviewer could not finish it; build 7 makes the HUD interactive and adds a menu-bar finish action",
     "upload": {
-      "uploadedAt": "2026-10-04T12:26:13-03:00",
-      "deliveryID": "0dfd8664-8693-4a51-b44e-24548a3b8b9d",
-      "packageSHA256": "dc72f52695893053d0bf6326fe0ef4fad887392c833e30682548515884339df4",
-      "statusObserved": "SUBMITTED_TO_REVIEW",
-      "build": 2
+      "uploadedAt": "2026-10-14T14:39:00-03:00",
+      "deliveryID": "5da93b94-bb83-4a70-a1ff-31bb2e5f5264",
+      "statusObserved": "REJECTED",
+      "build": 6
     },
     "releaseModeObserved": "MANUAL",
     "version": "1.0.0",
     "statusObserved": "REJECTED",
-    "submittedAt": "2026-10-04T12:52:00-03:00"
+    "submittedAt": "2026-10-14T14:42:00-03:00"
   }
 }

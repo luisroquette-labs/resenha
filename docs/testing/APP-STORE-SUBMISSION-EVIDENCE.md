@@ -2,6 +2,26 @@
 
 Data: 2 de outubro de 2026
 
+## Build 7 — correção da rejeição 2.1
+
+Em 20 de outubro de 2026, a Apple rejeitou o build 6 porque a gravação iniciava,
+mas o botão “Concluir” não respondia no ambiente de revisão. A captura enviada
+pela Apple mostra o HUD em `02:49`, com o botão visível.
+
+O candidato `1.0.0 (7)`, source commit
+`d8bae8c8ea81493088ab2920213782b00d4a10d7`, corrige o fluxo em duas camadas:
+
+- o painel não ativável passa a aceitar foco de teclado somente quando necessário
+  e mantém eventos de mouse habilitados durante a gravação;
+- o menu do Resenha mostra “Concluir gravação” enquanto o coordenador está em
+  `recording`, usando o mesmo encerramento seguro do HUD.
+
+Validação local do commit de código `e742d30`: `mac-gate xcodebuild … test`
+passou 105/105 testes, zero falhas. O teste novo prova que o HUD de gravação
+aceita interação; o teste de menu prova que a ação encerra o estado de gravação.
+O primeiro gate completo teve uma falha transitória no teste legado de timeout
+de 20 ms; o teste isolado e a repetição integral passaram sem mudança de código.
+
 ## Build 1 submetido — obsoleto
 
 - Archive: `build/archive/Resenha-1.0.0-b1-r2.xcarchive`
