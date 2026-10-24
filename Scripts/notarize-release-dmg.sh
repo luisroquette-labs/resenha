@@ -2,7 +2,7 @@
 set -euo pipefail
 
 project_root="${0:A:h:h}"
-dmg="${1:-$project_root/build/direct/Resenha-1.0.0-arm64.dmg}"
+dmg="${1:-$project_root/build/direct/Resenha-1.1.0-arm64.dmg}"
 profile="${RESENHA_NOTARY_PROFILE:-notchagent-notary}"
 
 [[ -f "$dmg" ]] || { print -u2 "ERRO: DMG ausente: $dmg"; exit 1; }

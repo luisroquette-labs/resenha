@@ -208,14 +208,16 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
         if (rootBody) assert.equal(html, rootBody); else rootBody = html;
         assert.match(html, /<html\b[^>]*lang="pt-BR"/u);
         assert.match(html, /<title>[^<]*Resenha[^<]*<\/title>/u);
-        assert.match(html, /name="description"[^>]*content="[^"]*alternativa gratuita[^"]*Wispr Flow[^"]*"/iu);
+        assert.match(html, /name="description"[^>]*content="[^"]*Tipo o Wispr[^"]*grátis[^"]*JEV[^"]*"/iu);
         assert.match(html, /property="og:title"/u);
         assert.match(html, /property="og:description"/u);
         assert.match(html, /licença MIT/u);
         assert.match(html, /SwiftUI/u); assert.match(html, /whisper\.cpp/u); assert.match(html, /ATALHO LIVRE/u);
         assert.match(html, /Acessibilidade/u);
         assert.match(html, /Apple Silicon/u); assert.match(html, /AVFoundation/u);
-        assert.match(html, /alternativa open source ao Wispr Flow/iu);
+        assert.match(html, /Tipo o Wispr,[\s\S]*mas grátis e com JEV\./iu);
+        assert.match(html, /JEV opcional/iu);
+        assert.match(html, /nunca o áudio/iu);
         assert.match(html, /sem limite semanal/iu);
         assert.match(html, /2\.000 palavras no desktop/iu);
         assert.equal((html.match(/id="download"/gu) ?? []).length, 1);
@@ -281,6 +283,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
         assert.equal(comparison.status, 200);
         assert.match(comparison.body, /<title>Alternativa gratuita e sem limite ao Wispr Flow \| Resenha<\/title>/u);
         assert.match(comparison.body, /Sem limite semanal imposto pelo plano/u);
+        assert.match(comparison.body, /Tipo o Wispr\.[\s\S]*Grátis e com JEV\./u);
+        assert.match(comparison.body, /Ditado offline; JEV exige conexão/u);
+        assert.doesNotMatch(comparison.body, /Só no download inicial do modelo/u);
         assert.match(comparison.body, /Resenha é um projeto independente/u);
         assert.match(comparison.body, /wisprflow\.ai\/pricing/u);
         assert.match(comparison.body, /application\/ld\+json/u);

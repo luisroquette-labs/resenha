@@ -69,7 +69,7 @@ Sandbox. O DMG contém o aplicativo e o atalho `Applications`.
 
 ```sh
 ~/.local/bin/mac-gate ./Scripts/build-release-dmg.sh
-./Scripts/notarize-release-dmg.sh build/direct/Resenha-1.0.0-arm64.dmg
+./Scripts/notarize-release-dmg.sh build/direct/Resenha-1.1.0-arm64.dmg
 ```
 
 O segundo comando envia o DMG à Apple usando o perfil de Keychain definido em
