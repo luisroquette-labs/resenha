@@ -1,0 +1,47 @@
+<Window x:Class="Resenha.Windows.FirstRunWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Configurar Resenha" Width="680" Height="650" ResizeMode="NoResize"
+        WindowStartupLocation="CenterScreen" Icon="Assets/Resenha.ico">
+    <Grid Margin="36">
+        <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+        <StackPanel>
+            <TextBlock Text="resenha." FontFamily="Georgia" FontSize="30" FontWeight="Bold" />
+            <TextBlock Text="Sua voz, em qualquer campo." FontFamily="Georgia" FontSize="38"
+                       FontWeight="Bold" Margin="0,18,0,6" />
+            <TextBlock Text="Três passos conectam voz, atalho e inserção. O áudio permanece neste PC."
+                       Foreground="{StaticResource MutedInk}" FontSize="15" />
+        </StackPanel>
+        <StackPanel Grid.Row="1" Margin="0,26,0,0">
+            <Border BorderBrush="{StaticResource Rule}" BorderThickness="0,1,0,0" Padding="0,18">
+                <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="48" /><ColumnDefinition /></Grid.ColumnDefinitions>
+                    <TextBlock Text="01" Foreground="{StaticResource Sage}" FontWeight="Bold" />
+                    <StackPanel Grid.Column="1"><TextBlock Text="Microfone e atalho" FontWeight="Bold" FontSize="16" />
+                        <TextBlock Text="Você escolhe o microfone e a combinação global para falar." TextWrapping="Wrap" Foreground="{StaticResource MutedInk}" /></StackPanel>
+                </Grid>
+            </Border>
+            <Border BorderBrush="{StaticResource Rule}" BorderThickness="0,1,0,0" Padding="0,18">
+                <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="48" /><ColumnDefinition /></Grid.ColumnDefinitions>
+                    <TextBlock Text="02" Foreground="{StaticResource Sage}" FontWeight="Bold" />
+                    <StackPanel Grid.Column="1"><TextBlock Text="Whisper local" FontWeight="Bold" FontSize="16" />
+                        <TextBlock Text="O modelo é baixado e verificado uma vez. Depois, o ditado funciona offline." TextWrapping="Wrap" Foreground="{StaticResource MutedInk}" /></StackPanel>
+                </Grid>
+            </Border>
+            <Border Background="{StaticResource SageSoft}" CornerRadius="12" Padding="16" Margin="0,4,0,0">
+                <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="48" /><ColumnDefinition /></Grid.ColumnDefinitions>
+                    <TextBlock Text="03" Foreground="{StaticResource Sage}" FontWeight="Bold" />
+                    <StackPanel Grid.Column="1"><TextBlock Text="JEV contextual — opcional" FontWeight="Bold" FontSize="16" />
+                        <TextBlock Text="Começa desligado. O Resenha local funciona sem conta e sem chave. Ao ativar, somente texto transcrito e alternativas do seu vocabulário seguem ao OpenRouter/TypeSafe; áudio nunca sai deste PC."
+                                   TextWrapping="Wrap" Margin="0,5,0,0" Foreground="{StaticResource MutedInk}" />
+                        <TextBlock Text="Você fornece sua própria chave. O OpenRouter pode cobrar sua conta diretamente; o Resenha não recebe nem subsidia esse valor."
+                                   TextWrapping="Wrap" Margin="0,6,0,0" Foreground="{StaticResource MutedInk}" /></StackPanel>
+                </Grid>
+            </Border>
+        </StackPanel>
+        <Grid Grid.Row="2" Margin="0,24,0,0">
+            <TextBlock Text="Configure ou deixe o JEV para depois nos Ajustes." VerticalAlignment="Center"
+                       Foreground="{StaticResource MutedInk}" />
+            <Button Content="Continuar para ajustes" HorizontalAlignment="Right" Click="Continue_Click" />
+        </Grid>
+    </Grid>
+</Window>

@@ -1,0 +1,532 @@
+{
+  "warning": "SYNTHETIC NEGATIVE CONTRACT MUTATIONS ONLY. C# execution requires the pinned .NET SDK.",
+  "cases": [
+    {
+      "name": "missing-schemaVersion",
+      "path": "manifest/schemaVersion",
+      "remove": true,
+      "schemaValid": false
+    },
+    {
+      "name": "missing-evidenceClass",
+      "path": "manifest/evidenceClass",
+      "remove": true,
+      "schemaValid": false
+    },
+    {
+      "name": "missing-stage",
+      "path": "manifest/stage",
+      "remove": true,
+      "schemaValid": false
+    },
+    {
+      "name": "missing-platform",
+      "path": "manifest/platform",
+      "remove": true,
+      "schemaValid": false
+    },
+    {
+      "name": "missing-architecture",
+      "path": "manifest/architecture",
+      "remove": true,
+      "schemaValid": false
+    },
+    {
+      "name": "missing-version",
+      "path": "manifest/version",
+      "remove": true,
+      "schemaValid": false
+    },
+    {
+      "name": "missing-filename",
+      "path": "manifest/filename",
+      "remove": true,
+      "schemaValid": false
+    },
+    {
+      "name": "missing-byteLength",
+      "path": "manifest/byteLength",
+      "remove": true,
+      "schemaValid": false
+    },
+    {
+      "name": "missing-sha256",
+      "path": "manifest/sha256",
+      "remove": true,
+      "schemaValid": false
+    },
+    {
+      "name": "missing-sourceCommit",
+      "path": "manifest/sourceCommit",
+      "remove": true,
+      "schemaValid": false
+    },
+    {
+      "name": "missing-whisperCommit",
+      "path": "manifest/whisperCommit",
+      "remove": true,
+      "schemaValid": false
+    },
+    {
+      "name": "missing-model",
+      "path": "manifest/model",
+      "remove": true,
+      "schemaValid": false
+    },
+    {
+      "name": "missing-requirements",
+      "path": "manifest/requirements",
+      "remove": true,
+      "schemaValid": false
+    },
+    {
+      "name": "missing-build",
+      "path": "manifest/build",
+      "remove": true,
+      "schemaValid": false
+    },
+    {
+      "name": "missing-payload",
+      "path": "manifest/payload",
+      "remove": true,
+      "schemaValid": false
+    },
+    {
+      "name": "missing-signatures",
+      "path": "manifest/signatures",
+      "remove": true,
+      "schemaValid": false
+    },
+    {
+      "name": "missing-scan",
+      "path": "manifest/scan",
+      "remove": true,
+      "schemaValid": false
+    },
+    {
+      "name": "missing-physical",
+      "path": "manifest/physical",
+      "remove": true,
+      "schemaValid": false
+    },
+    {
+      "name": "missing-hosting",
+      "path": "manifest/hosting",
+      "remove": true,
+      "schemaValid": false
+    },
+    {
+      "name": "missing-verification",
+      "path": "manifest/verification",
+      "remove": true,
+      "schemaValid": false
+    },
+    {
+      "name": "cross-platform-macos",
+      "path": "manifest/platform",
+      "value": "macos",
+      "schemaValid": false
+    },
+    {
+      "name": "cross-platform-arm64",
+      "path": "manifest/architecture",
+      "value": "arm64",
+      "schemaValid": false
+    },
+    {
+      "name": "cross-platform-dmg",
+      "path": "manifest/filename",
+      "value": "Resenha-0.0.0.dmg",
+      "schemaValid": false
+    },
+    {
+      "name": "version-filename-mismatch",
+      "path": "manifest/version",
+      "value": "1.0.0",
+      "schemaValid": true,
+      "error": "identity.filename"
+    },
+    {
+      "name": "source-mismatch",
+      "path": "manifest/sourceCommit",
+      "value": "2222222222222222222222222222222222222222",
+      "schemaValid": true,
+      "error": "identity.source"
+    },
+    {
+      "name": "whisper-mismatch",
+      "path": "manifest/whisperCommit",
+      "value": "2222222222222222222222222222222222222222",
+      "schemaValid": false
+    },
+    {
+      "name": "model-hash-mismatch",
+      "path": "manifest/model/sha256",
+      "value": "2222222222222222222222222222222222222222222222222222222222222222",
+      "schemaValid": false
+    },
+    {
+      "name": "model-size-mismatch",
+      "path": "manifest/model/byteLength",
+      "value": 1,
+      "schemaValid": false
+    },
+    {
+      "name": "build-source-mismatch",
+      "path": "manifest/build/sourceCommit",
+      "value": "2222222222222222222222222222222222222222",
+      "schemaValid": true,
+      "error": "build.source"
+    },
+    {
+      "name": "build-skipped-test",
+      "path": "manifest/build/preflight/skippedTests",
+      "value": 1,
+      "schemaValid": false
+    },
+    {
+      "name": "build-toolchain-unpinned",
+      "path": "manifest/build/toolchain/dotnetSdk",
+      "value": "10.0.999",
+      "schemaValid": false
+    },
+    {
+      "name": "invalid-calendar-date",
+      "path": "manifest/build/recordedAtUtc",
+      "value": "2026-02-30T10:00:00Z",
+      "schemaValid": true,
+      "error": "malformed-or-unreadable-evidence"
+    },
+    {
+      "name": "non-utc-timestamp",
+      "path": "manifest/build/recordedAtUtc",
+      "value": "2026-10-04T10:00:00-03:00",
+      "schemaValid": false
+    },
+    {
+      "name": "future-timestamp",
+      "path": "manifest/build/recordedAtUtc",
+      "value": "2028-01-01T00:00:00Z",
+      "schemaValid": true,
+      "error": "evidence.future-time"
+    },
+    {
+      "name": "payload-inventory-mismatch",
+      "path": "manifest/payload/inventorySha256",
+      "value": "3333333333333333333333333333333333333333333333333333333333333333",
+      "schemaValid": true,
+      "error": "payload.inventory-hash"
+    },
+    {
+      "name": "incomplete-pe-inventory",
+      "path": "manifest/signatures/items",
+      "value": [],
+      "schemaValid": false
+    },
+    {
+      "name": "signature-invalid",
+      "path": "manifest/signatures/items/0/status",
+      "value": "NotSigned",
+      "schemaValid": false
+    },
+    {
+      "name": "signature-certificate-mismatch",
+      "path": "manifest/signatures/items/0/certificateThumbprint",
+      "value": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+      "schemaValid": true,
+      "error": "signatures.certificate"
+    },
+    {
+      "name": "signature-expired-at-signing",
+      "path": "manifest/signatures/items/0/certificateNotAfterUtc",
+      "value": "2026-01-02T00:00:00Z",
+      "schemaValid": true,
+      "error": "signatures.certificate-time"
+    },
+    {
+      "name": "signature-self-signed",
+      "path": "manifest/signatures/items/0/publiclyTrusted",
+      "value": false,
+      "schemaValid": false
+    },
+    {
+      "name": "signature-no-timestamp",
+      "path": "manifest/signatures/items/0/timestamp",
+      "value": null,
+      "schemaValid": false
+    },
+    {
+      "name": "signature-weak-digest",
+      "path": "manifest/signatures/items/0/digestAlgorithm",
+      "value": "SHA1",
+      "schemaValid": false
+    },
+    {
+      "name": "scan-stale-definitions",
+      "path": "manifest/scan/signatureUpdatedAtUtc",
+      "value": "2026-10-02T10:00:00Z",
+      "schemaValid": true,
+      "error": "scan.definitions-age"
+    },
+    {
+      "name": "scan-future-definitions",
+      "path": "manifest/scan/signatureUpdatedAtUtc",
+      "value": "2026-10-04T11:00:00Z",
+      "schemaValid": true,
+      "error": "scan.definitions-age"
+    },
+    {
+      "name": "scan-incomplete",
+      "path": "manifest/scan/targets/0/complete",
+      "value": false,
+      "schemaValid": false
+    },
+    {
+      "name": "scan-detection",
+      "path": "manifest/scan/targets/0/detections",
+      "value": 1,
+      "schemaValid": false
+    },
+    {
+      "name": "scan-remediation",
+      "path": "manifest/scan/targets/0/remediations",
+      "value": 1,
+      "schemaValid": false
+    },
+    {
+      "name": "scan-nonzero-exit",
+      "path": "manifest/scan/targets/0/exitCode",
+      "value": 2,
+      "schemaValid": false
+    },
+    {
+      "name": "scan-wrong-artifact",
+      "path": "manifest/scan/artifactSha256",
+      "value": "4444444444444444444444444444444444444444444444444444444444444444",
+      "schemaValid": true,
+      "error": "scan.artifact"
+    },
+    {
+      "name": "scan-wrong-payload",
+      "path": "manifest/scan/payloadInventorySha256",
+      "value": "4444444444444444444444444444444444444444444444444444444444444444",
+      "schemaValid": true,
+      "error": "scan.payload"
+    },
+    {
+      "name": "scan-missing-target",
+      "path": "manifest/scan/targets",
+      "value": [],
+      "schemaValid": false
+    },
+    {
+      "name": "physical-one-os-only",
+      "path": "manifest/physical",
+      "value": [],
+      "schemaValid": false
+    },
+    {
+      "name": "physical-wrong-os-release",
+      "path": "manifest/physical/0/os/release",
+      "value": "25H2",
+      "schemaValid": true,
+      "error": "os.release-build"
+    },
+    {
+      "name": "physical-virtual-machine",
+      "path": "manifest/physical/0/hardware/physical",
+      "value": false,
+      "schemaValid": false
+    },
+    {
+      "name": "physical-wrong-source",
+      "path": "manifest/physical/0/sourceCommit",
+      "value": "5555555555555555555555555555555555555555",
+      "schemaValid": true,
+      "error": "physical.source-version"
+    },
+    {
+      "name": "physical-wrong-artifact",
+      "path": "manifest/physical/0/artifactSha256",
+      "value": "5555555555555555555555555555555555555555555555555555555555555555",
+      "schemaValid": true,
+      "error": "physical.artifact"
+    },
+    {
+      "name": "physical-boolean-only",
+      "path": "manifest/physical/0/checks/notepad",
+      "value": {
+        "passed": true
+      },
+      "schemaValid": false
+    },
+    {
+      "name": "physical-missing-cycle",
+      "path": "manifest/physical/0/cycles",
+      "value": [],
+      "schemaValid": false
+    },
+    {
+      "name": "physical-cycle-number-mismatch",
+      "path": "manifest/physical/0/cycles/0/number",
+      "value": 99,
+      "schemaValid": true,
+      "error": "physical.ten-cycles"
+    },
+    {
+      "name": "physical-bad-accuracy",
+      "path": "manifest/physical/0/corpus/0/wordErrorRate",
+      "value": 0.21,
+      "schemaValid": false
+    },
+    {
+      "name": "physical-anglicism-loss",
+      "path": "manifest/physical/0/corpus/2/anglicismRetention",
+      "value": 0.89,
+      "schemaValid": false
+    },
+    {
+      "name": "physical-online-only",
+      "path": "manifest/physical/0/corpus/0/networkDisconnected",
+      "value": false,
+      "schemaValid": false
+    },
+    {
+      "name": "hosting-null-cannot-activate",
+      "path": "manifest/hosting",
+      "value": null,
+      "schemaValid": true,
+      "error": "hosting.stage"
+    },
+    {
+      "name": "candidate-with-hosting-contradiction",
+      "path": "manifest/stage",
+      "value": "candidate-ready",
+      "schemaValid": true,
+      "error": "hosting.stage"
+    },
+    {
+      "name": "hosting-arbitrary-url",
+      "path": "manifest/hosting/url",
+      "value": "https://attacker.invalid/setup.exe",
+      "schemaValid": true,
+      "error": "hosting.url"
+    },
+    {
+      "name": "hosting-wrong-tag",
+      "path": "manifest/hosting/releaseTag",
+      "value": "latest",
+      "schemaValid": true,
+      "error": "hosting.tag"
+    },
+    {
+      "name": "hosting-changed-bytes",
+      "path": "manifest/hosting/downloadedSha256",
+      "value": "6666666666666666666666666666666666666666666666666666666666666666",
+      "schemaValid": true,
+      "error": "hosting.bytes"
+    },
+    {
+      "name": "hosting-wrong-size",
+      "path": "manifest/hosting/downloadedByteLength",
+      "value": 1,
+      "schemaValid": true,
+      "error": "hosting.bytes"
+    },
+    {
+      "name": "hosting-missing-motw",
+      "path": "manifest/hosting/markOfTheWebZoneId",
+      "value": 0,
+      "schemaValid": false
+    },
+    {
+      "name": "hosting-policy-denial",
+      "path": "manifest/hosting/smartScreen",
+      "value": "policy-denied",
+      "schemaValid": false
+    },
+    {
+      "name": "hosting-undisclosed-warning",
+      "path": "manifest/hosting/reputationDisclosure",
+      "value": "",
+      "schemaValid": true,
+      "error": "hosting.reputation-disclosure"
+    },
+    {
+      "name": "hosting-mutable-release",
+      "path": "manifest/hosting/immutableRelease",
+      "value": false,
+      "schemaValid": false
+    },
+    {
+      "name": "verification-wrong-tool",
+      "path": "manifest/verification/toolSha256",
+      "value": "7777777777777777777777777777777777777777777777777777777777777777",
+      "schemaValid": true,
+      "error": "report.projection"
+    },
+    {
+      "name": "verification-missing-report",
+      "path": "manifest/verification/report",
+      "value": null,
+      "schemaValid": false
+    },
+    {
+      "name": "manifest-self-hash",
+      "path": "manifest/manifestSha256",
+      "value": "8888888888888888888888888888888888888888888888888888888888888888",
+      "schemaValid": false
+    },
+    {
+      "name": "circular-manifest-report-hash",
+      "path": "manifest/verification/manifestSha256",
+      "value": "8888888888888888888888888888888888888888888888888888888888888888",
+      "schemaValid": false
+    },
+    {
+      "name": "changed-artifact-bytes",
+      "path": "artifactUtf8",
+      "value": "MZ SYNTHETIC CHANGED ARTIFACT",
+      "schemaValid": true,
+      "error": "artifact.bytes"
+    },
+    {
+      "name": "missing-payload-file",
+      "path": "payloadUtf8",
+      "value": {},
+      "schemaValid": true,
+      "error": "payload.inventory-count"
+    },
+    {
+      "name": "missing-all-report-bytes",
+      "path": "evidenceFiles",
+      "value": {},
+      "schemaValid": true
+    },
+    {
+      "name": "physical-english-invented-anglicism-ratio",
+      "path": "manifest/physical/0/corpus/1/anglicismRetention",
+      "value": 1,
+      "schemaValid": false
+    },
+    {
+      "name": "physical-portuguese-missing-anglicism-measurement",
+      "path": "manifest/physical/0/corpus/0/anglicismRetention",
+      "value": "not-applicable",
+      "schemaValid": false
+    },
+    {
+      "name": "physical-spanish-missing-anglicism-measurement",
+      "path": "manifest/physical/0/corpus/2/anglicismRetention",
+      "value": "not-applicable",
+      "schemaValid": false
+    },
+    {
+      "name": "release-signature-before-build",
+      "path": "manifest/signatures/items/0/timestamp/atUtc",
+      "value": "2026-09-01T10:00:00Z",
+      "schemaValid": true,
+      "error": "signatures.timestamp-order"
+    }
+  ]
+}

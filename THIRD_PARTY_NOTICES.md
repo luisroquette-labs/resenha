@@ -21,3 +21,8 @@ Resenha project.
 
 The model is downloaded only after the user chooses **Baixar**. Resenha checks
 its exact byte count and SHA-256 digest before installation.
+
+The Windows installer includes `Windows/Installer/LICENSES.txt`. Release builds
+must also include the original `Vendor/whisper.cpp/LICENSE` file inside the
+installed `licenses` directory. Microsoft-signed .NET runtime files retain their
+vendor signatures and are not re-signed by the Resenha publisher.

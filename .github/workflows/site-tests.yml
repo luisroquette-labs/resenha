@@ -6,6 +6,7 @@ on:
       - '.github/workflows/site-tests.yml'
       - 'Scripts/site.mjs'
       - 'Scripts/site.test.mjs'
+      - 'Scripts/windows/promote-release.mjs'
       - 'site/**'
   push:
     branches: [main]
@@ -13,6 +14,7 @@ on:
       - '.github/workflows/site-tests.yml'
       - 'Scripts/site.mjs'
       - 'Scripts/site.test.mjs'
+      - 'Scripts/windows/promote-release.mjs'
       - 'site/**'
 
 permissions:
