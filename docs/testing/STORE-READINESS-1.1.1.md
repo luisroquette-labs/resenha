@@ -1,4 +1,4 @@
-# Resenha 1.1.0 — diagnóstico de prontidão das lojas
+# Resenha 1.1.1 — diagnóstico de prontidão das lojas
 
 Verificado em 24 de outubro de 2026. Este documento avalia a possibilidade de
 submissão; não autoriza nem registra uma submissão.
@@ -7,8 +7,8 @@ submissão; não autoriza nem registra uma submissão.
 
 | Canal | JEV permitido? | Estado desta versão | Próximo gate |
 | --- | --- | --- | --- |
-| Mac App Store | Sim, com consentimento e declaração de compartilhamento com IA | Não pronta: o binário direto usa Acessibilidade e não está no App Sandbox | portar a 1.1.0 para a edição sandboxada baseada em `NSServices`, habilitar `network.client` e validar o archive exato |
-| Microsoft Store | Sim, com política de privacidade e opt-in; declarar IA por prudência | Não pronta: a implementação JEV existe somente no app macOS; a versão Windows pública ainda não contém esse fluxo | integrar o mesmo contrato textual no Windows, gerar instalador assinado e passar WACK/certificação |
+| Mac App Store | Possível, mas sujeito à interpretação da regra 3.1.1 sobre desbloqueio externo | Não pronta: além do sandbox, o BYOK precisa passar pela revisão sem link de compra e com o modo local completo | portar para `NSServices`, manter JEV opcional com chave preexistente e explicar o modelo à revisão |
+| Microsoft Store | Sim para app PC não jogo, com BYOK opcional e divulgação clara | Não pronta: a implementação JEV existe somente no app macOS; a versão Windows pública ainda não contém esse fluxo | integrar o mesmo contrato textual no Windows, gerar instalador assinado e passar WACK/certificação |
 
 ## Apple
 
@@ -16,7 +16,7 @@ submissão; não autoriza nem registra uma submissão.
   porque a inserção usa Acessibilidade e eventos para devolver texto ao campo.
 - Existe uma edição histórica sandboxada baseada em Serviço do macOS, com
   `com.apple.security.app-sandbox`, `device.audio-input` e `network.client`.
-  Ela precisa receber a implementação e os testes da 1.1.0 antes de novo upload.
+  Ela precisa receber a implementação e os testes da 1.1.1 antes de novo upload.
 - A Apple exige revelar claramente o compartilhamento de dados com IA de
   terceiros e obter permissão explícita. O fluxo atual atende a base técnica:
   começa desligado, envia texto e alternativas somente após consentimento,
@@ -26,6 +26,10 @@ submissão; não autoriza nem registra uma submissão.
   **App Functionality** e não para tracking. As notas de revisão devem citar
   OpenRouter, TypeSafe/JEV e fornecer uma chave de revisão válida ou um modo
   demonstrável que permita avaliar o recurso.
+- O BYOK não tem aprovação automática: a regra 3.1.1 pode ser interpretada como
+  desbloqueio de funcionalidade por mecanismo externo. A submissão proposta não
+  oferece compra, cadastro ou link externo, aceita apenas chave preexistente e
+  mantém o ditado local completo sem JEV. O resultado ainda depende do App Review.
 - A página pública Apple `id6818779976` retornou HTTP 404 nesta verificação;
   o estado interno do App Store Connect não foi confirmado sem uma sessão
   autenticada.
@@ -41,6 +45,9 @@ Fontes oficiais: [App Review Guidelines](https://developer.apple.com/app-store/r
 - A política 10.5 exige política de privacidade, opt-in antes de enviar dados a
   terceiros, explicação do uso/compartilhamento e uma forma de retirar o
   consentimento. O contrato do JEV no macOS já segue esses princípios.
+- Apps PC que não são jogos podem usar pagamento seguro de terceiros. Como uma
+  conta individual não pode exigir segredo de API para a função principal, o
+  JEV deve permanecer opcional; instalação e ditado local não dependem da chave.
 - A política 11.16 trata conteúdo dinâmico criado por IA. O JEV escolhe entre
   opções locais e não gera texto livre, mas a submissão deve declarar o uso de
   IA por prudência. Se a Microsoft enquadrar o resultado como conteúdo

@@ -223,6 +223,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
         assert.match(html, /Tipo o Wispr,[\s\S]*mas grátis e com JEV\./iu);
         assert.match(html, /JEV opcional/iu);
         assert.match(html, /nunca o áudio/iu);
+        assert.match(html, /OpenRouter pode cobrar o consumo diretamente na sua conta/iu);
         assert.match(html, /sem limite semanal/iu);
         assert.match(html, /2\.000 palavras no desktop/iu);
         assert.equal((html.match(/id="download"/gu) ?? []).length, 1);
@@ -273,6 +274,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
         assert.match(privacy.body, /Sua voz fica no seu Mac/u);
         assert.match(privacy.body, /não envia áudio/u);
         assert.match(privacy.body, /OpenRouter\/TypeSafe \(JEV\)/u);
+        assert.match(privacy.body, /não recebe nem subsidia esse valor/u);
         assert.match(privacy.body, /4096 bytes/u);
         assert.match(privacy.body, /intervalo mínimo de 500 ms/u);
         assert.match(privacy.body, /avalia durante o ditado/u);
@@ -290,6 +292,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
         assert.match(comparison.body, /Sem limite semanal imposto pelo plano/u);
         assert.match(comparison.body, /Tipo o Wispr\.[\s\S]*Grátis e com JEV\./u);
         assert.match(comparison.body, /Ditado offline; JEV exige conexão/u);
+        assert.match(comparison.body, /OpenRouter pode cobrar esse consumo diretamente/u);
         assert.doesNotMatch(comparison.body, /Só no download inicial do modelo/u);
         assert.match(comparison.body, /Resenha é um projeto independente/u);
         assert.match(comparison.body, /wisprflow\.ai\/pricing/u);

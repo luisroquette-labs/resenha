@@ -1,4 +1,4 @@
-# Resenha 1.1 — ficha de submissão
+# Resenha 1.1.1 — ficha de submissão
 
 ## Identidade
 
@@ -7,8 +7,8 @@
 - Bundle ID: `br.com.luisroquette.Resenha`
 - SKU: `resenha-macos-1`
 - Plataforma: macOS
-- Versão: `1.1.0`
-- Build: `20261028`
+- Versão: `1.1.1`
+- Build: `20261029`
 - Preço: grátis
 - Disponibilidade: todos os territórios elegíveis
 - Lançamento: manual após aprovação
@@ -22,7 +22,7 @@
 - Classificação etária esperada: 4+
 - Questionário: nenhuma ocorrência para violência, sexualidade, drogas, linguagem ofensiva, medo, jogos de azar, conteúdo médico ou conteúdo irrestrito da web
 - Controles no app, chat, publicidade e conteúdo gerado pelo usuário: não
-- Compras no app, assinatura e login: não
+- Compras no app, assinatura e login do Resenha: não. O JEV opcional aceita somente uma chave OpenRouter preexistente, sem link de compra; o provedor pode cobrar essa conta diretamente
 
 ## Privacidade e conformidade
 
@@ -32,13 +32,13 @@
 - Criptografia não isenta: não; somente TLS fornecido pelo sistema para baixar o modelo e consultar o JEV opcional
 - Conteúdo de terceiros: não exibe catálogo ou mídia de terceiros; whisper.cpp e o modelo Whisper são componentes locais cobertos pelas licenças documentadas em `THIRD_PARTY_NOTICES.md`
 - IDFA, analytics, crash SDK e logging remoto: ausentes
-- Política: https://luisroquette.github.io/resenha/privacy/
+- Política: https://luisroquette-labs.github.io/resenha/privacy/
 
 ## URLs e contato de revisão
 
-- Marketing: https://luisroquette.github.io/resenha/
-- Suporte: https://github.com/luisroquette/resenha/issues
-- Código-fonte: https://github.com/luisroquette/resenha
+- Marketing: https://luisroquette-labs.github.io/resenha/
+- Suporte: https://github.com/luisroquette-labs/resenha/issues
+- Código-fonte: https://github.com/luisroquette-labs/resenha
 - Contato, telefone e e-mail de revisão: preencher com os dados verificados da conta, sem publicar no repositório
 
 ## Ativos

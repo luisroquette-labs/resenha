@@ -2,7 +2,7 @@
 
 > Arquivo histórico: a distribuição pela Mac App Store foi substituída pela distribuição direta em 03/10/2026. Estas notas não descrevem o bundle atual.
 
-Resenha é um app de barra de menus. Não há conta, compras ou conteúdo pago.
+Resenha é um app de barra de menus. Não há conta, compra ou conteúdo pago pelo Resenha.
 
 ## Fluxo principal
 
@@ -28,6 +28,9 @@ frase transcrita e alternativas de exemplos locais pertinentes. Histórico,
 clipboard e conteúdo do app de destino não são enviados. Revogar remove a chave
 pessoal e preserva o ditado local. Como a chave autentica a conta do provedor,
 o conteúdo enviado é declarado como vinculado ao usuário no manifesto de privacidade.
+O OpenRouter pode cobrar o consumo diretamente nessa conta. O Resenha não vende,
+recebe ou subsidia créditos, não oferece link de compra e funciona integralmente
+no modo local sem a chave.
 
 ## Sandbox
 
