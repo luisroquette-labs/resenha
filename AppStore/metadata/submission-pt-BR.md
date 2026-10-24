@@ -1,4 +1,4 @@
-# Resenha 1.0 — ficha de submissão
+# Resenha 1.1 — ficha de submissão
 
 ## Identidade
 
@@ -7,8 +7,8 @@
 - Bundle ID: `br.com.luisroquette.Resenha`
 - SKU: `resenha-macos-1`
 - Plataforma: macOS
-- Versão: `1.0.0`
-- Build: `1`
+- Versão: `1.1.0`
+- Build: `20261028`
 - Preço: grátis
 - Disponibilidade: todos os territórios elegíveis
 - Lançamento: manual após aprovação
@@ -26,10 +26,10 @@
 
 ## Privacidade e conformidade
 
-- App Privacy: `Data Not Collected`
+- App Privacy: `Other User Content`, vinculado ao usuário, usado somente para funcionalidade do app
 - Tracking: não
-- Áudio e transcrições enviados: não
-- Criptografia não isenta: não; somente TLS fornecido pelo sistema para baixar o modelo
+- Áudio enviado: não. Texto transcrito e alternativas locais: somente após consentimento explícito para o JEV
+- Criptografia não isenta: não; somente TLS fornecido pelo sistema para baixar o modelo e consultar o JEV opcional
 - Conteúdo de terceiros: não exibe catálogo ou mídia de terceiros; whisper.cpp e o modelo Whisper são componentes locais cobertos pelas licenças documentadas em `THIRD_PARTY_NOTICES.md`
 - IDFA, analytics, crash SDK e logging remoto: ausentes
 - Política: https://luisroquette.github.io/resenha/privacy/

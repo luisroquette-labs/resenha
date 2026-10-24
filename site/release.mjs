@@ -1,4 +1,4 @@
-import { openDownloadGate } from './download-gate.mjs?v=20261004-2';
+import { openDownloadGate } from './download-gate.mjs?v=20261024-1';
 
 const copy = Object.freeze({
   macos: { label: 'Download em preparação', ready: 'Baixar para macOS', reason: 'Ainda não há um instalador público verificado.' },
@@ -7,17 +7,17 @@ const copy = Object.freeze({
 });
 
 export const releaseState = Object.freeze({
-  macos: Object.freeze({ state: 'published', platform: 'macos', version: '1.0.0',
+  macos: Object.freeze({ state: 'published', platform: 'macos', version: '1.1.0',
     architecture: 'Apple Silicon (arm64)', minimumOS: 'macOS 14+',
-    url: 'https://github.com/luisroquette/resenha/releases/download/v1.0.0/Resenha-1.0.0-arm64.dmg',
+    url: 'https://github.com/luisroquette-labs/resenha/releases/download/v1.1.0/Resenha-1.1.0-arm64.dmg',
     evidence: Object.freeze({ channel: 'macos',
-      url: 'https://github.com/luisroquette/resenha/releases/download/v1.0.0/Resenha-1.0.0-arm64.dmg',
-      verifiedAt: '2026-10-04T00:35:16Z', artifact: Object.freeze({ platform: 'macos', version: '1.0.0',
-        sha256: '9fc0728419c8c2ca4feb0631667a4ce8cdf88cfd894c821b3f82b98533056985',
-        notarizationId: 'e3471859-6fe0-4166-8c6e-bcb723afdab3', notarizationStatus: 'Accepted' }) }) }),
-  source: Object.freeze({ state: 'published', url: 'https://github.com/luisroquette/resenha',
-    evidence: Object.freeze({ channel: 'source', url: 'https://github.com/luisroquette/resenha',
-      verifiedAt: '2026-10-03T02:30:00Z' }) }),
+      url: 'https://github.com/luisroquette-labs/resenha/releases/download/v1.1.0/Resenha-1.1.0-arm64.dmg',
+      verifiedAt: '2026-10-24T12:05:43Z', artifact: Object.freeze({ platform: 'macos', version: '1.1.0',
+        sha256: '9d794f62b79ff6a786480872866832770c9bbaab4ea2a06458cc219784ffa0dc',
+        notarizationId: '5cda153b-313f-4474-9059-5c3d98510137', notarizationStatus: 'Accepted' }) }) }),
+  source: Object.freeze({ state: 'published', url: 'https://github.com/luisroquette-labs/resenha',
+    evidence: Object.freeze({ channel: 'source', url: 'https://github.com/luisroquette-labs/resenha',
+      verifiedAt: '2026-10-24T12:05:43Z' }) }),
   store: Object.freeze({ state: 'planned', url: null, evidence: null }),
 });
 
