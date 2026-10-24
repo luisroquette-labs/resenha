@@ -1,6 +1,10 @@
 import AppKit
 import SwiftUI
 
+private final class InteractiveFloatingPanel: NSPanel {
+    override var canBecomeKey: Bool { true }
+}
+
 struct PanelDismissal {
     private(set) var generation: UInt = 0
     private(set) var deadline: TimeInterval?
@@ -30,6 +34,7 @@ final class FloatingPanelController: NSObject {
     private(set) var selectedScreenID: UInt32?
     var onFinishRecording: (() -> Void)?
     var isVisible: Bool { panel.isVisible }
+    var acceptsRecordingInteraction: Bool { panel.canBecomeKey && !panel.ignoresMouseEvents }
     var status: FloatingStatus { model.status }
     var frame: CGRect { panel.frame }
     var recordingMeter: RecordingMeter { model.recording }
@@ -105,7 +110,7 @@ final class FloatingPanelController: NSObject {
     }
 
     private func makePanel() -> NSPanel {
-        let panel = NSPanel(
+        let panel = InteractiveFloatingPanel(
             contentRect: NSRect(x: 0, y: 0, width: 280, height: 64),
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
@@ -117,6 +122,7 @@ final class FloatingPanelController: NSObject {
         panel.level = .floating
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.hidesOnDeactivate = false
+        panel.becomesKeyOnlyIfNeeded = true
         panel.ignoresMouseEvents = true
         panel.isReleasedWhenClosed = false
         let finishRecording: (() -> Void)? = onFinishRecording == nil ? nil : { [weak self] in

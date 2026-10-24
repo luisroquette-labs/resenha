@@ -1018,11 +1018,21 @@ final class WhisperKeyTests: XCTestCase {
         coordinator.cancel()
         coordinator.transition(to: .recording)
         app.menuWillOpen(root)
-        app.handleHotkeyRelease()
+        app.finishRecordingFromMenu()
         XCTAssertNotEqual(coordinator.phase, .recording, "Even a controlled recording without an audio file must finish or fail")
         XCTAssertFalse(app.interaction.isPressed)
         app.menuDidClose(root)
         coordinator.cancel()
+    }
+
+    @MainActor
+    func testStoreRecordingHUDAcceptsFinishClicks() {
+        let panel = FloatingPanelController()
+        panel.onFinishRecording = {}
+        panel.show(.listening)
+        defer { panel.hide() }
+
+        XCTAssertTrue(panel.acceptsRecordingInteraction)
     }
 
     @MainActor

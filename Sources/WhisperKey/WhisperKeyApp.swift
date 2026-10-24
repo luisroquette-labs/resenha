@@ -179,6 +179,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         finishRecordingSession()
     }
 
+    @objc func finishRecordingFromMenu() {
+        finishRecordingSession()
+    }
+
     func handleRecordingDeadline() {
         finishRecordingSession()
     }

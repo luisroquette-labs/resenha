@@ -34,6 +34,7 @@ final class NativeMenuController {
     private var detailsMenuItem: NSMenuItem!
     private var enableMenuItem: NSMenuItem!
     private var instructionMenuItem: NSMenuItem!
+    private var finishRecordingMenuItem: NSMenuItem!
     private var recentMenuItem: NSMenuItem!
     private var languageMenuItem: NSMenuItem!
     private var renderedSnapshot: PermissionSnapshot?
@@ -55,6 +56,8 @@ final class NativeMenuController {
         instructionMenuItem?.title = ResenhaDistributionChannel.current.usesSandboxedTextService
             ? "Pressione \(ResenhaServiceShortcut.displayName); clique em Concluir"
             : "Segure \(ResenhaServiceShortcut.displayName) para ditar"
+        finishRecordingMenuItem?.isHidden = !isRecording
+        finishRecordingMenuItem?.isEnabled = isRecording
         statusItem?.button?.toolTip = presentation.accessibleStatus
         statusItem?.button?.setAccessibilityLabel(presentation.accessibleStatus)
         enableMenuItem?.isEnabled = !snapshot.isReady && !isRequestingPermission
@@ -90,6 +93,15 @@ final class NativeMenuController {
         statusMenuItem.isEnabled = false
         instructionMenuItem = menu.addItem(withTitle: "Segure seu atalho para ditar", action: nil, keyEquivalent: "")
         instructionMenuItem.isEnabled = false
+        finishRecordingMenuItem = menu.addItem(
+            withTitle: "Concluir gravação",
+            action: #selector(AppDelegate.finishRecordingFromMenu),
+            keyEquivalent: ""
+        )
+        finishRecordingMenuItem.target = delegate
+        finishRecordingMenuItem.image = menuSymbol("stop.circle.fill")
+        finishRecordingMenuItem.isEnabled = false
+        finishRecordingMenuItem.isHidden = true
         languageMenuItem = menu.addItem(withTitle: "Idioma", action: nil, keyEquivalent: "")
         languageMenuItem.image = menuSymbol("globe")
         languageMenuItem.submenu = makeLanguageMenu(selected: .portuguese)
