@@ -73,6 +73,6 @@ hdiutil create \
 codesign --force --sign "$signing_hash" --timestamp "$dmg"
 
 "$project_root/Scripts/validate-release-dmg.sh" "$dmg" --before-notarization
-shasum -a 256 "$dmg" > "$dmg.sha256"
+(cd "$output_root" && shasum -a 256 "${dmg:t}" > "${dmg:t}.sha256")
 print "DMG assinado: $dmg"
 print "Próximo: Scripts/notarize-release-dmg.sh '$dmg'"

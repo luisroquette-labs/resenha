@@ -118,6 +118,11 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
       `import(${JSON.stringify(new URL('../site/download-gate.mjs', import.meta.url).href)}).then(() => process.stdout.write('ok'))`],
     { encoding: 'utf8', timeout: 5000 }), /^ok$/u);
   });
+  test('release checksum manifest uses a portable artifact filename', async () => {
+    const script = await readFile(new URL('./build-release-dmg.sh', import.meta.url), 'utf8');
+    assert.match(script, /shasum -a 256 "\$\{dmg:t\}" > "\$\{dmg:t\}\.sha256"/u);
+    assert.doesNotMatch(script, /shasum -a 256 "\$dmg" > "\$dmg\.sha256"/u);
+  });
   test('Consent Mode v2 denies analytics and all advertising signals by default', () => {
     const denied = consentState(false);
     assert.equal(denied.analytics_storage, 'denied');
