@@ -1,7 +1,7 @@
 <Window x:Class="Resenha.Windows.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Resenha — Ajustes" Width="700" Height="590" MinWidth="620" MinHeight="520"
+        Title="Resenha — Ajustes" Width="700" Height="760" MinWidth="620" MinHeight="620"
         WindowStartupLocation="CenterScreen" Icon="Assets/Resenha.ico">
     <Grid Margin="34">
         <Grid.RowDefinitions>
@@ -56,9 +56,40 @@
             </Grid>
             <Border Background="{StaticResource SageSoft}" CornerRadius="12" Padding="16" Margin="0,24,0,0">
                 <StackPanel>
-                    <TextBlock Text="100% local" FontWeight="Bold" FontSize="15" />
-                    <TextBlock Text="O áudio e a transcrição ficam neste computador. O último texto permanece apenas na memória e na área de transferência."
+                    <TextBlock Text="Ditado local" FontWeight="Bold" FontSize="15" />
+                    <TextBlock Text="O áudio nunca sai deste computador. Sem o JEV opcional, a transcrição também permanece local. O último texto fica apenas na memória e na área de transferência."
                                TextWrapping="Wrap" Margin="0,5,0,0" Foreground="{StaticResource MutedInk}" />
+                </StackPanel>
+            </Border>
+            <TextBlock Text="JEV CONTEXTUAL — OPCIONAL" Foreground="{StaticResource Sage}"
+                       FontWeight="SemiBold" FontSize="11" Margin="0,24,0,0" />
+            <Border Background="{StaticResource Paper}" BorderBrush="{StaticResource Rule}"
+                    BorderThickness="1" CornerRadius="12" Padding="16" Margin="0,8,0,0">
+                <StackPanel>
+                    <CheckBox Content="Usar JEV para escolher palavras pelo contexto"
+                              IsChecked="{Binding ContextualEnabled}" FontWeight="SemiBold" />
+                    <TextBlock Text="O ditado local funciona sem esta opção. Quando ativada, somente a frase transcrita e alternativas do seu vocabulário são enviadas ao OpenRouter/TypeSafe — nunca áudio."
+                               TextWrapping="Wrap" Margin="0,8,0,0" Foreground="{StaticResource MutedInk}" />
+                    <TextBlock Text="Você usa sua própria chave. O OpenRouter pode cobrar diretamente sua conta; o Resenha não recebe nem subsidia esse valor."
+                               TextWrapping="Wrap" Margin="0,6,0,0" Foreground="{StaticResource MutedInk}" />
+                    <TextBlock Text="VOCABULÁRIO PESSOAL" Foreground="{StaticResource Sage}"
+                               FontWeight="SemiBold" FontSize="11" Margin="0,16,0,0" />
+                    <TextBox Text="{Binding PersonalVocabulary, UpdateSourceTrigger=PropertyChanged}"
+                             AcceptsReturn="True" MinHeight="62" MaxLength="4096" TextWrapping="Wrap"
+                             Margin="0,6,0,0" AutomationProperties.Name="Vocabulário pessoal" />
+                    <TextBlock Text="Uma palavra ou nome por linha. O JEV decide por contexto; nada vira substituição global."
+                               TextWrapping="Wrap" Margin="0,5,0,0" Foreground="{StaticResource MutedInk}" FontSize="12" />
+                    <TextBlock Text="CHAVE OPENROUTER" Foreground="{StaticResource Sage}"
+                               FontWeight="SemiBold" FontSize="11" Margin="0,14,0,0" />
+                    <Grid Margin="0,6,0,0">
+                        <Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
+                        <PasswordBox x:Name="OpenRouterKey" PasswordChanged="OpenRouterKey_PasswordChanged"
+                                     MaxLength="256" AutomationProperties.Name="Chave pessoal do OpenRouter" />
+                        <Button Grid.Column="1" Content="Revogar" Click="RevokeJev_Click" Margin="10,0,0,0"
+                                Background="Transparent" Foreground="{StaticResource Ink}" />
+                    </Grid>
+                    <TextBlock Text="{Binding JevStatus}" Margin="0,7,0,0"
+                               Foreground="{StaticResource MutedInk}" FontSize="12" />
                 </StackPanel>
             </Border>
         </StackPanel>

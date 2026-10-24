@@ -24,7 +24,7 @@ public sealed class ContractTests
         Assert.AreEqual(ShortcutModifiers.LeftControl | ShortcutModifiers.LeftAlt, restored.Shortcut.Modifiers);
         Assert.IsFalse(restored.Shortcut.Modifiers.HasFlag(ShortcutModifiers.RightAlt));
         using var document = JsonDocument.Parse(json);
-        CollectionAssert.AreEquivalent(new[] { "schemaVersion", "shortcut", "microphoneEndpointId", "language" }, document.RootElement.EnumerateObject().Select(property => property.Name).ToArray());
+        CollectionAssert.AreEquivalent(new[] { "schemaVersion", "shortcut", "microphoneEndpointId", "language", "contextualEnabled", "personalVocabulary" }, document.RootElement.EnumerateObject().Select(property => property.Name).ToArray());
     }
 
     [TestMethod]

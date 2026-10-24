@@ -82,8 +82,11 @@ public sealed class PreferencesStore
 
     public static bool IsValid(ProductPreferences? value) => value is not null
         && value.SchemaVersion == 1
+        && value.MicrophoneEndpointId is not null
         && (value.MicrophoneEndpointId.Length == 0 || !string.IsNullOrWhiteSpace(value.MicrophoneEndpointId))
         && value.MicrophoneEndpointId.Length <= 2048
+        && value.PersonalVocabulary is not null
+        && PersonalVocabulary.IsValid(value.PersonalVocabulary)
         && Enum.IsDefined(value.Language)
         && ShortcutPolicy.Validate(value.Shortcut) == ErrorCode.None;
 

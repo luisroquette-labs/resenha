@@ -107,7 +107,15 @@ public sealed record ProductPreferences(
     [property: JsonPropertyName("schemaVersion")] int SchemaVersion,
     [property: JsonPropertyName("shortcut")] Shortcut Shortcut,
     [property: JsonPropertyName("microphoneEndpointId")] string MicrophoneEndpointId,
-    [property: JsonPropertyName("language")] DictationLanguage Language);
+    [property: JsonPropertyName("language")] DictationLanguage Language,
+    [property: JsonPropertyName("contextualEnabled")] bool ContextualEnabled = false,
+    [property: JsonPropertyName("personalVocabulary")] string PersonalVocabulary = "");
+
+public interface IContextualTextResolver
+{
+    ValueTask<string> ResolveAsync(AttemptId attempt, string text, ProductPreferences preferences,
+        MonotonicTimestamp deadline, CancellationToken cancellationToken);
+}
 
 public enum RecoveryAction { None, Retry, OpenMicrophoneSettings, ChooseMicrophone, ReconnectMicrophone, InstallMediaFeaturePack, DownloadOrImportModel, CopyAgain, PasteManually, ReopenApplication }
 

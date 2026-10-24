@@ -1,8 +1,9 @@
 # Resenha para Windows — estado de desenvolvimento
 
-O aplicativo WPF já compõe o fluxo local de atalho, WASAPI, whisper.cpp,
-clipboard, inserção, tray, HUD e ajustes. O build x64 e os testes portáteis rodam
-no Mac, mas nenhuma execução nativa do Windows nem release utilizável é afirmada.
+O aplicativo WPF compõe atalho, WASAPI, whisper.cpp local, clipboard, inserção,
+tray, HUD e ajustes. A versão 0.2.0 acrescenta revisão contextual final opcional
+por JEV: vocabulário pessoal, chave BYOK protegida pelo Gerenciador de
+Credenciais e preservação do texto local em qualquer falha. Áudio nunca é enviado.
 
 ## Boundaries
 
@@ -27,20 +28,11 @@ Run structural checks on the Mac from the repository root:
 ~/.local/bin/mac-gate node --test Windows/scaffold.test.mjs
 ```
 
-The current macOS arm64 host has .NET SDK 10.0.401. It completed locked restore,
-cross-target x64 compilation, 145 Core tests and the 43 explicitly categorized
-portable Platform tests on 2026-10-04. An additional 34 Platform tests completed
-in the broad run, while four native tests failed and four Media Foundation cases
-were inconclusive because this is not Windows; those are blockers, not skips.
-Those checks prove the managed dependency graph and portable code compile; they
-do not prove Win32 execution, WPF, hooks, WASAPI, UI Automation, signing or the
-installer. `toolchain-lock.json` therefore leaves the approved native Windows
-host inventory null. Required runtime 10.0.12 is pinned in the lock metadata and
-release evidence, but deliberately not set as a global MSBuild property because
-that collides with the Windows SDK reference pack. NuGet's official MSTest.Sdk
-4.4.0 package declares MSTest 4.4.0 and Microsoft.Testing.Platform 2.4.0. The
-`None` extension profile avoids optional coverage/reporting packages; it does
-not disable test execution.
+The macOS arm64 checks prove the managed dependency graph and portable code;
+they do not prove Win32 execution, WPF, hooks, WASAPI, UI Automation or MSIX
+packaging. The manual Windows release workflow performs those native gates and
+generates the exact Partner Center candidate. The public Store version is 0.1.0;
+0.2.0 remains a candidate until Microsoft accepts its submission.
 
 All seven per-project `packages.lock.json` files were generated with SDK 10.0.401,
 reviewed and accepted by a subsequent locked restore. The approved Windows host

@@ -1,7 +1,7 @@
 # Política de Privacidade do Resenha
 
 **Vigência:** 24 de outubro de 2026
-**Aplicável à versão macOS:** 1.1.1; contrato Windows em atualização
+**Aplicável à versão macOS:** 1.1.1; **Windows:** versão pública 0.1.0 e atualização 0.2.0 em preparação
 
 Resenha é um aplicativo de ditado local para macOS. Não criamos contas, não
 operamos um backend do produto e não exibimos anúncios. O áudio permanece no
@@ -87,16 +87,26 @@ usuário ao concluir um ditado.
 
 ## Windows — contrato de privacidade do MVP
 
-Status Windows: implementação e verificação física pendentes; download
-indisponível. Esta seção define o comportamento exigido por
-[SPEC-023](specs/23-windows-mvp.md), não afirma uma versão Windows publicada.
+O Resenha para Windows 0.1.0 está publicado na Microsoft Store. O candidato
+0.2.0 adiciona revisão contextual JEV opcional; o fluxo local continua disponível
+sem conta, chave ou conexão depois do download do modelo.
 
 O microfone selecionado usa WASAPI local somente no intervalo em que o atalho
 está pressionado. Soltar, cancelar, bloquear/suspender ou perder o dispositivo
 encerra a tentativa. O whisper.cpp e o modelo executam no computador; áudio e
-transcrições não são enviados ao site, ao formulário ou a APIs. Não há conta,
+transcrições não são enviados ao site nem ao formulário. Não há conta,
 backend do aplicativo, telemetria, analytics, logs de áudio/texto ou histórico
 de transcrições no disco. O histórico opcional do macOS não se aplica ao Windows.
+
+Quando o usuário ativa o JEV e fornece sua própria chave OpenRouter, o Windows
+envia ao endpoint fixo do OpenRouter somente a frase final já transcrita e até
+três alternativas derivadas do vocabulário pessoal. Nunca envia áudio,
+clipboard, conteúdo do aplicativo de destino, histórico ou o vocabulário
+completo. A resposta deve chegar em até 900 ms e superar os limites de confiança;
+erro, atraso ou ambiguidade preservam a transcrição local. A chave fica no
+Gerenciador de Credenciais do Windows e não entra em `settings.json`. O usuário
+pode removê-la nos Ajustes. OpenRouter/TypeSafe podem medir, cobrar e reter dados
+conforme suas políticas; o Resenha não recebe nem subsidia o valor.
 
 ### Modelo e dados locais
 
@@ -110,7 +120,7 @@ código executável em runtime. Depois da aquisição, o ditado deve funcionar o
 | Dados Windows | Local e duração exigidos |
 | --- | --- |
 | Aplicativo | `%LOCALAPPDATA%\Programs\Resenha\`, instalação por usuário |
-| Preferências | `%LOCALAPPDATA%\Resenha\settings.json`: versão de schema, atalho, endpoint de microfone e idioma; sem texto ditado |
+| Preferências | `%LOCALAPPDATA%\Resenha\settings.json`: versão de schema, atalho, endpoint de microfone, idioma, ativação do JEV e vocabulário pessoal; sem texto ditado nem chave |
 | Modelo | `%LOCALAPPDATA%\Resenha\models\ggml-small-q5_1.bin`, persistente e validado |
 | Áudio e saída transitória | `%LOCALAPPDATA%\Resenha\sessions\<attempt-guid>\input.wav` e `result.txt`, apagados em sucesso, erro, cancelamento, saída e limpeza de sessões abandonadas no próximo início |
 | Texto de recuperação | Último texto completo somente em RAM até substituição, limpeza explícita ou saída; pode permanecer no clipboard do Windows |

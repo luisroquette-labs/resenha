@@ -10,12 +10,14 @@ public sealed class ProductViewModel : INotifyPropertyChanged, IDisposable
     private readonly DictationCoordinator coordinator;
     private readonly PreferencesStore preferences;
     private readonly ModelStore models;
+    private readonly OpenRouterCredentialStore credentials;
     private readonly Func<AttemptId, CancellationToken,
         ValueTask<Outcome<IReadOnlyList<MicrophoneEndpoint>>>> enumerateMicrophones;
     private readonly Func<ProductPreferences, CancellationToken, ValueTask<Outcome<Unit>>> applyPreferences;
     private readonly SynchronizationContext ui;
     private ProductPreferences value;
     private string notice = "Pronto para ouvir";
+    private string openRouterKey = string.Empty;
     private bool disposed;
 
     public ProductViewModel(DictationCoordinator coordinator, PreferencesStore preferences, ModelStore models,
@@ -23,6 +25,7 @@ public sealed class ProductViewModel : INotifyPropertyChanged, IDisposable
         Func<AttemptId, CancellationToken,
             ValueTask<Outcome<IReadOnlyList<MicrophoneEndpoint>>>> enumerateMicrophones,
         Func<ProductPreferences, CancellationToken, ValueTask<Outcome<Unit>>> applyPreferences,
+        OpenRouterCredentialStore credentials,
         SynchronizationContext? ui = null)
     {
         this.coordinator = coordinator;
@@ -30,6 +33,7 @@ public sealed class ProductViewModel : INotifyPropertyChanged, IDisposable
         this.models = models;
         this.enumerateMicrophones = enumerateMicrophones;
         this.applyPreferences = applyPreferences;
+        this.credentials = credentials;
         value = initial;
         Microphones = microphones;
         if (ShortcutChoices.All(choice => choice.Shortcut != initial.Shortcut))
@@ -73,6 +77,24 @@ public sealed class ProductViewModel : INotifyPropertyChanged, IDisposable
         set { if (value is not null && this.value.Shortcut != value.Shortcut) { this.value = this.value with { Shortcut = value.Shortcut }; Changed(); } }
     }
     public string ShortcutLabel => SelectedShortcut.Label;
+    public bool ContextualEnabled
+    {
+        get => value.ContextualEnabled;
+        set { if (this.value.ContextualEnabled != value) { this.value = this.value with { ContextualEnabled = value }; Changed(); Changed(nameof(JevStatus)); } }
+    }
+    public string PersonalVocabulary
+    {
+        get => value.PersonalVocabulary;
+        set { if (this.value.PersonalVocabulary != value) { this.value = this.value with { PersonalVocabulary = value }; Changed(); } }
+    }
+    public string OpenRouterKey
+    {
+        private get => openRouterKey;
+        set { if (openRouterKey != value) { openRouterKey = value; Changed(nameof(JevStatus)); } }
+    }
+    public string JevStatus => !ContextualEnabled ? "Desligado — o ditado continua 100% local"
+        : credentials.HasCredential || OpenRouterCredentialStore.IsValid(OpenRouterKey)
+            ? "Ativo com sua chave pessoal" : "Informe uma chave OpenRouter válida para ativar";
     public string Notice { get => notice; private set { if (notice != value) { notice = value; Changed(); } } }
     public bool HasLastResult => coordinator.Status.HasLastResult;
     public bool IsRecording => coordinator.Status.State == DictationState.Recording;
@@ -121,6 +143,18 @@ public sealed class ProductViewModel : INotifyPropertyChanged, IDisposable
 
     public async ValueTask<Outcome<Unit>> SaveAsync(CancellationToken cancellationToken = default)
     {
+        if (value.ContextualEnabled && !credentials.HasCredential
+            && !OpenRouterCredentialStore.IsValid(OpenRouterKey))
+        {
+            Notice = "Informe uma chave OpenRouter válida ou desligue o JEV.";
+            return Outcome<Unit>.Failed(AttemptId.New(), ErrorCode.NotReady);
+        }
+        if (OpenRouterCredentialStore.IsValid(OpenRouterKey) && !credentials.Save(OpenRouterKey))
+        {
+            Notice = "Não foi possível proteger a chave no Gerenciador de Credenciais.";
+            return Outcome<Unit>.Failed(AttemptId.New(), ErrorCode.StorageUnsafe);
+        }
+        OpenRouterKey = string.Empty;
         var result = await applyPreferences(value, cancellationToken);
         if (result.IsSuccess)
         {
@@ -129,6 +163,23 @@ public sealed class ProductViewModel : INotifyPropertyChanged, IDisposable
         Notice = result.IsSuccess ? "Preferências salvas" : "Não foi possível salvar as preferências";
         if (result.IsSuccess) { await coordinator.AcknowledgeFailureAsync(); }
         return result;
+    }
+
+    public async ValueTask RevokeJevAsync(CancellationToken cancellationToken = default)
+    {
+        if (!credentials.Delete())
+        {
+            Notice = "Não foi possível remover a chave. Tente novamente.";
+            return;
+        }
+        OpenRouterKey = string.Empty;
+        value = value with { ContextualEnabled = false };
+        Changed(nameof(ContextualEnabled));
+        Changed(nameof(JevStatus));
+        var saved = await preferences.SaveAsync(AttemptId.New(), value, cancellationToken);
+        Notice = saved.IsSuccess
+            ? "Chave removida. O Resenha voltou ao modo local."
+            : "Chave removida, mas não foi possível salvar o modo local.";
     }
 
     public async ValueTask<Outcome<Unit>> DownloadModelAsync(CancellationToken cancellationToken = default)

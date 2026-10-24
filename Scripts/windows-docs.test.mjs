@@ -135,8 +135,10 @@ test('release templates have no prefilled successes and bind exact bytes to ever
 
 test('privacy and required-form contract preserve owned data and separate macOS history', () => {
   requires(docs['docs/PRIVACY.md'], [
-    /não afirma uma versão Windows publicada/, /WASAPI local/, /offline/,
+    /publicado na Microsoft Store/, /WASAPI local/, /offline/,
     /histórico opcional do macOS não se aplica ao Windows/,
+    /somente a frase final já transcrita/, /Nunca envia áudio/,
+    /Gerenciador de Credenciais do Windows/, /não recebe nem subsidia/,
     /somente em RAM/, /Copiar novamente/, /reparse points/,
     /sucesso, erro, cancelamento, saída/, /Não prometemos apagamento/,
     /Remover modelo e configurações, selecionado por/, /arquivo original importado/,

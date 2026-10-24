@@ -17,6 +17,7 @@ public partial class App : System.Windows.Application
     private TrayController? tray;
     private SettingsWindow? settings;
     private StatusWindow? status;
+    private JevContextualResolver? contextual;
     private bool shuttingDown;
 
     protected override async void OnStartup(StartupEventArgs e)
@@ -55,7 +56,10 @@ public partial class App : System.Windows.Application
             var clipboard = new ClipboardService();
             var injector = new TextInjector(target, clipboard, clock);
             var transcriber = new WhisperCliTranscriber(AppContext.BaseDirectory, clock);
-            coordinator = new(clock, recorder, models, transcriber, target, clipboard, injector, shortcut);
+            var credentials = new OpenRouterCredentialStore();
+            contextual = new(clock, credentials.Read);
+            coordinator = new(clock, recorder, models, transcriber, target, clipboard, injector,
+                shortcut, contextual);
 
             var preferenceStore = new PreferencesStore(localData);
             var microphones = await recorder.EnumerateAsync(AttemptId.New(), default);
@@ -66,7 +70,7 @@ public partial class App : System.Windows.Application
                 ShortcutPolicy.Default, available.FirstOrDefault(item => item.IsDefault)?.Id
                     ?? available.FirstOrDefault()?.Id ?? string.Empty, DictationLanguage.Pt);
             model = new(coordinator, preferenceStore, models, initial, available,
-                recorder.EnumerateAsync, ApplyPreferencesAsync);
+                recorder.EnumerateAsync, ApplyPreferencesAsync, credentials);
             settings = new(model);
             settings.Closing += SettingsClosing;
             status = new(model);
@@ -83,7 +87,11 @@ public partial class App : System.Windows.Application
                 var applied = await ApplyPreferencesAsync(initial, default);
                 if (!applied.IsSuccess) { firstRun = true; }
             }
-            if (firstRun) { OpenSettings(); }
+            if (firstRun)
+            {
+                new FirstRunWindow().ShowDialog();
+                OpenSettings();
+            }
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException
             or InvalidOperationException or PlatformNotSupportedException)
@@ -193,6 +201,7 @@ public partial class App : System.Windows.Application
         if (shortcut is not null) { await shortcut.DisposeAsync(); }
         if (model is not null) { await model.ClearLastResultAsync(); }
         model?.Dispose();
+        contextual?.Dispose();
         tray?.Dispose();
         status?.Close();
         settings?.Close();

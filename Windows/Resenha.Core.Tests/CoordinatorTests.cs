@@ -49,6 +49,30 @@ public sealed class CoordinatorTests
     }
 
     [TestMethod]
+    public async Task ContextualReviewRunsBeforeClipboardAndFailurePreservesLocalText()
+    {
+        var fixture = new Fixture { Text = "Reservei um rosto." };
+        await using var corrected = fixture.Create(new FakeContextualResolver
+        {
+            OnResolve = (_, _, _, _, _) => ValueTask.FromResult("Reservei um Hostel.")
+        });
+        await RecordAndReleaseAsync(corrected, fixture,
+            Preferences with { ContextualEnabled = true, PersonalVocabulary = "Hostel" });
+        await corrected.WaitForQuiescenceAsync();
+        Assert.AreEqual("Reservei um Hostel.", fixture.LastCopiedText);
+
+        var fallbackFixture = new Fixture { Text = "Meu rosto ficou vermelho." };
+        await using var fallback = fallbackFixture.Create(new FakeContextualResolver
+        {
+            OnResolve = (_, _, _, _, _) => throw new IOException("fixture")
+        });
+        await RecordAndReleaseAsync(fallback, fallbackFixture,
+            Preferences with { ContextualEnabled = true, PersonalVocabulary = "Hostel" });
+        await fallback.WaitForQuiescenceAsync();
+        Assert.AreEqual("Meu rosto ficou vermelho.", fallbackFixture.LastCopiedText);
+    }
+
+    [TestMethod]
     public async Task SilenceTouchesNeitherClipboardNorTarget()
     {
         var fixture = new Fixture { Transcript = TranscriptOutcome.Silence };
@@ -221,11 +245,26 @@ public sealed class CoordinatorTests
         Assert.AreEqual(OutcomeKind.Cancelled, (await coordinator.ClearLastResultAsync(cancellation.Token)).Kind);
     }
 
-    private static async Task RecordAndReleaseAsync(DictationCoordinator coordinator, Fixture fixture)
+    private static async Task RecordAndReleaseAsync(DictationCoordinator coordinator, Fixture fixture,
+        ProductPreferences? preferences = null)
     {
-        await coordinator.HandleShortcutAsync(new(ShortcutEdgeKind.Pressed, new(10)), Preferences);
+        preferences ??= Preferences;
+        await coordinator.HandleShortcutAsync(new(ShortcutEdgeKind.Pressed, new(10)), preferences);
         await fixture.Started.Task.WaitAsync(TimeSpan.FromSeconds(1));
-        await coordinator.HandleShortcutAsync(new(ShortcutEdgeKind.Released, new(20)), Preferences);
+        await coordinator.HandleShortcutAsync(new(ShortcutEdgeKind.Released, new(20)), preferences);
+    }
+
+    private sealed class FakeContextualResolver : IContextualTextResolver
+    {
+        internal Func<AttemptId, string, ProductPreferences, MonotonicTimestamp, CancellationToken,
+            ValueTask<string>> OnResolve
+        { get; init; } =
+            (_, text, _, _, _) => ValueTask.FromResult(text);
+
+        public ValueTask<string> ResolveAsync(AttemptId attempt, string text,
+            ProductPreferences preferences, MonotonicTimestamp deadline,
+            CancellationToken cancellationToken) =>
+            OnResolve(attempt, text, preferences, deadline, cancellationToken);
     }
 
     private sealed class Fixture
@@ -247,10 +286,11 @@ public sealed class CoordinatorTests
         internal int Insertions { get; private set; }
         internal int Cancellations { get; private set; }
         internal int Transcriptions { get; private set; }
+        internal string? LastCopiedText { get; private set; }
         internal TestAudioLease AudioLease { get; private set; } = null!;
         internal TestModelLease ModelLease { get; private set; } = null!;
 
-        internal DictationCoordinator Create()
+        internal DictationCoordinator Create(IContextualTextResolver? contextual = null)
         {
             var clock = new ManualClock();
             var audio = new FakeAudioRecorder
@@ -316,6 +356,7 @@ public sealed class CoordinatorTests
                 {
                     events?.Add("copy");
                     Copies++;
+                    LastCopiedText = text;
                     CopyEntered.TrySetResult();
                     return ClipboardOverride is null
                         ? Outcome<ClipboardToken>.Success(attempt, new(attempt, (uint)Copies, new string('a', 64)))
@@ -332,7 +373,8 @@ public sealed class CoordinatorTests
                         new(InjectionDisposition.Dispatched, ErrorCode.None)));
                 }
             };
-            return new(clock, audio, model, transcriber, target, clipboard, injector);
+            return new(clock, audio, model, transcriber, target, clipboard, injector,
+                contextual: contextual);
         }
 
         private static TargetSnapshot Target(AttemptId attempt, MonotonicTimestamp at) =>

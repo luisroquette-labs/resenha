@@ -8,7 +8,7 @@
   <Properties>
     <DisplayName>Resenha</DisplayName>
     <PublisherDisplayName>__PUBLISHER_DISPLAY_NAME__</PublisherDisplayName>
-    <Description>Ditado local, gratuito e open source para Windows.</Description>
+    <Description>Ditado local gratuito com revisão contextual JEV opcional.</Description>
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
   <Resources>
@@ -23,7 +23,7 @@
     <Application Id="Resenha" Executable="Resenha.exe" EntryPoint="Windows.FullTrustApplication">
       <uap:VisualElements
         DisplayName="Resenha"
-        Description="Ditado local, gratuito e open source para Windows."
+        Description="Ditado local gratuito com revisão contextual JEV opcional."
         BackgroundColor="transparent"
         Square150x150Logo="Assets\Square150x150Logo.png"
         Square44x44Logo="Assets\Square44x44Logo.png" />

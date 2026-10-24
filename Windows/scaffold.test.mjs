@@ -55,7 +55,7 @@ test('portable Core has no UI, native, network or project/package dependencies',
   const core = read('Resenha.Core/Contracts.cs');
   assert.doesNotMatch(core, /DllImport|LibraryImport|System\.Windows|HttpClient|WebRequest|Process\.Start/);
   const asyncMethods = [...core.matchAll(/ValueTask<[^;]+?\s(\w+Async)\(([^;]+?)\);/g)];
-  assert.equal(asyncMethods.length, 14);
+  assert.equal(asyncMethods.length, 15);
   for (const [, name, parameters] of asyncMethods) {
     assert.match(parameters, /^AttemptId attempt,/, name);
     assert.match(parameters, /CancellationToken cancellationToken$/, name);
@@ -65,7 +65,8 @@ test('portable Core has no UI, native, network or project/package dependencies',
 test('app composition owns one instance, real adapters and bounded local IPC', () => {
   const app = read('Resenha.Windows/App.xaml.cs');
   for (const boundary of ['SingleInstanceCoordinator', 'KeyboardHook', 'WasapiRecorder', 'ModelStore',
-    'TargetBrokerClient', 'ClipboardService', 'TextInjector', 'WhisperCliTranscriber', 'DictationCoordinator']) {
+    'TargetBrokerClient', 'ClipboardService', 'TextInjector', 'WhisperCliTranscriber',
+    'OpenRouterCredentialStore', 'JevContextualResolver', 'DictationCoordinator']) {
     assert.ok(app.includes(boundary), boundary);
   }
   assert.match(app, /PipeOptions\.Asynchronous \| PipeOptions\.CurrentUserOnly/);
@@ -81,6 +82,16 @@ test('app composition owns one instance, real adapters and bounded local IPC', (
   assert.match(client, /PipeOptions\.Asynchronous \| PipeOptions\.CurrentUserOnly/);
   assert.doesNotMatch(`${broker}\n${client}`, /TcpListener|HttpListener|Socket\(/);
   assert.match(read('Resenha.Windows/app.manifest'), /level="asInvoker" uiAccess="false"/);
+  const wizard = read('Resenha.Windows/FirstRunWindow.xaml');
+  assert.match(wizard, /JEV contextual — opcional/u);
+  assert.match(wizard, /áudio nunca sai deste PC/u);
+  assert.match(wizard, /não recebe nem subsidia esse valor/u);
+  const resolver = read('Resenha.Platform/JevContextualResolver.cs');
+  assert.match(resolver, /https:\/\/openrouter\.ai\/api\/alpha\/decisions/u);
+  assert.match(resolver, /typesafe\/jev-1\.14/u);
+  assert.match(resolver, /TimeSpan\.FromMilliseconds\(900\)/u);
+  assert.match(resolver, /MaximumResponseBytes = 64 \* 1024/u);
+  assert.match(read('Resenha.Platform/OpenRouterCredentialStore.cs'), /Resenha\/OpenRouter/u);
 });
 
 test('cross-target evidence is recorded without claiming native Windows validation', () => {

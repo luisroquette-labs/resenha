@@ -9,6 +9,7 @@ public sealed class DictationCoordinator : IAsyncDisposable
     private readonly ITargetProbe targets;
     private readonly IClipboard clipboard;
     private readonly ITextInjector injector;
+    private readonly IContextualTextResolver? contextual;
     private readonly IShortcutAttemptContext? shortcutContext;
     private readonly SemaphoreSlim gate = new(1, 1);
     private readonly object tasksGate = new();
@@ -20,7 +21,8 @@ public sealed class DictationCoordinator : IAsyncDisposable
 
     public DictationCoordinator(IClock clock, IAudioRecorder audio, IModelStore models,
         ITranscriber transcriber, ITargetProbe targets, IClipboard clipboard,
-        ITextInjector injector, IShortcutAttemptContext? shortcutContext = null)
+        ITextInjector injector, IShortcutAttemptContext? shortcutContext = null,
+        IContextualTextResolver? contextual = null)
     {
         this.clock = clock;
         this.audio = audio;
@@ -30,6 +32,7 @@ public sealed class DictationCoordinator : IAsyncDisposable
         this.clipboard = clipboard;
         this.injector = injector;
         this.shortcutContext = shortcutContext;
+        this.contextual = contextual;
     }
 
     public event Action<DictationStatus>? StatusChanged;
@@ -253,6 +256,17 @@ public sealed class DictationCoordinator : IAsyncDisposable
             }
             var text = OutputPolicy.Normalize(transcript.Text);
             if (text is null) { failure = ErrorCode.OutputInvalid; return; }
+            if (contextual is not null && attempt.Preferences.ContextualEnabled)
+            {
+                try
+                {
+                    var resolved = await contextual.ResolveAsync(attempt.Id, text, attempt.Preferences,
+                        clock.GetTimestamp().Add(TimeSpan.FromMilliseconds(900)), attempt.Cancellation.Token)
+                        .ConfigureAwait(false);
+                    text = OutputPolicy.Normalize(resolved) ?? text;
+                }
+                catch (Exception) { }
+            }
             if (!await OwnsAsync(attempt).ConfigureAwait(false)) { return; }
             lastResult = text;
             if (!await PublishIfCurrentAsync(attempt,

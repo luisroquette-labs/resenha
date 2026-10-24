@@ -13,18 +13,18 @@
   "licenseTerms": "MIT License. O código-fonte e os termos completos estão disponíveis no repositório oficial do Resenha.",
   "developedBy": "CF Gauss Serviços Ltda.",
   "copyright": "Copyright 2026 CF Gauss Serviços Ltda.",
-  "restrictedCapabilityJustification": "Resenha é um aplicativo desktop WPF de ditado push-to-talk. runFullTrust é necessário para monitorar a hotkey global, capturar o microfone via WASAPI, executar o whisper.cpp local empacotado, manter o texto no clipboard e enviar um único Ctrl+V ao aplicativo que permaneceu em foco. Não há serviço, driver, elevação, telemetria, conta, backend ou transcrição em nuvem.",
-  "certificationNotes": "Abra o Resenha, escolha PT-BR e aceite o microfone. O primeiro uso baixa explicitamente o modelo multilíngue oficial e valida tamanho e SHA-256; depois o ditado funciona offline. Mantenha Left Ctrl + Left Alt + Space pressionado enquanto fala e solte para transcrever. O texto é copiado antes da tentativa de Ctrl+V. O app não exige login nem chave de API.",
+  "restrictedCapabilityJustification": "Resenha é um aplicativo desktop WPF de ditado push-to-talk. runFullTrust é necessário para monitorar a hotkey global, capturar o microfone via WASAPI, executar o whisper.cpp local empacotado, manter o texto no clipboard e enviar um único Ctrl+V ao aplicativo que permaneceu em foco. Não há serviço, driver, elevação, telemetria, conta ou backend do produto. A revisão contextual JEV é opcional e, somente quando o usuário a ativa com sua própria chave OpenRouter, envia por HTTPS a frase já transcrita e alternativas do vocabulário pessoal; áudio nunca é enviado.",
+  "certificationNotes": "Abra o Resenha, avance pelo guia inicial, escolha PT-BR e aceite o microfone. O primeiro uso baixa explicitamente o modelo multilíngue oficial e valida tamanho e SHA-256; depois o ditado funciona offline. Mantenha Left Ctrl + Left Alt + Space pressionado enquanto fala e solte para transcrever. O texto é copiado antes da tentativa de Ctrl+V. O JEV começa desligado e não é necessário para testar o fluxo local. Para testá-lo, o avaliador pode informar sua própria chave OpenRouter nos Ajustes; somente texto e alternativas são enviados, nunca áudio, e eventuais cobranças são feitas pelo OpenRouter diretamente ao titular da chave.",
   "localizations": {
     "pt-BR": {
-      "shortDescription": "Segure o atalho, fale e solte. O Resenha transcreve no seu próprio PC e coloca o texto onde você estava escrevendo — grátis, open source e sem conta.",
-      "description": "Sua voz, em qualquer campo.\n\nO Resenha transforma fala em texto no Windows sem mandar seu áudio para um servidor. Segure a hotkey configurável, fale e solte: o whisper.cpp transcreve localmente e o texto fica imediatamente no clipboard, com inserção automática quando o campo ativo permitir.\n\nFeito para português do Brasil, inglês e espanhol, inclusive frases que misturam termos como README, benchmark, dashboard e deadline.\n\nPrivacidade simples: o áudio é temporário, a transcrição não vira histórico em disco e não existe conta, anúncio, analytics, backend, assinatura ou chave de API. O modelo de voz é baixado uma vez, com consentimento, e validado antes do uso.\n\nSe outro aplicativo tomar o foco ou bloquear a colagem, seu texto continua no clipboard para você usar com Ctrl+V.\n\nResenha é gratuito e open source.",
+      "shortDescription": "Tipo o Whisper, mas grátis e com JEV opcional: ditado local que usa sua própria chave para escolher palavras pelo contexto.",
+      "description": "Sua voz, em qualquer campo.\n\nO Resenha transforma fala em texto no Windows sem mandar seu áudio para um servidor. Segure a hotkey configurável, fale e solte: o whisper.cpp transcreve localmente e o texto fica imediatamente no clipboard, com inserção automática quando o campo ativo permitir.\n\nO JEV contextual é opcional e começa desligado. Com sua própria chave OpenRouter, ele pode escolher entre a palavra ouvida e termos do seu vocabulário pessoal conforme o sentido da frase — nunca como substituição global. Somente a frase já transcrita e as alternativas são enviadas; áudio nunca sai do computador. O OpenRouter pode cobrar diretamente sua conta, e o Resenha não recebe nem subsidia esse valor.\n\nFeito para português do Brasil, inglês e espanhol. Não existe conta do Resenha, anúncio, analytics, backend ou assinatura. A chave fica protegida no Gerenciador de Credenciais do Windows.\n\nSe a rede, o JEV ou o campo de destino falhar, a transcrição local é preservada no clipboard.\n\nResenha é gratuito e open source.",
       "features": [
         "Push-to-talk com hotkey global configurável",
         "Transcrição local com whisper.cpp",
         "Português, inglês e espanhol com anglicismos",
         "Texto preservado no clipboard antes da inserção",
-        "Sem conta, anúncios, analytics ou backend",
+        "JEV contextual opcional com sua própria chave OpenRouter",
         "Código aberto sob licença MIT"
       ],
       "searchTerms": ["ditado", "voz para texto", "transcrição", "whisper", "produtividade", "microfone", "offline"],
@@ -32,14 +32,14 @@
       "recommendedRequirements": ["Windows 11 x64", "16 GB de RAM", "Microfone de boa qualidade"]
     },
     "en-US": {
-      "shortDescription": "Hold the shortcut, speak, and release. Resenha transcribes on your own PC and puts the text where you were typing — free, open source, and account-free.",
-      "description": "Your voice, in any text field.\n\nResenha turns speech into text on Windows without sending your audio to a server. Hold the configurable hotkey, speak, and release: whisper.cpp transcribes locally and your text is immediately available on the clipboard, with automatic insertion when the active field allows it.\n\nBuilt for Brazilian Portuguese, English, and Spanish, including mixed technical vocabulary such as README, benchmark, dashboard, and deadline.\n\nPrivacy is simple: audio is temporary, transcripts are not stored as disk history, and there are no accounts, ads, analytics, backend, subscriptions, or API keys. The speech model is downloaded once with your consent and verified before use.\n\nIf another app takes focus or blocks paste, your text remains on the clipboard for Ctrl+V.\n\nResenha is free and open source.",
+      "shortDescription": "Like Whisper, but free and with optional JEV: local dictation that uses your own key to choose words by context.",
+      "description": "Your voice, in any text field.\n\nResenha turns speech into text on Windows without sending your audio to a server. Hold the configurable hotkey, speak, and release: whisper.cpp transcribes locally and your text is immediately available on the clipboard, with automatic insertion when the active field allows it.\n\nContextual JEV is optional and starts off. With your own OpenRouter key, it can choose between a heard word and terms from your personal vocabulary based on the sentence — never as a global replacement. Only the transcribed sentence and alternatives are sent; audio never leaves the computer. OpenRouter may bill your account directly, and Resenha neither receives nor subsidizes that charge.\n\nBuilt for Brazilian Portuguese, English, and Spanish. There is no Resenha account, advertising, analytics, backend, or subscription. The key is protected by Windows Credential Manager.\n\nIf the network, JEV, or destination field fails, the local transcript remains on the clipboard.\n\nResenha is free and open source.",
       "features": [
         "Push-to-talk with a configurable global hotkey",
         "Local transcription powered by whisper.cpp",
         "Brazilian Portuguese, English, and Spanish",
         "Text preserved on the clipboard before insertion",
-        "No account, ads, analytics, or backend",
+        "Optional contextual JEV with your own OpenRouter key",
         "Open source under the MIT License"
       ],
       "searchTerms": ["dictation", "speech to text", "transcription", "whisper", "productivity", "microphone", "offline"],
@@ -47,14 +47,14 @@
       "recommendedRequirements": ["Windows 11 x64", "16 GB RAM", "Good-quality microphone"]
     },
     "es-ES": {
-      "shortDescription": "Mantén pulsado el atajo, habla y suelta. Resenha transcribe en tu propio PC y coloca el texto donde escribías: gratis, open source y sin cuenta.",
-      "description": "Tu voz, en cualquier campo de texto.\n\nResenha convierte voz en texto en Windows sin enviar tu audio a un servidor. Mantén pulsado el atajo configurable, habla y suelta: whisper.cpp transcribe localmente y el texto queda inmediatamente en el portapapeles, con inserción automática cuando el campo activo lo permite.\n\nCreado para portugués de Brasil, inglés y español, incluso con vocabulario técnico mixto como README, benchmark, dashboard y deadline.\n\nPrivacidad clara: el audio es temporal, las transcripciones no se guardan como historial en disco y no hay cuenta, anuncios, analytics, backend, suscripción ni clave API. El modelo de voz se descarga una vez con tu consentimiento y se verifica antes de usarlo.\n\nSi otra aplicación toma el foco o bloquea el pegado, el texto permanece en el portapapeles para usarlo con Ctrl+V.\n\nResenha es gratuito y open source.",
+      "shortDescription": "Como Whisper, pero gratis y con JEV opcional: dictado local que usa tu propia clave para elegir palabras según el contexto.",
+      "description": "Tu voz, en cualquier campo de texto.\n\nResenha convierte voz en texto en Windows sin enviar tu audio a un servidor. Mantén pulsado el atajo configurable, habla y suelta: whisper.cpp transcribe localmente y el texto queda inmediatamente en el portapapeles, con inserción automática cuando el campo activo lo permite.\n\nEl JEV contextual es opcional y empieza desactivado. Con tu propia clave OpenRouter, puede elegir entre la palabra oída y términos de tu vocabulario personal según el sentido de la frase, nunca como sustitución global. Solo se envían la frase transcrita y las alternativas; el audio nunca sale del equipo. OpenRouter puede cobrar directamente tu cuenta y Resenha no recibe ni subsidia ese importe.\n\nCreado para portugués de Brasil, inglés y español. No hay cuenta de Resenha, anuncios, analytics, backend ni suscripción. La clave queda protegida en el Administrador de credenciales de Windows.\n\nSi fallan la red, JEV o el campo de destino, la transcripción local permanece en el portapapeles.\n\nResenha es gratuito y open source.",
       "features": [
         "Push-to-talk con atajo global configurable",
         "Transcripción local con whisper.cpp",
         "Portugués de Brasil, inglés y español",
         "Texto preservado en el portapapeles antes de insertarlo",
-        "Sin cuenta, anuncios, analytics ni backend",
+        "JEV contextual opcional con tu propia clave OpenRouter",
         "Código abierto con licencia MIT"
       ],
       "searchTerms": ["dictado", "voz a texto", "transcripción", "whisper", "productividad", "micrófono", "offline"],

@@ -24,6 +24,13 @@ public partial class SettingsWindow : Window
     private async void Download_Click(object sender, RoutedEventArgs e) => await model.DownloadModelAsync();
     private async void RefreshMicrophones_Click(object sender, RoutedEventArgs e) => await model.RefreshMicrophonesAsync();
     private async void Clear_Click(object sender, RoutedEventArgs e) => await model.ClearLastResultAsync();
+    private void OpenRouterKey_PasswordChanged(object sender, RoutedEventArgs e) =>
+        model.OpenRouterKey = OpenRouterKey.Password;
+    private async void RevokeJev_Click(object sender, RoutedEventArgs e)
+    {
+        OpenRouterKey.Clear();
+        await model.RevokeJevAsync();
+    }
 
     private void Capture_Click(object sender, RoutedEventArgs e)
     {
