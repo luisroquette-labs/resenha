@@ -96,7 +96,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
     assert.equal(resolveDestination('source', releaseState.source).active, true);
     assert.equal(resolveDestination('source', releaseState.source).href, 'https://github.com/luisroquette-labs/resenha');
     assert.equal(resolveDestination('macos', releaseState.macos).active, true);
-    assert.match(resolveDestination('macos', releaseState.macos).href, /Resenha-1\.1\.0-arm64\.dmg$/u);
+    assert.match(resolveDestination('macos', releaseState.macos).href, /Resenha-1\.1\.1-arm64\.dmg$/u);
     assert.equal(releaseState.store.url, null);
     assert.equal(releaseState.store.evidence, null);
     assert.equal(resolveDestination('store', releaseState.store).active, false);
@@ -223,6 +223,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
         assert.match(html, /Tipo o Wispr,[\s\S]*mas grátis e com JEV\./iu);
         assert.match(html, /JEV opcional/iu);
         assert.match(html, /nunca o áudio/iu);
+        assert.match(html, /OpenRouter pode cobrar o consumo diretamente na sua conta/iu);
         assert.match(html, /sem limite semanal/iu);
         assert.match(html, /2\.000 palavras no desktop/iu);
         assert.equal((html.match(/id="download"/gu) ?? []).length, 1);
@@ -259,7 +260,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
         assert.ok((html.match(/data-reveal/gu) ?? []).length >= 8);
         assert.match(html, /type="module"/u);
         assert.match(html, /styles\.css\?v=20261004-3/u);
-        assert.match(html, /release\.mjs\?v=20261024-1/u);
+        assert.match(html, /release\.mjs\?v=20261024-2/u);
         assert.match(html, /media\.mjs\?v=20261003-2/u);
         const media = await get(preview.origin, prefix + 'media.mjs');
         assert.equal(media.status, 200);
@@ -273,6 +274,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
         assert.match(privacy.body, /Sua voz fica no seu Mac/u);
         assert.match(privacy.body, /não envia áudio/u);
         assert.match(privacy.body, /OpenRouter\/TypeSafe \(JEV\)/u);
+        assert.match(privacy.body, /não recebe nem subsidia esse valor/u);
         assert.match(privacy.body, /4096 bytes/u);
         assert.match(privacy.body, /intervalo mínimo de 500 ms/u);
         assert.match(privacy.body, /avalia durante o ditado/u);
@@ -290,12 +292,13 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
         assert.match(comparison.body, /Sem limite semanal imposto pelo plano/u);
         assert.match(comparison.body, /Tipo o Wispr\.[\s\S]*Grátis e com JEV\./u);
         assert.match(comparison.body, /Ditado offline; JEV exige conexão/u);
+        assert.match(comparison.body, /OpenRouter pode cobrar esse consumo diretamente/u);
         assert.doesNotMatch(comparison.body, /Só no download inicial do modelo/u);
         assert.match(comparison.body, /Resenha é um projeto independente/u);
         assert.match(comparison.body, /wisprflow\.ai\/pricing/u);
         assert.match(comparison.body, /application\/ld\+json/u);
         assert.match(comparison.body, /src="\.\.\/media\.mjs\?v=20261003-2"/u);
-        assert.match(comparison.body, /src="\.\.\/release\.mjs\?v=20261024-1"/u);
+        assert.match(comparison.body, /src="\.\.\/release\.mjs\?v=20261024-2"/u);
         assert.match(comparison.body, /src="\.\.\/analytics\.mjs\?v=20261004-1"/u);
         assert.ok((comparison.body.match(/data-reveal/gu) ?? []).length >= 5);
         const robots = await get(preview.origin, prefix + 'robots.txt');

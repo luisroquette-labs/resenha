@@ -987,6 +987,16 @@ final class WhisperKeyTests: XCTestCase {
         XCTAssertFalse(PermissionOnboardingPolicy.shouldPresent(snapshot: ready, hasPresented: false))
     }
 
+    func testPermissionOnboardingDisclosesJEVPrivacyAndBYOKBilling() {
+        XCTAssertTrue(JEVOnboardingDisclosure.title.contains("opcional"))
+        XCTAssertTrue(JEVOnboardingDisclosure.summary.contains("Começa desligado"))
+        XCTAssertTrue(JEVOnboardingDisclosure.privacy.contains("O áudio nunca sai deste Mac"))
+        XCTAssertTrue(JEVOnboardingDisclosure.billing.contains("própria chave"))
+        XCTAssertTrue(JEVOnboardingDisclosure.billing.contains("cobrar o consumo diretamente na sua conta"))
+        XCTAssertTrue(JEVOnboardingDisclosure.billing.contains("não recebe nem subsidia"))
+        XCTAssertTrue(JEVOnboardingDisclosure.settings.contains("Ajustes → Transcrição"))
+    }
+
     @MainActor
     func testPermissionOnboardingReusesOneWindow() throws {
         let controller = PermissionOnboardingController(requestPermissions: {}, openSettings: { _ in })
@@ -995,6 +1005,7 @@ final class WhisperKeyTests: XCTestCase {
         let first = try XCTUnwrap(controller.window)
         controller.show(snapshot: blocked, isRequesting: true)
         XCTAssertTrue(first === controller.window)
+        XCTAssertEqual(first.contentView?.frame.height, 690)
         controller.close()
         XCTAssertFalse(first.isVisible)
     }
@@ -7822,6 +7833,9 @@ final class ContextualFeedbackSettingsTests: XCTestCase {
         XCTAssertTrue(ContextualSettingsModel.personalDisclosure.contains("no máximo seis envios"))
         XCTAssertTrue(ContextualSettingsModel.personalDisclosure.contains("500 ms"))
         XCTAssertTrue(ContextualSettingsModel.personalDisclosure.contains("4096 bytes"))
+        XCTAssertTrue(ContextualSettingsModel.personalDisclosure.contains("própria chave"))
+        XCTAssertTrue(ContextualSettingsModel.personalDisclosure.contains("cobrar o consumo diretamente"))
+        XCTAssertTrue(ContextualSettingsModel.personalDisclosure.contains("não recebe nem subsidia"))
         XCTAssertFalse(ContextualSettingsModel.personalDisclosure.localizedCaseInsensitiveContains("ZDR"))
     }
 

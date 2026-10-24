@@ -22,7 +22,7 @@ Escolha PT-BR, inglês ou espanhol. Em português, o Resenha preserva anglicismo
 
 PRIVADO POR PADRÃO
 
-O áudio é processado pelo whisper.cpp no próprio Mac e apagado após cada tentativa. Não há conta, backend do Resenha, anúncios ou analytics. A avaliação contextual de texto é opcional, começa desligada e usa uma chave pessoal do OpenRouter; áudio nunca é enviado. O código é aberto e auditável.
+O áudio é processado pelo whisper.cpp no próprio Mac e apagado após cada tentativa. Não há conta, backend do Resenha, anúncios ou analytics. A avaliação contextual de texto é opcional, começa desligada e usa uma chave pessoal do OpenRouter; o provedor pode cobrar o consumo diretamente nessa conta. O Resenha não recebe ou subsidia esse valor, e áudio nunca é enviado. O código é aberto e auditável.
 
 RÁPIDO DE USAR
 
@@ -52,6 +52,6 @@ texto,transcrição,Whisper,offline,português,atalho,microfone,produtividade,pr
 
 ## URLs
 
-- Suporte: https://github.com/luisroquette/resenha/issues
-- Marketing: https://luisroquette.github.io/resenha/
-- Privacidade: https://luisroquette.github.io/resenha/privacy/
+- Suporte: https://github.com/luisroquette-labs/resenha/issues
+- Marketing: https://luisroquette-labs.github.io/resenha/
+- Privacidade: https://luisroquette-labs.github.io/resenha/privacy/

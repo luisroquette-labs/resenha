@@ -14,7 +14,7 @@
   <link rel="icon" href="assets/brand/resenha-app-icon.png">
   <link rel="stylesheet" href="styles.css?v=20261004-3">
   <script type="module" src="analytics.mjs?v=20261004-1"></script>
-  <script type="module" src="release.mjs?v=20261024-1"></script>
+  <script type="module" src="release.mjs?v=20261024-2"></script>
   <script type="module" src="media.mjs?v=20261003-2"></script>
   <script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Resenha","applicationCategory":"UtilitiesApplication","operatingSystem":"macOS 14 ou posterior","isAccessibleForFree":true,"license":"https://opensource.org/license/mit","description":"Tipo o Wispr, mas grátis e com JEV: ditado local com inteligência contextual opcional no Mac."}</script>
 </head>
@@ -39,7 +39,7 @@
       <div class="hero-copy">
         <p class="kicker"><span></span> Ditado inteligente, local por padrão</p>
         <h1 id="hero-title">Tipo o Wispr,<br><em>mas grátis e com JEV.</em></h1>
-        <p class="hero-lead">O Whisper transcreve no Mac. Se você ativar, o JEV avalia o contexto durante a fala para escolher a palavra certa — sem receber seu áudio.</p>
+        <p class="hero-lead">O Whisper transcreve no Mac. Se você ativar, o JEV avalia o contexto sem receber seu áudio. Ele usa sua própria chave e o OpenRouter pode cobrar o consumo diretamente na sua conta.</p>
         <div class="hero-actions">
           <a class="button" href="#download">Baixar grátis <span aria-hidden="true">↘</span></a>
           <a class="text-link" href="alternativa-wispr-flow/">Comparar com Wispr Flow →</a>
@@ -205,7 +205,7 @@
       <div class="section-heading"><p class="kicker">Perguntas diretas</p><h2 id="faq-title">Antes de falar.</h2></div>
       <div class="faq-list">
         <details><summary>Minha voz é enviada para a internet?</summary><p>Não. O áudio é transcrito dentro do Mac e nunca é enviado. Se você ativar o JEV, somente a frase transcrita e alternativas locais seguem para OpenRouter/TypeSafe; o recurso começa desligado e pode ser revogado.</p></details>
-        <details><summary>O que o JEV faz?</summary><p>Durante a fala, ele escolhe entre manter uma palavra reconhecida ou aplicar uma alternativa acústica local compatível com o contexto. Em dúvida, erro ou timeout, o Resenha preserva o texto local.</p></details>
+        <details><summary>O que o JEV faz — e quem paga?</summary><p>Durante a fala, ele escolhe entre manter uma palavra reconhecida ou aplicar uma alternativa acústica local compatível com o contexto. É opcional e usa uma chave pessoal: o OpenRouter pode cobrar o consumo diretamente na conta do usuário; o Resenha não recebe nem subsidia esse valor. Em dúvida, erro ou timeout, o texto local é preservado.</p></details>
         <details><summary>Preciso instalar Python ou o Whisper?</summary><p>Não. O runtime whisper.cpp faz parte do aplicativo. Na primeira configuração, o Resenha baixa e verifica o modelo de voz.</p></details>
         <details><summary>Posso escolher o atalho?</summary><p>Sim. Grave qualquer tecla ou combinação dentro do próprio Resenha, inclusive Option direita isolada.</p></details>
         <details><summary>O Resenha é uma alternativa ao Wispr Flow?</summary><p>Sim, para quem procura ditado no Mac sem assinatura, sem conta e sem limite semanal. O Resenha é local e open source; não tenta reproduzir todos os recursos em nuvem e de equipe do Wispr Flow.</p></details>

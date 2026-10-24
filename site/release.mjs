@@ -1,4 +1,4 @@
-import { openDownloadGate } from './download-gate.mjs?v=20261024-1';
+import { openDownloadGate } from './download-gate.mjs?v=20261024-2';
 
 const copy = Object.freeze({
   macos: { label: 'Download em preparação', ready: 'Baixar para macOS', reason: 'Ainda não há um instalador público verificado.' },
@@ -7,14 +7,14 @@ const copy = Object.freeze({
 });
 
 export const releaseState = Object.freeze({
-  macos: Object.freeze({ state: 'published', platform: 'macos', version: '1.1.0',
+  macos: Object.freeze({ state: 'published', platform: 'macos', version: '1.1.1',
     architecture: 'Apple Silicon (arm64)', minimumOS: 'macOS 14+',
-    url: 'https://github.com/luisroquette-labs/resenha/releases/download/v1.1.0/Resenha-1.1.0-arm64.dmg',
+    url: 'https://github.com/luisroquette-labs/resenha/releases/download/v1.1.1/Resenha-1.1.1-arm64.dmg',
     evidence: Object.freeze({ channel: 'macos',
-      url: 'https://github.com/luisroquette-labs/resenha/releases/download/v1.1.0/Resenha-1.1.0-arm64.dmg',
-      verifiedAt: '2026-10-24T12:05:43Z', artifact: Object.freeze({ platform: 'macos', version: '1.1.0',
-        sha256: '9d794f62b79ff6a786480872866832770c9bbaab4ea2a06458cc219784ffa0dc',
-        notarizationId: '5cda153b-313f-4474-9059-5c3d98510137', notarizationStatus: 'Accepted' }) }) }),
+      url: 'https://github.com/luisroquette-labs/resenha/releases/download/v1.1.1/Resenha-1.1.1-arm64.dmg',
+      verifiedAt: '2026-10-24T14:07:56Z', artifact: Object.freeze({ platform: 'macos', version: '1.1.1',
+        sha256: '746bc412d2165a1f940427652d2aaf7b9c86822f76cd23641c0ca0fc92bf2980',
+        notarizationId: '47a6c6c2-06e4-464c-b5aa-ea11dcf552ce', notarizationStatus: 'Accepted' }) }) }),
   source: Object.freeze({ state: 'published', url: 'https://github.com/luisroquette-labs/resenha',
     evidence: Object.freeze({ channel: 'source', url: 'https://github.com/luisroquette-labs/resenha',
       verifiedAt: '2026-10-24T12:05:43Z' }) }),
