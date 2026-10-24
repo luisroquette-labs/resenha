@@ -9,6 +9,14 @@ enum PermissionOnboardingPolicy {
     }
 }
 
+enum JEVOnboardingDisclosure {
+    static let title = "JEV contextual — opcional"
+    static let summary = "Melhora escolhas de palavras usando o contexto. Começa desligado; o ditado local funciona sem conta ou chave."
+    static let privacy = "Se você ativar, somente a frase transcrita e alternativas locais são enviadas ao OpenRouter/TypeSafe. O áudio nunca sai deste Mac."
+    static let billing = "Você usa sua própria chave. O OpenRouter pode cobrar o consumo diretamente na sua conta; o Resenha não recebe nem subsidia esse valor."
+    static let settings = "Ative depois em Ajustes → Transcrição."
+}
+
 private extension RequiredPermission {
     var onboardingTitle: String {
         switch self {
@@ -51,7 +59,7 @@ private struct PermissionOnboardingView: View {
     private var setupReady: Bool { snapshot.isReady && modelReady }
 
     private var introText: String {
-        "Três permissões conectam voz, atalho e inserção automática. O áudio nunca sai deste Mac."
+        "O áudio permanece neste Mac. Você decide se quer usar inteligência contextual com sua própria conta."
     }
     var body: some View {
         ZStack {
@@ -74,7 +82,7 @@ private struct PermissionOnboardingView: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     Spacer()
-                    ResenhaStatusPill(title: "100% local", symbol: "lock.fill", active: true)
+                    ResenhaStatusPill(title: "Áudio local", symbol: "lock.fill", active: true)
                 }
 
                 VStack(spacing: 0) {
@@ -102,6 +110,28 @@ private struct PermissionOnboardingView: View {
                 }
                 .padding(.horizontal, 4)
 
+                HStack(alignment: .top, spacing: 14) {
+                    Text("04")
+                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .foregroundStyle(ResenhaTheme.accent)
+                        .frame(width: 34, alignment: .leading)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(JEVOnboardingDisclosure.title).fontWeight(.semibold)
+                        Text(JEVOnboardingDisclosure.summary)
+                        Text(JEVOnboardingDisclosure.privacy)
+                        Text(JEVOnboardingDisclosure.billing).fontWeight(.semibold)
+                        Text(JEVOnboardingDisclosure.settings).foregroundStyle(.secondary)
+                    }
+                    .font(.callout)
+                    .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 12)
+                    ResenhaStatusPill(title: "Opcional", symbol: "sparkles", active: false)
+                }
+                .padding(14)
+                .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 14))
+                .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.primary.opacity(0.10)))
+                .accessibilityElement(children: .combine)
+
                 Spacer(minLength: 0)
 
                 HStack {
@@ -122,7 +152,7 @@ private struct PermissionOnboardingView: View {
             }
             .padding(30)
         }
-        .frame(width: 680, height: 570)
+        .frame(width: 680, height: 690)
         .tint(ResenhaTheme.signal)
     }
 
@@ -211,7 +241,7 @@ final class PermissionOnboardingController: NSObject, NSWindowDelegate {
 
     private func makeWindow() -> NSWindow {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 680, height: 570),
+            contentRect: NSRect(x: 0, y: 0, width: 680, height: 690),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false

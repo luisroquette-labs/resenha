@@ -1,4 +1,4 @@
-import { openDownloadGate } from './download-gate.mjs?v=20261004-4';
+import { openDownloadGate } from './download-gate.mjs?v=20261024-2';
 import { platformConfig } from './download-platforms.mjs?v=20261004-1';
 
 const copy = Object.freeze({
@@ -10,17 +10,17 @@ const copy = Object.freeze({
 });
 
 export const releaseState = Object.freeze({
-  macos: Object.freeze({ state: 'published', platform: 'macos', version: '1.0.0',
+  macos: Object.freeze({ state: 'published', platform: 'macos', version: '1.1.1',
     architecture: 'Apple Silicon (arm64)', minimumOS: 'macOS 14+',
-    url: 'https://github.com/luisroquette-labs/resenha/releases/download/v1.0.0/Resenha-1.0.0-arm64.dmg',
+    url: 'https://github.com/luisroquette-labs/resenha/releases/download/v1.1.1/Resenha-1.1.1-arm64.dmg',
     evidence: Object.freeze({ channel: 'macos',
-      url: 'https://github.com/luisroquette-labs/resenha/releases/download/v1.0.0/Resenha-1.0.0-arm64.dmg',
-      verifiedAt: '2026-10-04T00:35:16Z', artifact: Object.freeze({ platform: 'macos', version: '1.0.0',
-        sha256: '9fc0728419c8c2ca4feb0631667a4ce8cdf88cfd894c821b3f82b98533056985',
-        notarizationId: 'e3471859-6fe0-4166-8c6e-bcb723afdab3', notarizationStatus: 'Accepted' }) }) }),
+      url: 'https://github.com/luisroquette-labs/resenha/releases/download/v1.1.1/Resenha-1.1.1-arm64.dmg',
+      verifiedAt: '2026-10-24T14:07:56Z', artifact: Object.freeze({ platform: 'macos', version: '1.1.1',
+        sha256: '746bc412d2165a1f940427652d2aaf7b9c86822f76cd23641c0ca0fc92bf2980',
+        notarizationId: '47a6c6c2-06e4-464c-b5aa-ea11dcf552ce', notarizationStatus: 'Accepted' }) }) }),
   source: Object.freeze({ state: 'published', url: 'https://github.com/luisroquette-labs/resenha',
     evidence: Object.freeze({ channel: 'source', url: 'https://github.com/luisroquette-labs/resenha',
-      verifiedAt: '2026-10-03T02:30:00Z' }) }),
+      verifiedAt: '2026-10-24T12:05:43Z' }) }),
   store: Object.freeze({ state: 'planned', url: null, evidence: null }),
   windows: Object.freeze({ state: 'unavailable', platform: 'windows', version: null,
     architecture: 'x64', minimumOS: 'Windows 10 22H2 / Windows 11 25H2', url: null, evidence: null }),

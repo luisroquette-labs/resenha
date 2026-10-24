@@ -128,7 +128,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
     assert.equal(resolveDestination('source', releaseState.source).active, true);
     assert.equal(resolveDestination('source', releaseState.source).href, 'https://github.com/luisroquette-labs/resenha');
     assert.equal(resolveDestination('macos', releaseState.macos).active, true);
-    assert.match(resolveDestination('macos', releaseState.macos).href, /Resenha-1\.0\.0-arm64\.dmg$/u);
+    assert.match(resolveDestination('macos', releaseState.macos).href, /Resenha-1\.1\.1-arm64\.dmg$/u);
     assert.equal(releaseState.store.url, null);
     assert.equal(releaseState.store.evidence, null);
     assert.equal(resolveDestination('store', releaseState.store).active, false);
@@ -178,6 +178,11 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
       const value = structuredClone({ manifest, verification, download }); mutate(value);
       assert.throws(() => projectWindowsRelease(value.manifest, value.verification, value.download));
     }
+  });
+  test('release checksum manifest uses a portable artifact filename', async () => {
+    const script = await readFile(new URL('./build-release-dmg.sh', import.meta.url), 'utf8');
+    assert.match(script, /shasum -a 256 "\$\{dmg:t\}" > "\$\{dmg:t\}\.sha256"/u);
+    assert.doesNotMatch(script, /shasum -a 256 "\$dmg" > "\$dmg\.sha256"/u);
   });
   test('Consent Mode v2 denies analytics and all advertising signals by default', () => {
     const denied = consentState(false);
@@ -274,14 +279,17 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
         if (rootBody) assert.equal(html, rootBody); else rootBody = html;
         assert.match(html, /<html\b[^>]*lang="pt-BR"/u);
         assert.match(html, /<title>[^<]*Resenha[^<]*<\/title>/u);
-        assert.match(html, /name="description"[^>]*content="[^"]*alternativa gratuita[^"]*Wispr Flow[^"]*"/iu);
+        assert.match(html, /name="description"[^>]*content="[^"]*Tipo o Wispr[^"]*grátis[^"]*JEV[^"]*"/iu);
         assert.match(html, /property="og:title"/u);
         assert.match(html, /property="og:description"/u);
         assert.match(html, /licença MIT/u);
         assert.match(html, /SwiftUI/u); assert.match(html, /whisper\.cpp/u); assert.match(html, /ATALHO LIVRE/u);
         assert.match(html, /Acessibilidade/u);
         assert.match(html, /Apple Silicon/u); assert.match(html, /AVFoundation/u);
-        assert.match(html, /alternativa open source ao Wispr Flow/iu);
+        assert.match(html, /Tipo o Wispr,[\s\S]*mas grátis e com JEV\./iu);
+        assert.match(html, /JEV opcional/iu);
+        assert.match(html, /nunca o áudio/iu);
+        assert.match(html, /OpenRouter pode cobrar o consumo diretamente na sua conta/iu);
         assert.match(html, /sem limite semanal/iu);
         assert.match(html, /2\.000 palavras no desktop/iu);
         assert.equal((html.match(/id="download"/gu) ?? []).length, 1);
@@ -321,7 +329,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
         assert.ok((html.match(/data-reveal/gu) ?? []).length >= 8);
         assert.match(html, /type="module"/u);
         assert.match(html, /styles\.css\?v=20261005-1/u);
-        assert.match(html, /release\.mjs\?v=20261005-1/u);
+        assert.match(html, /release\.mjs\?v=20261024-2/u);
         assert.match(html, /media\.mjs\?v=20261003-2/u);
         const media = await get(preview.origin, prefix + 'media.mjs');
         assert.equal(media.status, 200);
@@ -334,6 +342,15 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
         assert.equal(privacy.status, 200);
         assert.match(privacy.body, /Sua voz fica no seu computador/u);
         assert.match(privacy.body, /No Windows, o MVP não grava histórico em disco/u);
+        assert.match(privacy.body, /não envia áudio/u);
+        assert.match(privacy.body, /OpenRouter\/TypeSafe \(JEV\)/u);
+        assert.match(privacy.body, /não recebe nem subsidia esse valor/u);
+        assert.match(privacy.body, /4096 bytes/u);
+        assert.match(privacy.body, /intervalo mínimo de 500 ms/u);
+        assert.match(privacy.body, /avalia durante o ditado/u);
+        assert.match(privacy.body, /vincular o texto à conta/u);
+        assert.match(privacy.body, /não estima o custo total/u);
+        assert.match(privacy.body, /Revogar cancela o trabalho pendente/u);
         assert.match(privacy.body, /Acessibilidade devolve o foco/u);
         assert.match(privacy.body, /não lê o conteúdo de outros apps/u);
         assert.match(privacy.body, /Consent Mode v2/u);
@@ -343,12 +360,16 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
         assert.equal(comparison.status, 200);
         assert.match(comparison.body, /<title>Alternativa gratuita e sem limite ao Wispr Flow \| Resenha<\/title>/u);
         assert.match(comparison.body, /Sem limite semanal imposto pelo plano/u);
+        assert.match(comparison.body, /Tipo o Wispr\.[\s\S]*Grátis e com JEV\./u);
+        assert.match(comparison.body, /Ditado offline; JEV exige conexão/u);
+        assert.match(comparison.body, /OpenRouter pode cobrar esse consumo diretamente/u);
+        assert.doesNotMatch(comparison.body, /Só no download inicial do modelo/u);
         assert.match(comparison.body, /Resenha é um projeto independente/u);
         assert.match(comparison.body, /Windows x64 em Beta não assinada/u);
         assert.match(comparison.body, /wisprflow\.ai\/pricing/u);
         assert.match(comparison.body, /application\/ld\+json/u);
         assert.match(comparison.body, /src="\.\.\/media\.mjs\?v=20261003-2"/u);
-        assert.match(comparison.body, /src="\.\.\/release\.mjs\?v=20261005-1"/u);
+        assert.match(comparison.body, /src="\.\.\/release\.mjs\?v=20261024-2"/u);
         assert.match(comparison.body, /src="\.\.\/analytics\.mjs\?v=20261004-1"/u);
         assert.ok((comparison.body.match(/data-reveal/gu) ?? []).length >= 5);
         const robots = await get(preview.origin, prefix + 'robots.txt');

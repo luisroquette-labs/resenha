@@ -2,7 +2,7 @@
 
 > Arquivo histórico: a distribuição pela Mac App Store foi substituída pela distribuição direta em 03/10/2026. Estas notas não descrevem o bundle atual.
 
-Resenha é um app de barra de menus. Não há conta, compras ou conteúdo pago.
+Resenha é um app de barra de menus. Não há conta, compra ou conteúdo pago pelo Resenha.
 
 ## Fluxo principal
 
@@ -18,11 +18,19 @@ Sistema → Teclado → Atalhos de Teclado → Serviços. O app usa um event tap
 
 ## Rede e privacidade
 
-A única conexão de rede do produto baixa o modelo de
+O download inicial busca o modelo em
 `https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small-q5_1.bin`.
 O arquivo esperado tem 190.085.487 bytes e SHA-256
 `ae85e4a935d7a567bd102fe55afc16bb595bdb618e11b2fc7591bc08120411bb`.
-Áudio e transcrições nunca são enviados.
+Áudio nunca é enviado. A avaliação contextual opcional começa desligada e,
+somente após consentimento e chave próprios, envia ao OpenRouter/TypeSafe a
+frase transcrita e alternativas de exemplos locais pertinentes. Histórico,
+clipboard e conteúdo do app de destino não são enviados. Revogar remove a chave
+pessoal e preserva o ditado local. Como a chave autentica a conta do provedor,
+o conteúdo enviado é declarado como vinculado ao usuário no manifesto de privacidade.
+O OpenRouter pode cobrar o consumo diretamente nessa conta. O Resenha não vende,
+recebe ou subsidia créditos, não oferece link de compra e funciona integralmente
+no modo local sem a chave.
 
 ## Sandbox
 

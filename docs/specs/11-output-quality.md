@@ -121,6 +121,29 @@ O candidato com prompt reduziu o WER em 94% relativo. A contagem anterior de 96%
 - Cancelar ou encerrar um ditado invalida a tentativa e limpa seu áudio; não existe subprocesso externo.
 - API paga, telemetria e upload continuam proibidos sem decisão explícita posterior.
 
+## Correção explícita após o ditado
+
+Com o HUD ligado, uma inserção concluída e ainda atual oferece “Transcrição
+correta” e “Corrigir transcrição”, também no menu de status. Aprovar encerra a
+oferta sem guardar nota. Corrigir mostra a frase confirmada e os campos “Saiu
+como” e “Correto é”; múltiplas ocorrências exigem seleção explícita. Salvar não
+reescreve o texto já inserido, clipboard ou histórico e não é retreinamento do
+modelo.
+
+Like e cancelamento não persistem feedback. Dislike + Salvar cria um exemplo
+contextual local com idioma, forma ouvida, forma canônica, frase confirmada e
+ocorrência; não cria regra global no glossário. Há no máximo 100 exemplos,
+frase de até 600 caracteres e exclusão individual ou total. Ocorrências
+múltiplas exigem escolha explícita. Duplicata é idempotente; conflito, limite e
+falha preservam o draft. `rosto → Hostel` nunca significa troca global.
+
+O beta local começa desligado. Mesmo ligado, ditado pessoal recebe escopo
+proibido para transporte e permanece byte a byte original. Apenas o diagnóstico
+sintético consentido pode usar `typesafe/jev-1.14` via OpenRouter/TypeSafe, uma
+vez, com deadline de 900 ms; falha, timeout ou dúvida preservam o original. A
+chamada controlada mede contrato, não precisão PT-BR, recorrência, custo ou
+privacidade além das políticas publicadas.
+
 ## Falhas e recuperação
 
 - Modelo ausente ou incompatível: explicar o caminho e não inserir texto parcial.

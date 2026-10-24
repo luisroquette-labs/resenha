@@ -18,13 +18,33 @@ campo ativo com a permissão de Acessibilidade.
 - Áudio transitório, clipboard imediato e últimos 10 textos locais e opcionais.
 - HUD compacto com nível real do microfone, sons configuráveis e feedback de erro.
 - Atalho livre configurado dentro do app, inclusive Option direita isolada.
-- Sem conta, anúncios, analytics, backend ou chave de API.
+- Correção contextual preventiva durante a fala, desligada por padrão e limitada a opções locais.
+- Prévia local opcional durante a fala, mostrada somente no HUD do Resenha.
+- Sem conta, anúncios, analytics ou backend. Uma chave descartável é aceita apenas para o diagnóstico sintético opcional.
 
 ## Privacidade
 
 O áudio nunca sai do Mac. O modelo de 181 MB é baixado uma vez da distribuição
-oficial do whisper.cpp e validado por tamanho e SHA-256. Resenha não coleta
-dados e não inclui SDKs de rastreamento. Leia a [política de privacidade](docs/PRIVACY.md).
+oficial do whisper.cpp e validado por tamanho e SHA-256. Resenha não inclui
+SDKs de rastreamento. Leia a [política de privacidade](docs/PRIVACY.md).
+
+O beta guarda no máximo 100 exemplos locais, com frases de até 600 caracteres,
+todos apagáveis. A avaliação remota de texto começa desligada e exige
+consentimento e chave pessoais. Um diagnóstico explícito e sintético separado pode
+consultar `typesafe/jev-1.14` via OpenRouter/TypeSafe, com limite de 900 ms e
+uma única tentativa. Esse diagnóstico não comprova qualidade em PT-BR.
+
+A inteligência contextual contínua ainda é experimental. O reconhecedor local
+produz hipóteses provisórias e alternativas acústicas; o avaliador JEV autorizado
+pode apenas manter ou escolher uma opção ligada à palavra já reconhecida. Ele
+não recebe áudio, logits, probabilidades, vocabulário completo ou contexto do
+aplicativo, não prevê palavras ainda não ditas e não gera texto livre. Cada
+ditado permite no máximo seis envios. Sem opt-in e credencial, a prévia e a
+finalização permanecem locais e fazem zero requisições.
+Os Ajustes mostram a última prova técnica recebida do JEV — modelo, decisão,
+latência, custo e identificador — sem guardar o texto ditado. Até 20 registros
+locais podem ser apagados pelo usuário.
+Metas de latência não são apresentadas como desempenho medido sem prova física.
 
 ## Rodar o projeto
 
@@ -53,7 +73,7 @@ Sandbox. O DMG contém o aplicativo e o atalho `Applications`.
 
 ```sh
 ~/.local/bin/mac-gate ./Scripts/build-release-dmg.sh
-./Scripts/notarize-release-dmg.sh build/direct/Resenha-1.0.0-arm64.dmg
+./Scripts/notarize-release-dmg.sh build/direct/Resenha-1.1.1-arm64.dmg
 ```
 
 O segundo comando envia o DMG à Apple usando o perfil de Keychain definido em
@@ -66,6 +86,7 @@ Gatekeeper. Cada artefato recebe um arquivo `.sha256` correspondente.
 Atalho global escolhido no Resenha
   → AVFoundation (PCM mono, 16 kHz)
   → whisper.cpp + Metal
+  → hipóteses locais provisórias no HUD (opcional)
   → pós-processamento determinístico
   → NSPasteboard + Command-V no campo ativo
 ```

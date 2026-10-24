@@ -8,10 +8,10 @@ Communicate state without stealing focus from the target application.
 
 ## Form
 
-- One borderless, non-activating, floating panel, centered near the bottom of the target application's display.
+- One borderless, non-activating visual panel, centered near the bottom of the target application's display; feedback adds exactly two small native target overlays.
 - SwiftUI content hosted in AppKit.
-- Compact status only; ordinary idle remains hidden. No persistent primary window or focusable HUD controls.
-- The panel ignores mouse events and is visible across Spaces as appropriate for a transient utility.
+- Ordinary idle remains hidden. Recording, processing, insertion and notices are passive status; completed transcription feedback is interactive.
+- The visual panel always ignores mouse events, including during feedback, and is visible across Spaces as appropriate for a transient utility. Only the two feedback target rectangles intercept clicks.
 
 ## Requirements
 
@@ -25,6 +25,20 @@ Communicate state without stealing focus from the target application.
 
 The focused text field remains focused while every pipeline status is displayed.
 
+## Post-transcription feedback
+
+After successful `insertStaged`, cleanup and a current-attempt check, an enabled HUD offers “Transcrição correta” and “Corrigir transcrição”. Failure, empty output, cancellation and insertion fallback do not offer success feedback. The offer reuses the processing panel's 280 × 64 frame, position and material: two 36-point gradient thumb bubbles appear without a visible title or separate card. The visual panel remains nonactivating and always click-through. Two separate transparent, nonactivating 44 × 44 overlay panels contain native buttons that accept the first mouse click; only these rectangles intercept input. They follow the visual panel's placement/display changes and Spaces behavior. Labels and hints name both actions in the native targets; decorative duplicates are hidden from accessibility, and a single announcement requests action availability. The status menu exposes the same actions with the current session token.
+
+The passive offer expires at the monotonic deadline `now + 4 seconds`. The existing dismissal task checks generation, original token and still-passive feedback state before clearing the offer/menu and hiding the panel. Expiration and approval write no preferences or ratings and show no notice. Opening correction invalidates the timer before opening its window; drafts, errors and Save never expire. A new accepted dictation retires the old offer on that press. Old timers cannot close later offers, recording, editors or notices.
+
+Only the explicit correction action activates Resenha and opens the normal, titled “Corrigir transcrição” window. It contains two initially empty labeled fields, “Saiu como” and “Correto é”, Salvar and Cancelar. The source field receives initial focus; Tab moves through controls, Return requests Save and Escape cancels. Each raw field has a visible counter and a limit of 160 Swift characters and 2,560 UTF-8 bytes, enforced at the binding and again at Save. Oversized input preserves the last accepted value without silent truncation, displays/requests announcement of a textual error and blocks Save/Return until corrected. Other invalid input retains the bounded fields. Errors and actions stay outside the scrolling fields so they remain visible in a small window. Save adds only the canonical term to local vocabulary, never a heard-to-canonical replacement, and recognition may vary; see [SPEC-011](11-output-quality.md). Success requests announcement of “Termo adicionado ao vocabulário” or “Termo já existente” and presents a temporary passive notice. Actual VoiceOver delivery remains a separate physical gate.
+
+Normal cancel, Escape and close discard the draft. If Resenha is still frontmost and the original target is alive, closing requests its activation once; an app chosen meanwhile keeps focus. An unavailable target is never reopened and the notice asks the user to return to the text field. A hotkey press inside the editor cancels and consumes that press through release: “Solte e pressione novamente para ditar”. A fresh external press can then record. After switching to another external app, a fresh press discards the editor and uses that app. Permission refresh and routine ready status must not replace an active correction.
+
+Every action checks its session token, including queued menu items. Hiding the HUD, new dictation or termination clears feedback and closes the editor. History being disabled does not disable feedback. A failed storage rollback keeps the current bounded fields and error only while that editor remains open, with Save/Return blocked. Cancelar, Escape and close always release both fields and the session without writing, including after rollback failure. Only a value-only recovery offer (token and target PID, no draft or application object) remains for the same result. Reopening the menu action starts with two empty fields and explicitly reloads/verifies the actual stored baseline before issuing a new token and enabling a fresh confirmation. Failed reload leaves that empty editor blocked with an error; new dictation, HUD off and termination erase the recovery offer. Retired bindings cannot repopulate a cleared session. No background retry writes a term.
+
+Interactive surfaces expose accessible children and Portuguese names; passive surfaces retain their combined status. Feedback matches processing dimensions; the editor retains its own bounded dimensions. Each bubble rises from 10 points below with a 70 ms stagger, rests, then rises 14 points while fading before the controller's unchanged four-second deadline. Finite model-phase transitions drive this decoration under the controller's monotonic lifetime; there is no continuously running SwiftUI `TimelineView` or hidden render clock. Animation never owns dismissal or mutates the feedback session. Reduce Motion removes travel, scale and stagger and keeps only short fades without changing the deadline. Increase Contrast strengthens the outline; opaque/light/dark appearances retain the same native gradient symbols. See [SPEC-008](08-testing.md) for the physical script and [dated evidence](../testing/UI-REFINEMENT-EVIDENCE.md) for observed results and remaining gates.
+
 ## Delivered state contract
 
 | Condition | Title / secondary copy | Indicator | Lifetime |
@@ -34,6 +48,7 @@ The focused text field remains focused while every pipeline status is displayed.
 | Recording | `Listening` and monospaced `mm:ss`; release instruction remains in menu/accessibility status | Steady mist-green dot and 48 microphone-driven rounded bars | Entire recording interval |
 | Transcribing | `Transcribing…` | Native indeterminate progress | Entire transcription interval |
 | Inserting | `Inserting…` | Same progress footprint | Until actual insertion completion |
+| Feedback | No visible text; named accessible buttons | Two 3D thumb bubbles in the processing frame | 4 seconds; correction cancels expiration |
 | Failure | Concise cause / `Open the WhisperKey menu for help` | Warning symbol | Approximately 2 seconds; recovery stays in menu |
 
 Ready/processing states use 280 × 64 points, a 20-point indicator slot, 12-point gap, 18-point horizontal inset and 4-point outer margin. Titles use 14-point semibold system font; secondary copy uses 12-point regular system font with a 3-point gap. The background uses an 18-point radius, regularMaterial and semantic colors. One-line processing states are vertically centered. Listening alone uses a horizontally arranged 340 × 72 capsule, clamped by the same fresh visible-frame rules.
@@ -54,9 +69,9 @@ Acceptance: deterministic injected clock/level checks cover normalization, fixed
 
 ## Brand resonance
 
-While listening, `ResenhaMark` responds to the same smoothed microphone level used by the waveform. The foreground mark scales from 84% to 116% and a faint duplicate expands to 152% at 30% opacity, producing a visible resonance without random or autonomous animation. Silence returns to the resting mark; loud speech never exceeds the HUD bounds.
+While listening, a native 44-point angular-gradient orb responds to the same smoothed microphone level used by the waveform. Its bright core scales from 84% to 116%; the blurred purple halo expands to 152% and adds at most 30% level-driven opacity. A radial highlight and bounded cyan shadow provide depth. Silence returns to the resting orb; loud speech never exceeds the HUD bounds, and no random or autonomous animation is added.
 
-The menu-bar mark uses five size steps from 12 to 18 pt driven by the live level. It returns to the full, static brand mark outside recording. No layout-width change, color flash or VoiceOver announcement is allowed. Reduce Motion keeps the HUD mark fixed and removes its halo; the waveform remains the existing stationary real-level display.
+The menu-bar mark uses five size steps from 12 to 18 pt driven by the live level. It returns to the full, static brand mark outside recording. No layout-width change, color flash or VoiceOver announcement is allowed. Reduce Motion fixes the orb's scale/rotation and removes its level-driven halo expansion; the waveform remains the existing stationary real-level display.
 
 Acceptance: deterministic tests cover nonfinite input, clamping, monotonic scale/opacity, Reduce Motion and the finite menu-frame set. Native fixtures must show distinct silence/speech states without changing the HUD footprint.
 
@@ -64,9 +79,9 @@ Acceptance: deterministic tests cover nonfinite input, clamping, monotonic scale
 
 Store 1.0 does not read another application's window through Accessibility. Retain the chosen display through the session; use the last valid external target mapping when available, then main/first. Exact target-window placement is deliberately not promised without a public sandbox-safe geometry source. Standalone feedback uses the current external app or latest known external target with the same fallback. Pointer position does not select the display.
 
-Refresh visibleFrame on presentation/display changes; recover from disconnected displays. Center horizontally, prefer visibleFrame.minY + 88 and clamp every edge with a 12-point margin, including negative coordinates. Preserve click-through, hidesOnDeactivate=false, canJoinAllSpaces/fullScreenAuxiliary and one physical panel.
+Refresh visibleFrame on presentation/display changes; recover from disconnected displays. Center horizontally, prefer visibleFrame.minY + 88 and clamp every edge with a 12-point margin, including negative coordinates. Preserve visual-panel click-through, hidesOnDeactivate=false and canJoinAllSpaces/fullScreenAuxiliary. There is one visual status panel plus two target-only overlay panels during a feedback offer; explicit correction uses its own normal window.
 
-The panel solely owns dismissal: replacement/hide cancels the prior task and invalidates its generation/deadline. Delayed hide applies only to the current generation. Failed → idle uses that completion. Check during activity updates the menu without replacing or queuing HUD feedback.
+The controller solely owns dismissal: replacement/hide cancels the prior task and invalidates its generation/deadline. Hiding sets the animation phase to hidden, detaches hosting content and retires overlay windows, content and handlers. Editor teardown clears its session before detaching content and closing, so a retained old window cannot retain drafts. Delayed hide applies only to the current generation. Failed → idle uses that completion. Check during activity updates the menu without replacing or queuing HUD feedback.
 
 The coordinator owns real activity; the menu observes it. New starts are rejected while menus/submenus or a permission request are active, or the target is WhisperKey. Active recording release still reaches the coordinator. A rejected held press never replays; require a fresh release/press.
 

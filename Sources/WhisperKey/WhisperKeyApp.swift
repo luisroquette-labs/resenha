@@ -7,7 +7,7 @@ struct WhisperKeyApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     var body: some Scene {
-        Settings { ProductSettingsView(preferences: appDelegate.preferences) }
+        Settings { appDelegate.productSettingsView }
     }
 }
 
@@ -15,7 +15,7 @@ struct WhisperKeyApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let logger = Logger(subsystem: "br.com.luisroquette.Resenha", category: "lifecycle")
     private let permissions = PermissionService()
-    private let panel = FloatingPanelController()
+    let panel = FloatingPanelController()
     private let hotkey = HotkeyMonitor()
     private let cuePlayer = DictationCuePlayer()
     private var coordinator: DictationCoordinator!
@@ -25,21 +25,136 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var hotkeyFailureFeedback = HotkeyFailureFeedback()
     private var didPlayLaunchReadyCue = false
     let preferences = ProductPreferences()
+    private let contextualTime = ContinuousContextualTime()
+    private let contextualPolicy = ContextualCorrectionPolicy()
+    private let contextualStore = ContextualCorrectionStore()
+    private let contextualAttemptStore = ContextualAttemptStore()
+    private let syntheticCredentialStore = KeychainContextualCredentialStore()
+    private let personalCredentialStore = KeychainContextualCredentialStore(
+        account: KeychainContextualCredentialConstants.personalAccount
+    )
+    private let personalAuthorizationStateStore = UserDefaultsPersonalRemoteAuthorizationStateStore()
+    private lazy var contextualTimeComposition: ContextualTimeComposition = {
+        do {
+            return try ContextualTimeComposition(
+                resolver: contextualTime,
+                diagnostic: contextualTime,
+                transport: contextualTime
+            )
+        } catch {
+            preconditionFailure("Contextual clocks must share one origin")
+        }
+    }()
+    private lazy var contextualTransport = URLSessionDecisionsStreamingTransport(
+        time: contextualTimeComposition.shared
+    )
+    private lazy var syntheticClient = OpenRouterDecisionsClient(
+        transport: contextualTransport,
+        credential: { [syntheticCredentialStore] in
+            guard let value = try syntheticCredentialStore.load() else {
+                throw OpenRouterDecisionsError.missingCredential
+            }
+            return value
+        }
+    )
+    private lazy var contextualAuthorization = SyntheticDiagnosticAuthorizationOwner(
+        optInStore: preferences,
+        credentialStore: syntheticCredentialStore,
+        guardStore: SyntheticDiagnosticGuard(),
+        policy: contextualPolicy
+    )
+    private lazy var personalAuthorization = PersonalRemoteAuthorizationOwner(
+        optInStore: preferences,
+        credentialStore: personalCredentialStore,
+        authorizationStateStore: personalAuthorizationStateStore,
+        policy: contextualPolicy,
+        storeSnapshot: { [contextualStore] in contextualStore.snapshot },
+        proactiveEvidenceAvailable: { WhisperTranscriber.supportsProactiveEvidence }
+    )
+    private lazy var personalClient: OpenRouterDecisionsClient = {
+        let authorization = personalAuthorization
+        return OpenRouterDecisionsClient(
+            transport: contextualTransport,
+            credential: { [personalCredentialStore] in
+                guard let value = try personalCredentialStore.load() else {
+                    throw OpenRouterDecisionsError.missingCredential
+                }
+                return value
+            },
+            beforeTransportOpen: {
+                await authorization.personalRemoteHealth().canDispatch
+            },
+            onFailure: { error in
+                await authorization.handleProviderError(error)
+            },
+            onAttempt: { [contextualAttemptStore] event in
+                await contextualAttemptStore.consume(event)
+            }
+        )
+    }()
+    private lazy var contextualResolver = ContextualCorrectionResolver(
+        store: contextualStore,
+        policy: contextualPolicy,
+        provider: personalClient,
+        storeGeneration: { [contextualStore] in contextualStore.generation },
+        time: contextualTimeComposition.shared,
+        onAttemptDisposition: { [contextualAttemptStore] id, disposition, context in
+            Task { @MainActor in
+                contextualAttemptStore.consume(.resolved(
+                    id: id, disposition: disposition, context: context
+                ))
+            }
+        }
+    )
+    private lazy var contextualDiagnosticController = SyntheticDiagnosticController(
+        policy: contextualPolicy,
+        authorization: contextualAuthorization,
+        client: syntheticClient,
+        validator: ContextualDecisionValidator(),
+        fixture: try! SyntheticDiagnosticFixture.load(),
+        time: contextualTimeComposition.shared
+    )
     private lazy var transcriptHistory = TranscriptHistory()
     private lazy var menuController = NativeMenuController(delegate: self)
     private lazy var onboardingController = PermissionOnboardingController(
         requestPermissions: { [weak self] in self?.enablePermissions() },
         openSettings: { [weak self] permission in self?.openSettings(for: permission) }
     )
-    private lazy var settingsController = ProductSettingsWindowController(preferences: preferences)
+    private lazy var settingsController = ProductSettingsWindowController(
+        preferences: preferences,
+        contextualStore: contextualStore,
+        authorization: contextualAuthorization,
+        diagnostic: contextualDiagnosticController,
+        personalAuthorization: personalAuthorization,
+        contextualAttemptStore: contextualAttemptStore
+    )
+
+    var productSettingsView: ProductSettingsView {
+        ProductSettingsView(
+            preferences: preferences,
+            contextualStore: contextualStore,
+            authorization: contextualAuthorization,
+            diagnostic: contextualDiagnosticController,
+            personalAuthorization: personalAuthorization,
+            contextualAttemptStore: contextualAttemptStore
+        )
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         AudioRecorder.cleanupStaleRecordings()
+        contextualStore.onMutation = { [weak self, weak contextualPolicy] in
+            contextualPolicy?.invalidate(.storeMutated)
+            Task { @MainActor in self?.coordinator?.continuousContextModeChanged() }
+        }
+        _ = contextualDiagnosticController
         transcriptHistory.onChange = { [weak self] items, storageAvailable in
             self?.menuController.updateRecentTranscripts(items, storageAvailable: storageAvailable)
         }
         preferences.onHistoryChange = { [weak self] enabled in self?.historyPreferenceChanged(enabled) }
-        preferences.onLanguageChange = { [weak self] language in self?.menuController.updateLanguage(language) }
+        preferences.onLanguageChange = { [weak self] language in
+            self?.coordinator?.continuousContextModeChanged()
+            self?.menuController.updateLanguage(language)
+        }
         hotkey.configure(shortcut: preferences.shortcut)
         preferences.onShortcutChange = { [weak self] shortcut in
             guard let self else { return }
@@ -47,7 +162,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self.hotkey.configure(shortcut: shortcut)
             self.startHotkeyIfReady(showResult: true)
         }
-        preferences.onHUDChange = { [weak self] visible in if !visible { self?.panel.hide() } }
         observeCoordinator(DictationCoordinator(
             permissions: permissions,
             panel: panel,
@@ -59,7 +173,54 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             onTranscript: { [weak self] text in
                 self?.recordTranscript(text)
             },
-            onFailure: { _ in }
+            onFailure: { _ in },
+            continuousContextEnabled: { [weak preferences] in preferences?.continuousContextEnabled ?? false },
+            continuousPreviewVisible: { [weak preferences] in preferences?.localPreviewEnabled ?? false },
+            continuousContextSessionFactory: { ContinuousContextSession() },
+            onContinuousPreview: { [weak self] revision in
+                guard let self else { return }
+                if revision == nil || self.preferences.showsHUD {
+                    self.panel.updateContinuousPreview(revision)
+                }
+            },
+            continuousContextLoopFactory: { [weak self] session, budget in
+                guard let self else { return nil }
+                return RevisionBoundJevLoop(
+                    session: session,
+                    provider: self.personalClient,
+                    time: self.contextualTimeComposition.shared,
+                    storeSnapshot: { [contextualStore] in contextualStore.snapshot },
+                    policyGeneration: { [contextualPolicy] in contextualPolicy.generation },
+                    policy: self.contextualPolicy,
+                    dispatchBudget: budget,
+                    glossaryTerms: { [weak preferences] in
+                        TranscriptionGlossary(
+                            text: preferences?.transcriptionGlossary ?? TranscriptionGlossary.defaultText
+                        ).terms
+                    },
+                    onAttemptDisposition: { [contextualAttemptStore] id, disposition, context in
+                        Task { @MainActor in
+                            contextualAttemptStore.consume(.resolved(
+                                id: id, disposition: disposition, context: context
+                            ))
+                        }
+                    }
+                )
+            },
+            onContinuousContextualPreview: { [weak self] attemptID, revision, text in
+                guard let self, self.preferences.showsHUD else { return }
+                self.panel.updateContinuousContextualPreview(
+                    attemptID: attemptID,
+                    revision: revision,
+                    text: text
+                )
+            },
+            outputSink: TextInjector(),
+            contextualResolver: contextualResolver,
+            contextualTokenSource: DictationCoordinator.productionContextualTokenSource(
+                authorization: personalAuthorization
+            ),
+            contextualStoreGeneration: { [weak contextualStore] in contextualStore?.generation ?? 0 }
         ))
         configureHotkeyRouting()
         configureMenuBar()
@@ -78,10 +239,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func observeCoordinator(_ coordinator: DictationCoordinator) {
         self.coordinator = coordinator
         coordinator.onPhaseChange = { [weak self] _ in self?.updateStatusItem() }
+        coordinator.onCompleted = { [weak self] context in
+            guard let self, self.preferences.showsHUD else { return }
+            self.panel.offerFeedback(context)
+        }
+        panel.configureFeedback(preferences: preferences, store: contextualStore)
+        panel.onFeedbackChange = { [weak self] in self?.updateFeedbackMenu() }
+        preferences.onHUDChange = { [weak self] visible in if !visible { self?.panel.hide() } }
+        preferences.onLocalPreviewChange = { [weak self] enabled in
+            self?.coordinator?.continuousContextModeChanged()
+            if !enabled { self?.panel.clearContinuousPreview() }
+        }
+        preferences.onPersonalRemoteChange = { [weak self] _ in
+            self?.coordinator?.continuousContextModeChanged()
+        }
     }
 
     func configureHotkeyRouting() {
-        hotkey.onPress = { [weak self] in self?.handleHotkeyPress(targetIsSelf: false) }
+        hotkey.onPress = { [weak self] in self?.handleHotkeyPress() }
         hotkey.onRelease = { [weak self] in self?.handleHotkeyRelease() }
     }
 
@@ -90,10 +265,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func handleHotkeyPress(targetIsSelf: Bool? = nil) {
-        guard let coordinator, interaction.press(phase: coordinator.phase,
-            targetIsSelf: targetIsSelf ?? (NSWorkspace.shared.frontmostApplication?.processIdentifier
-                == ProcessInfo.processInfo.processIdentifier)) else { return }
+        guard acceptHotkeyPress(targetIsSelf: targetIsSelf) else { return }
         coordinator.hotkeyPressed()
+    }
+
+    func acceptHotkeyPress(targetIsSelf: Bool? = nil) -> Bool {
+        guard let coordinator else { return false }
+        let isSelf = targetIsSelf ?? (NSWorkspace.shared.frontmostApplication?.processIdentifier
+            == ProcessInfo.processInfo.processIdentifier)
+        let wasPressed = interaction.isPressed
+        let accepted = interaction.press(phase: coordinator.phase, targetIsSelf: isSelf)
+        if !wasPressed, isSelf, panel.isEditingCorrection, let token = panel.correctionActionToken {
+            panel.cancelCorrectionForHotkey(token: token)
+            return false
+        }
+        guard accepted else { return false }
+        panel.hide()
+        return true
     }
 
     func handleHotkeyRelease() {
@@ -105,10 +293,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         startHotkeyIfReady()
     }
 
+    func applicationShouldHandleReopen(
+        _ sender: NSApplication,
+        hasVisibleWindows flag: Bool
+    ) -> Bool {
+        settingsController.show()
+        return true
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
+        contextualPolicy.invalidate(.appTerminated)
         permissionTimer?.invalidate()
         hotkey.stop()
-        coordinator.cancel()
+        panel.hide()
+        coordinator?.cancel()
     }
 
     @objc func enablePermissions() {
@@ -145,6 +343,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc func showSettings() {
         settingsController.show()
+    }
+
+    @objc func approveTranscription(_ sender: NSMenuItem) {
+        guard let token = sender.representedObject as? UUID else { return }
+        panel.approveFeedback(token: token)
+    }
+
+    @objc func correctTranscription(_ sender: NSMenuItem) {
+        guard let token = sender.representedObject as? UUID else { return }
+        panel.openCorrection(token: token)
     }
 
     @objc func copyRecentTranscript(_ sender: NSMenuItem) {
@@ -190,18 +398,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func startHotkeyIfReady(showResult: Bool = false) {
         guard coordinator != nil else { return }
         let snapshot = permissions.snapshot
-        lastPermissionSnapshot = snapshot
-        updateStatusItem(snapshot)
-        guard snapshot.isReady else {
-            hotkeyFailureFeedback.lastAttemptFailed = false
-            hotkey.stop()
-            interaction.release()
-            coordinator.permissionLost(snapshot)
-            if showResult && coordinator.phase.acceptsStatusFeedback {
-                panel.showTemporarily(.failure(snapshot.missingPermissionMessage))
-            }
-            return
-        }
+        guard applyPermissionSnapshot(snapshot, showResult: showResult) else { return }
 
         coordinator.permissionsRestored()
         updateStatusItem(snapshot)
@@ -215,15 +412,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 didPlayLaunchReadyCue = true
                 cuePlayer.play(.ready, readySound: preferences.readySound)
             }
-            if (showResult || !wasRunning) && coordinator.phase.acceptsStatusFeedback {
-                panel.showTemporarily(.ready)
-            }
+            if showResult || !wasRunning { showRoutineStatus(.ready) }
         } catch {
             if hotkeyFailureFeedback.recordFailure(phase: coordinator.phase, explicitCheck: showResult) {
-                panel.showTemporarily(.failure("Atalho global indisponível"))
+                showRoutineStatus(.failure("Atalho global indisponível"))
             }
             updateStatusItem(snapshot)
         }
+    }
+
+    func applyPermissionSnapshot(_ snapshot: PermissionSnapshot, showResult: Bool = false) -> Bool {
+        guard let coordinator else { return false }
+        lastPermissionSnapshot = snapshot
+        updateStatusItem(snapshot)
+        guard !snapshot.isReady else { return true }
+        hotkeyFailureFeedback.lastAttemptFailed = false
+        hotkey.stop()
+        interaction.release()
+        if panel.hasFeedback { panel.hide() }
+        coordinator.permissionLost(snapshot)
+        if showResult { showRoutineStatus(.failure(snapshot.missingPermissionMessage)) }
+        return false
     }
 
     private func refreshPermissionState() {
@@ -233,6 +442,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
+    func showRoutineStatus(_ status: FloatingStatus) {
+        guard coordinator?.phase.acceptsStatusFeedback == true, !panel.hasFeedback, preferences.showsHUD else { return }
+        panel.showTemporarily(status)
+    }
+
     private func updateStatusItem(_ snapshot: PermissionSnapshot? = nil) {
         guard let coordinator else { return }
         let currentSnapshot = snapshot ?? permissions.snapshot
@@ -240,6 +454,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             error: coordinator.currentError, hotkeyUnavailable: hotkeyFailureFeedback.lastAttemptFailed,
             shortcut: preferences.shortcut)
         menuController.update(presentation, isRequestingPermission: interaction.isRequestingPermission)
+        updateFeedbackMenu()
         onboardingController.update(snapshot: currentSnapshot, isRequesting: interaction.isRequestingPermission)
     }
 
@@ -249,7 +464,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
     func menuDidClose(_ menu: NSMenu) { interaction.openMenuCount = max(0, interaction.openMenuCount - 1) }
 
-    private func configureMenuBar() { menuController.configure() }
+    private func configureMenuBar() {
+        menuController.configure()
+        updateFeedbackMenu()
+    }
+
+    private func updateFeedbackMenu() {
+        menuController.updateFeedback(approvalToken: panel.approvalActionToken, correctionToken: panel.correctionActionToken)
+    }
 
     private func recordTranscript(_ text: String) {
         guard preferences.keepsHistory else { return }

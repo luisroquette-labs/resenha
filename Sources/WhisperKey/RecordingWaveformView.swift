@@ -97,21 +97,40 @@ struct RecordingWaveformView: View {
 
     private var resonatingMark: some View {
         let shouldReduceMotion = fixtureReduceMotion ?? reduceMotion
+        let level = RecordingResonance.normalized(meter.currentLevel)
         return ZStack {
-            Image("ResenhaMark")
-                .resizable()
-                .renderingMode(.template)
-                .scaledToFit()
-                .foregroundStyle(ResenhaTheme.signal)
-                .opacity(RecordingResonance.haloOpacity(level: meter.currentLevel, reduceMotion: shouldReduceMotion))
-                .scaleEffect(RecordingResonance.haloScale(level: meter.currentLevel, reduceMotion: shouldReduceMotion))
-            Image("ResenhaMark")
-                .resizable()
-                .renderingMode(.template)
-                .scaledToFit()
-                .foregroundStyle(.primary)
+            Circle()
+                .fill(Color(red: 0.36, green: 0.24, blue: 0.95)
+                    .opacity(0.22 + Double(RecordingResonance.haloOpacity(
+                        level: meter.currentLevel, reduceMotion: shouldReduceMotion
+                    ))))
+                .blur(radius: 7)
+                .scaleEffect(RecordingResonance.haloScale(
+                    level: meter.currentLevel, reduceMotion: shouldReduceMotion
+                ))
+            Circle()
+                .fill(AngularGradient(
+                    colors: [
+                        Color(red: 0.61, green: 0.26, blue: 1),
+                        Color(red: 0.30, green: 0.76, blue: 0.91),
+                        Color(red: 0.06, green: 0.08, blue: 0.60),
+                        Color(red: 0.61, green: 0.26, blue: 1)
+                    ],
+                    center: .center
+                ))
+                .overlay {
+                    Circle()
+                        .fill(RadialGradient(
+                            colors: [.white.opacity(0.78), .clear],
+                            center: .init(x: 0.37, y: 0.32),
+                            startRadius: 0,
+                            endRadius: 24
+                        ))
+                }
                 .scaleEffect(RecordingResonance.markScale(level: meter.currentLevel, reduceMotion: shouldReduceMotion))
+                .rotationEffect(.degrees(shouldReduceMotion ? 0 : Double(level) * 90))
+                .shadow(color: Color(red: 0.30, green: 0.76, blue: 0.91).opacity(0.35), radius: 5)
         }
-        .frame(width: 28, height: 28)
+        .frame(width: 44, height: 44)
     }
 }
