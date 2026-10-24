@@ -36,8 +36,8 @@ function createGate() {
     }
     if (event.data.event !== 'success' || redirecting) return;
     redirecting = true;
-    trackEvent('download_form_success', { form_id: FORM_ID, download_version: '1.1.0', platform: 'macos_arm64' });
-    trackEvent('download_start', { download_version: '1.1.0', platform: 'macos_arm64' });
+    trackEvent('download_form_success', { form_id: FORM_ID, download_version: '1.1.1', platform: 'macos_arm64' });
+    trackEvent('download_start', { download_version: '1.1.1', platform: 'macos_arm64' });
     window.setTimeout(() => window.location.assign(DOWNLOAD_URL), 350);
   });
   document.body.append(dialog);
@@ -49,6 +49,6 @@ export function openDownloadGate() {
   if (!gate) ({ dialog: gate, frame: iframe } = createGate());
   redirecting = false;
   iframe.src = FORM_URL;
-  trackEvent('download_gate_view', { form_id: FORM_ID, download_version: '1.1.0', platform: 'macos_arm64' });
+  trackEvent('download_gate_view', { form_id: FORM_ID, download_version: '1.1.1', platform: 'macos_arm64' });
   gate.showModal();
 }

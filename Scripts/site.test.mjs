@@ -96,7 +96,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
     assert.equal(resolveDestination('source', releaseState.source).active, true);
     assert.equal(resolveDestination('source', releaseState.source).href, 'https://github.com/luisroquette-labs/resenha');
     assert.equal(resolveDestination('macos', releaseState.macos).active, true);
-    assert.match(resolveDestination('macos', releaseState.macos).href, /Resenha-1\.1\.0-arm64\.dmg$/u);
+    assert.match(resolveDestination('macos', releaseState.macos).href, /Resenha-1\.1\.1-arm64\.dmg$/u);
     assert.equal(releaseState.store.url, null);
     assert.equal(releaseState.store.evidence, null);
     assert.equal(resolveDestination('store', releaseState.store).active, false);
@@ -260,7 +260,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
         assert.ok((html.match(/data-reveal/gu) ?? []).length >= 8);
         assert.match(html, /type="module"/u);
         assert.match(html, /styles\.css\?v=20261004-3/u);
-        assert.match(html, /release\.mjs\?v=20261024-1/u);
+        assert.match(html, /release\.mjs\?v=20261024-2/u);
         assert.match(html, /media\.mjs\?v=20261003-2/u);
         const media = await get(preview.origin, prefix + 'media.mjs');
         assert.equal(media.status, 200);
@@ -298,7 +298,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
         assert.match(comparison.body, /wisprflow\.ai\/pricing/u);
         assert.match(comparison.body, /application\/ld\+json/u);
         assert.match(comparison.body, /src="\.\.\/media\.mjs\?v=20261003-2"/u);
-        assert.match(comparison.body, /src="\.\.\/release\.mjs\?v=20261024-1"/u);
+        assert.match(comparison.body, /src="\.\.\/release\.mjs\?v=20261024-2"/u);
         assert.match(comparison.body, /src="\.\.\/analytics\.mjs\?v=20261004-1"/u);
         assert.ok((comparison.body.match(/data-reveal/gu) ?? []).length >= 5);
         const robots = await get(preview.origin, prefix + 'robots.txt');
