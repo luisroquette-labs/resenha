@@ -394,7 +394,65 @@ struct ContextualReplacementOption: Equatable, Sendable {
     let source: ContextualCandidateSource
 }
 
+struct ProactiveCandidateSearchMetrics: Equatable, Sendable {
+    fileprivate(set) var scannedTerms = 0
+    fileprivate(set) var candidateWindows = 0
+    fileprivate(set) var similarityEvaluations = 0
+    fileprivate(set) var reachedSimilarityEvaluationLimit = false
+}
+
+struct ProactivePhraseCandidateSearchResult: Equatable, Sendable {
+    let occurrences: [ContextualCorrectionOccurrence]
+    let metrics: ProactiveCandidateSearchMetrics
+}
+
 struct ProactiveContextualCandidateGenerator {
+    private static let maximumContextCharacters = 600
+    private static let maximumGlossaryTerms = 200
+    private static let maximumTermCharacters = 64
+    private static let maximumPhraseWords = 4
+    private static let maximumSimilarityEvaluations = 4_096
+
+    static func semanticCandidates(
+        text: String,
+        language: String,
+        tokenEvidence: [WhisperTokenEvidence],
+        glossaryTerms: [String],
+        examples: [ContextualCorrectionExample],
+        thresholds: ProactiveCandidateThresholds
+    ) -> [ContextualCorrectionOccurrence] {
+        var proposed = ContextualCorrectionResolver.matchCandidates(
+            examples: examples,
+            text: text,
+            language: language
+        )
+        guard language.lowercased().hasPrefix("pt") else {
+            return reindexedNonOverlapping(proposed)
+        }
+
+        let permissiveEvidenceThresholds = ProactiveCandidateThresholds(
+            tokenProbability: 1,
+            maximumLogitGap: thresholds.maximumLogitGap,
+            minimumVocabularySimilarity: thresholds.minimumVocabularySimilarity
+        )
+        if let acoustic = candidate(
+            text: text,
+            language: language,
+            tokenEvidence: tokenEvidence,
+            glossaryTerms: glossaryTerms,
+            examples: [],
+            thresholds: permissiveEvidenceThresholds
+        ) {
+            proposed.append(acoustic)
+        }
+        proposed.append(contentsOf: phraseCandidatesWithMetrics(
+            text: text,
+            terms: glossaryTerms,
+            minimumSimilarity: permissiveEvidenceThresholds.minimumVocabularySimilarity
+        ).occurrences)
+        return reindexedNonOverlapping(proposed)
+    }
+
     static func candidate(
         text: String,
         language: String,
@@ -469,6 +527,120 @@ struct ProactiveContextualCandidateGenerator {
         )
     }
 
+    static func phraseCandidatesWithMetrics(
+        text: String,
+        terms: [String],
+        minimumSimilarity: Double
+    ) -> ProactivePhraseCandidateSearchResult {
+        var metrics = ProactiveCandidateSearchMetrics()
+        guard text.count <= maximumContextCharacters,
+              let regex = try? NSRegularExpression(pattern: "[\\p{L}][\\p{L}'’-]*") else {
+            return .init(occurrences: [], metrics: metrics)
+        }
+        let words = regex.matches(
+            in: text,
+            range: NSRange(text.startIndex..<text.endIndex, in: text)
+        ).compactMap { Range($0.range, in: text) }
+        guard !words.isEmpty else { return .init(occurrences: [], metrics: metrics) }
+
+        var seenTerms = Set<String>()
+        var ranked: [(score: Double, identity: String, occurrence: ContextualCorrectionOccurrence)] = []
+        termLoop: for raw in terms.prefix(maximumGlossaryTerms) {
+            guard !Task.isCancelled else { break }
+            metrics.scannedTerms += 1
+            let canonical = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            let identity = folded(canonical)
+            guard seenTerms.insert(identity).inserted,
+                  canonical.count <= maximumTermCharacters,
+                  isSafeTerm(canonical) else { continue }
+            let canonicalWordCount = max(1, canonical.split(whereSeparator: { !$0.isLetter }).count)
+            let minimumWords = max(1, canonicalWordCount - 1)
+            let maximumWords = min(maximumPhraseWords, canonicalWordCount + 1)
+            guard minimumWords <= maximumWords,
+                  minimumWords <= words.count else { continue }
+            var best: (Double, String, Range<String.Index>)?
+            for wordCount in minimumWords...maximumWords where wordCount <= words.count {
+                for start in 0...(words.count - wordCount) {
+                    guard !Task.isCancelled else { break termLoop }
+                    metrics.candidateWindows += 1
+                    let range = words[start].lowerBound..<words[start + wordCount - 1].upperBound
+                    let heard = String(text[range])
+                    guard isSafeReplacement(heard: heard, replacement: canonical) else { continue }
+                    let foldedHeard = folded(heard)
+                    guard lengthDifferenceCanMeetSimilarity(
+                        foldedHeard.count,
+                        identity.count,
+                        minimumSimilarity: minimumSimilarity
+                    ) else { continue }
+                    guard metrics.similarityEvaluations < maximumSimilarityEvaluations else {
+                        metrics.reachedSimilarityEvaluationLimit = true
+                        break termLoop
+                    }
+                    metrics.similarityEvaluations += 1
+                    let score = similarity(foldedHeard, identity)
+                    guard score >= minimumSimilarity else { continue }
+                    if best == nil || score > best!.0
+                        || (score == best!.0 && range.lowerBound < best!.2.lowerBound) {
+                        best = (score, heard, range)
+                    }
+                }
+            }
+            guard let best else { continue }
+            let ordinal = wholeTermRanges(best.1, in: text).firstIndex(of: best.2).map { $0 + 1 } ?? 1
+            ranked.append((best.0, identity, .init(
+                questionID: "",
+                heard: best.1,
+                canonical: canonical,
+                alternatives: [.init(id: "replace_1", value: canonical, source: .vocabulary)],
+                ordinal: ordinal,
+                range: best.2
+            )))
+        }
+        let occurrences = ranked.sorted {
+            $0.score == $1.score ? $0.identity < $1.identity : $0.score > $1.score
+        }.map(\.occurrence)
+        return .init(occurrences: occurrences, metrics: metrics)
+    }
+
+    private static func lengthDifferenceCanMeetSimilarity(
+        _ lhsCount: Int,
+        _ rhsCount: Int,
+        minimumSimilarity: Double
+    ) -> Bool {
+        let maximumLength = max(lhsCount, rhsCount)
+        guard maximumLength > 0 else { return true }
+        let maximumDistance = Int(floor((1 - minimumSimilarity) * Double(maximumLength)))
+        return abs(lhsCount - rhsCount) <= maximumDistance
+    }
+
+    private static func reindexedNonOverlapping(
+        _ candidates: [ContextualCorrectionOccurrence]
+    ) -> [ContextualCorrectionOccurrence] {
+        var selected: [ContextualCorrectionOccurrence] = []
+        var identities = Set<String>()
+        for candidate in candidates {
+            let identity = "\(candidate.heard.lowercased())|\(candidate.canonical.lowercased())|\(candidate.ordinal)"
+            guard identities.insert(identity).inserted,
+                  selected.allSatisfy({
+                      $0.range.upperBound <= candidate.range.lowerBound
+                          || candidate.range.upperBound <= $0.range.lowerBound
+                  }) else { continue }
+            selected.append(candidate)
+            if selected.count == 3 { break }
+        }
+        return selected.sorted { $0.range.lowerBound < $1.range.lowerBound }
+            .enumerated().map { index, candidate in
+                ContextualCorrectionOccurrence(
+                    questionID: "o\(index + 1)",
+                    heard: candidate.heard,
+                    canonical: candidate.canonical,
+                    alternatives: candidate.alternatives,
+                    ordinal: candidate.ordinal,
+                    range: candidate.range
+                )
+            }
+    }
+
     private static func acousticOptions(
         evidence: WhisperTokenEvidence,
         heard: String,
@@ -513,6 +685,13 @@ struct ProactiveContextualCandidateGenerator {
     private static func isSafeReplacement(heard: String, replacement: String) -> Bool {
         guard isSafeTerm(replacement), folded(heard) != folded(replacement) else { return false }
         return heard.filter(\.isNumber) == replacement.filter(\.isNumber)
+            && negations(in: heard) == negations(in: replacement)
+    }
+
+    private static func negations(in value: String) -> Set<String> {
+        let protected = Set(["nao", "nunca", "jamais", "sem"])
+        let words = folded(value).split(whereSeparator: { !$0.isLetter }).map(String.init)
+        return Set(words).intersection(protected)
     }
 
     private static func isSafeTerm(_ value: String) -> Bool {
@@ -625,21 +804,6 @@ final class ContextualDispatchBudget: @unchecked Sendable {
     }
 
     var consumed: Int { lock.withLock { value } }
-}
-
-struct ProactiveCandidateSignature: Equatable, Sendable {
-    let foldedHeard: String
-    let ordinal: Int
-    let orderedOptionValues: [String]
-
-    init(_ occurrence: ContextualCorrectionOccurrence) {
-        foldedHeard = occurrence.heard.folding(
-            options: [.caseInsensitive, .diacriticInsensitive],
-            locale: Locale(identifier: "pt_BR")
-        ).lowercased()
-        ordinal = occurrence.ordinal
-        orderedOptionValues = occurrence.alternatives.map(\.value)
-    }
 }
 
 struct ContextualDecision: Equatable, Sendable {

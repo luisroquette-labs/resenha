@@ -19,7 +19,7 @@ depends_on:
 **Scope Included:**
 
 1. Avaliação contextual repetida durante o ditado ativo, com hipóteses provisórias visíveis no próprio Resenha e finalização ao soltar o atalho.
-2. Adaptações limitadas ao conteúdo reconhecido e a alternativas justificadas pelo contexto recente e vocabulário confirmado; avaliação objetiva de fidelidade e fluidez.
+2. Adaptações limitadas ao conteúdo reconhecido e a alternativas literais enumeradas mecanicamente por evidência acústica, vocabulário confirmado ou exemplos locais; JEV é a única autoridade sobre adequação semântica, com avaliação objetiva de fidelidade e fluidez.
 3. Orçamentos mensuráveis de captura, reconhecimento, decisão e inserção, com degradação previsível e preservação da transcrição local.
 4. Contexto limitado à sessão, controles de privacidade/custo, experiência offline e cancelamento seguro.
 5. Prova em corpus e hardware real, incluindo acessibilidade, regressões e distinção entre capacidade pretendida e comprovada.
@@ -297,7 +297,7 @@ Use [continuous-context-transcription](../../../.claude/skills/continuous-contex
 
 ### Solution Strategy
 
-Implement two coupled loops with different guarantees. The **local live loop** owns responsiveness: bounded PCM snapshots are recognized locally, converted into immutable hypothesis revisions and rendered only inside Resenha. The **optional semantic loop** observes meaningful changed revisions, finds alternatives from explicitly confirmed correction examples and asks Jev only to choose between `keep_original` and an allowlisted replacement. The local preview never waits for a network result, and any missing, uncertain, late or invalid decision preserves the local candidate.
+Implement two coupled loops with different guarantees. The **local live loop** owns responsiveness: bounded PCM snapshots are recognized locally, converted into immutable hypothesis revisions and rendered only inside Resenha. The **optional semantic loop** observes meaningful changed revisions, mechanically enumerates allowlisted literal alternatives from acoustic evidence, confirmed vocabulary and local correction examples, and asks Jev to choose `keep_original` or one replacement. Local code validates provenance, shape and exact spans but never decides semantic fit. The local preview never waits for a network result, and any missing, uncertain, late or invalid decision preserves the local candidate.
 
 This translates “Jev always evaluates the meaning” into continuous session-level observation, not a remote request for every audio frame. A request is admitted only when the current revision contains an eligible ambiguous occurrence, at least 500 ms has elapsed since the previous dispatch, and the privacy, authority, payload and concurrency gates pass. Equal and superseded revisions are coalesced. There is at most one contextual request active and one latest pending snapshot; no FIFO can grow with dictation length.
 
@@ -358,7 +358,7 @@ The semantic loop is conservative candidate selection, not prose generation:
 ```text
 hypothesis revision
   -> current-session bounded context
-  -> confirmed-example candidate matching
+  -> bounded mechanical enumeration from acoustic evidence, vocabulary and examples
   -> eligibility + consent + cost + rate gates
   -> typed Jev keep/replace questions
   -> exact schema/probability/span validation
@@ -366,7 +366,7 @@ hypothesis revision
   -> provisional overlay or original
 ```
 
-Only locally supplied literal replacements are legal. Preserve the existing confidence and selected-probability minimum of 0.90, strict winning probability, bounded occurrences and exact answer-ID validation. Numbers, negations, identifiers, overlaps, conflicting examples, malformed responses and unsupported windows abstain unless the existing deterministic rules explicitly prove the replacement safe. There is no retry, alternate provider, open-ended rewrite or persistent semantic cache.
+Only locally supplied literal replacements are legal. Deterministic code may reject unsafe provenance, numbers, negations, identifiers, overlaps, malformed spans and unsupported windows, but it never infers which safe alternative fits the sentence; that semantic choice belongs exclusively to Jev. Preserve the existing confidence and selected-probability minimum of 0.90, strict winning probability, bounded occurrences and exact answer-ID validation. Fuzzy vocabulary enumeration runs off the MainActor and is bounded per revision to 600 characters, 200 terms, four-word spans, 64 characters per term and 4,096 edit-similarity evaluations. Session/revision, policy and store authority are revalidated after enumeration and before transport; cancellation or supersession fails open. There is no retry, alternate provider, open-ended rewrite or persistent semantic cache.
 
 The current OpenRouter client remains pinned to the reviewed model/route when a personal path is authorized. Chunked HTTP response delivery is not treated as semantic streaming. Before repeated requests, `DecisionsStreamingTransport` must either key callbacks by session plus task identity or enforce and prove a lifetime in which task identifiers cannot alias across URLSession instances. Tests must overlap a cancelled old request with a new request and prove bodies, continuations and cancellation never cross.
 
@@ -393,7 +393,7 @@ There is no schema migration: confirmed contextual examples keep their existing 
 
 ### Verification Architecture
 
-Deterministic XCTest uses the existing clocks, provider/transport doubles, engine controls, sink spies and retention probes. Add an event fixture for partial/final revisions, Unicode windows, overlap, cancellation, delay and expected final spans. Tests cover latest-wins queue bounds, stable/volatile text, stale and duplicated events, exact one commit, cancelled old/new transport isolation, byte/time boundaries, offline/opt-out, memory release and all current final-output regressions.
+Deterministic XCTest uses the existing clocks, provider/transport doubles, engine controls, sink spies and retention probes. Add an event fixture for partial/final revisions, Unicode windows, overlap, cancellation, delay and expected final spans. Tests cover latest-wins queue bounds, stable/volatile text, stale and duplicated events, exact one commit, cancelled old/new transport isolation, byte/time boundaries, offline/opt-out, memory release and all current final-output regressions. Candidate-enumeration regressions include Unicode, numbers, negations, overlapping/repeated fuzzy spans and terms above the four-word bound; a deterministic work counter proves at most 4,096 edit-similarity evaluations for a 600-character/200-term worst-case fixture without relying on wall-clock assertions.
 
 The frozen PT-BR corpus compares completed-recording baseline, local rolling mode and mocked contextual mode before thresholds are tuned. It must include at least the Acceptance Criteria cases and controls. Mock results prove orchestration only. Physical Apple Silicon runs then measure the full microphone -> preview -> final target path with monotonic traces and identify commit, model, hardware, cold/warm state and sample counts. A separately authorized frozen remote run is the only evidence for actual Jev latency/cost/schema; it still does not prove broad PT-BR quality.
 
@@ -406,7 +406,7 @@ No phase may claim success merely because fallback is fast. If quality, latency,
 | ADR-1 — App-owned live preview, one external commit | Gives continuous feedback without inventing editor-range and undo ownership. It does not provide inline third-party text before release. |
 | ADR-2 — Existing Whisper engine first | Avoids a new dependency, deployment-floor increase and silent cloud fallback. Rolling quality/performance must be calibrated; completed-WAV remains fallback. |
 | ADR-3 — One cohesive session owner | Centralizes revisions, backpressure, retention and commit guards without duplicating coordinator/output responsibilities. It adds one source file instead of a generic streaming framework. |
-| ADR-4 — Candidate-bound Jev decisions | Preserves fidelity and the established contextual-correction validator. It cannot invent the next word or fix an error for which no confirmed alternative exists. |
+| ADR-4 — Candidate-bound Jev semantic authority | Local code mechanically enumerates literal alternatives from acoustic evidence, confirmed vocabulary and local examples, then validates provenance and exact spans. Jev alone chooses semantic fit; it cannot invent the next word or emit text outside the allowlist. |
 | ADR-5 — Local path never waits for network | Makes perceived latency and offline behavior deterministic. Semantic improvement may arrive too late and safely abstain. |
 | ADR-6 — Personal remote mode separately authorized | Prevents a synthetic diagnostic key/toggle from becoming recurring paid personal transmission. Until consent and cost controls exist, real personal Jev traffic stays closed. |
 | ADR-7 — Benchmark-gated window constants | Avoids false precision from upstream examples. It requires a local calibration milestone before live mode can be enabled. |

@@ -223,8 +223,6 @@ final class ContinuousContextSession: @unchecked Sendable {
         var lastWorkDispatchedAt: TimeInterval?
         var contextualPreviewText: String?
         var finalCandidate: ContinuousContextFinalCandidate?
-        var proactiveSignature: ProactiveCandidateSignature?
-        var proactiveSignatureCount = 0
         var ephemeralTerms: [String] = []
     }
 
@@ -398,27 +396,6 @@ final class ContinuousContextSession: @unchecked Sendable {
         }
     }
 
-    func isStableForDispatch(_ occurrence: ContextualCorrectionOccurrence) -> Bool {
-        lock.withLock {
-            if occurrence.alternatives.allSatisfy({ $0.source == .learned }) { return true }
-            let signature = ProactiveCandidateSignature(occurrence)
-            if storage.proactiveSignature == signature {
-                storage.proactiveSignatureCount += 1
-            } else {
-                storage.proactiveSignature = signature
-                storage.proactiveSignatureCount = 1
-            }
-            return storage.proactiveSignatureCount >= 2
-        }
-    }
-
-    func resetProactiveStability() {
-        lock.withLock {
-            storage.proactiveSignature = nil
-            storage.proactiveSignatureCount = 0
-        }
-    }
-
     @discardableResult
     func registerCancellation(
         for work: ContinuousContextWork,
@@ -450,6 +427,18 @@ final class ContinuousContextSession: @unchecked Sendable {
             return work.attemptID == storage.attemptID
                 && work.generationIDs.session == storage.sessionGeneration
                 && work.revision == storage.latestRevision?.revision
+                && now() < work.expiresAt
+        }
+    }
+
+    func isCurrentForTransport(_ work: ContinuousContextWork) -> Bool {
+        lock.withLock {
+            storage.state == .capturing
+                && storage.activeWork?.id == work.id
+                && work.attemptID == storage.attemptID
+                && work.generationIDs.session == storage.sessionGeneration
+                && work.revision == storage.latestRevision?.revision
+                && work.sourceText == storage.latestRevision?.sourceText
                 && now() < work.expiresAt
         }
     }
@@ -585,8 +574,6 @@ final class ContinuousContextSession: @unchecked Sendable {
         storage.retainedAudioRange = nil
         storage.retainedContext = ""
         storage.contextualPreviewText = nil
-        storage.proactiveSignature = nil
-        storage.proactiveSignatureCount = 0
         if !keepingFinalCandidate { storage.finalCandidate = nil }
         return cancellation
     }
@@ -681,6 +668,19 @@ private final class RevisionBoundTaskCancellation {
 
 @MainActor
 final class RevisionBoundJevLoop {
+    struct CandidateEnumerationInput: Sendable {
+        let text: String
+        let language: String
+        let tokenEvidence: [WhisperTokenEvidence]
+        let glossaryTerms: [String]
+        let examples: [ContextualCorrectionExample]
+        let thresholds: ProactiveCandidateThresholds
+    }
+
+    typealias CandidateEnumerator = @Sendable (
+        CandidateEnumerationInput
+    ) -> [ContextualCorrectionOccurrence]
+
     private let session: ContinuousContextSession
     private let provider: any ContextualDecisionProvider
     private let time: any ContextualMonotonicTime
@@ -690,6 +690,7 @@ final class RevisionBoundJevLoop {
     private let dispatchBudget: ContextualDispatchBudget
     private let glossaryTerms: @MainActor @Sendable () -> [String]
     private let thresholds: ProactiveCandidateThresholds
+    private let candidateEnumerator: CandidateEnumerator
     private let onAttemptDisposition: @MainActor @Sendable (
         UUID, ContextualAttemptDisposition, ContextualAttemptContext
     ) -> Void
@@ -705,6 +706,16 @@ final class RevisionBoundJevLoop {
         dispatchBudget: ContextualDispatchBudget = ContextualDispatchBudget(),
         glossaryTerms: @escaping @MainActor @Sendable () -> [String] = { [] },
         thresholds: ProactiveCandidateThresholds = .frozen,
+        candidateEnumerator: @escaping CandidateEnumerator = { input in
+            ProactiveContextualCandidateGenerator.semanticCandidates(
+                text: input.text,
+                language: input.language,
+                tokenEvidence: input.tokenEvidence,
+                glossaryTerms: input.glossaryTerms,
+                examples: input.examples,
+                thresholds: input.thresholds
+            )
+        },
         onAttemptDisposition: @escaping @MainActor @Sendable (
             UUID, ContextualAttemptDisposition, ContextualAttemptContext
         ) -> Void = { _, _, _ in }
@@ -718,6 +729,7 @@ final class RevisionBoundJevLoop {
         self.dispatchBudget = dispatchBudget
         self.glossaryTerms = glossaryTerms
         self.thresholds = thresholds
+        self.candidateEnumerator = candidateEnumerator
         self.onAttemptDisposition = onAttemptDisposition
     }
 
@@ -750,29 +762,40 @@ final class RevisionBoundJevLoop {
             _ = session.applyContextualResult(abstained, for: work)
             return abstained
         }
-        let learned = ContextualCorrectionResolver.matchCandidates(
-            examples: snapshot.examples,
-            text: work.sourceText,
-            language: work.language
-        )
-        let occurrences: [ContextualCorrectionOccurrence]
-        if !learned.isEmpty {
-            occurrences = learned
-        } else if let proactive = ProactiveContextualCandidateGenerator.candidate(
+        let enumerationInput = CandidateEnumerationInput(
             text: work.sourceText,
             language: work.language,
             tokenEvidence: work.tokenEvidence,
             glossaryTerms: glossaryTerms(),
-            examples: [],
+            examples: snapshot.examples,
             thresholds: thresholds
-        ) {
-            guard session.isStableForDispatch(proactive) else {
-                _ = session.applyContextualResult(abstained, for: work)
-                return abstained
-            }
-            occurrences = [proactive]
+        )
+        let candidateEnumerator = candidateEnumerator
+        let enumerationTask = Task.detached(priority: .userInitiated) {
+            candidateEnumerator(enumerationInput)
+        }
+        let occurrences = await withTaskCancellationHandler {
+            await enumerationTask.value
+        } onCancel: {
+            enumerationTask.cancel()
+        }
+        let snapshotAfterEnumeration = storeSnapshot()
+        let policyStillCurrent: Bool
+        if let policyToken {
+            policyStillCurrent = policy?.isCurrent(policyToken) == true
         } else {
-            session.resetProactiveStability()
+            policyStillCurrent = true
+        }
+        guard !Task.isCancelled,
+              session.isCurrentForTransport(work),
+              policyGeneration() == policyAtStart,
+              snapshotAfterEnumeration.health == .healthy,
+              snapshotAfterEnumeration.generation == snapshot.generation,
+              policyStillCurrent else {
+            _ = session.applyContextualResult(abstained, for: work)
+            return abstained
+        }
+        guard !occurrences.isEmpty else {
             _ = session.applyContextualResult(abstained, for: work)
             return abstained
         }
