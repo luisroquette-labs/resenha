@@ -1883,8 +1883,36 @@ final class URLSessionDecisionsStreamingTransport: NSObject, URLSessionDecisions
 
     private let time: any ContextualMonotonicTime
     private let contexts = DecisionsTransportContextRegistry<RequestContext>()
+    private var session: URLSession!
 
-    init(time: any ContextualMonotonicTime) { self.time = time }
+    init(time: any ContextualMonotonicTime) {
+        self.time = time
+        super.init()
+        session = URLSession(
+            configuration: Self.secureConfiguration(), delegate: self, delegateQueue: nil
+        )
+    }
+
+    init(
+        time: any ContextualMonotonicTime,
+        configuration: URLSessionConfiguration,
+        sessionFactory: (URLSessionConfiguration, URLSessionDelegate) -> URLSession = {
+            URLSession(configuration: $0, delegate: $1, delegateQueue: nil)
+        }
+    ) {
+        self.time = time
+        super.init()
+        session = sessionFactory(configuration, self)
+    }
+
+    static func secureConfiguration() -> URLSessionConfiguration {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.urlCache = nil
+        configuration.httpCookieStorage = nil
+        configuration.urlCredentialStorage = nil
+        configuration.httpShouldSetCookies = false
+        return configuration
+    }
 
     func open(
         _ request: URLRequest,
@@ -1892,15 +1920,10 @@ final class URLSessionDecisionsStreamingTransport: NSObject, URLSessionDecisions
         deadline: ContextualInstant
     ) async throws -> DecisionsResponseStream {
         guard deadline > time.now() else { throw OpenRouterDecisionsError.timedOut }
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.urlCache = nil
-        configuration.httpCookieStorage = nil
-        configuration.urlCredentialStorage = nil
-        configuration.httpShouldSetCookies = false
         let remaining = max(0.001, seconds(deadline.offset - time.now().offset))
-        configuration.timeoutIntervalForRequest = remaining
-        configuration.timeoutIntervalForResource = remaining
-        let session = URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
+        var request = request
+        request.timeoutInterval = remaining
+        let session = session!
         let canceller = TaskCanceller()
         let state = DecisionsDelegateState(maximumResponseBytes: maximumResponseBytes) {
             canceller.cancel()
@@ -1970,7 +1993,6 @@ final class URLSessionDecisionsStreamingTransport: NSObject, URLSessionDecisions
             )
         }
         context?.state.finish(context?.completionError ?? error)
-        session.finishTasksAndInvalidate()
     }
 
     func urlSession(
