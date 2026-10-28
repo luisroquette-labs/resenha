@@ -282,6 +282,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
         assert.match(html, /name="description"[^>]*content="[^"]*Tipo o Wispr[^"]*grátis[^"]*JEV[^"]*"/iu);
         assert.match(html, /property="og:title"/u);
         assert.match(html, /property="og:description"/u);
+        assert.match(html, /property="og:image"[^>]*resenha-social-card\.png/u);
+        assert.match(html, /name="twitter:card"[^>]*summary_large_image/u);
         assert.match(html, /licença MIT/u);
         assert.match(html, /SwiftUI/u); assert.match(html, /whisper\.cpp/u); assert.match(html, /ATALHO LIVRE/u);
         assert.match(html, /Acessibilidade/u);
@@ -312,8 +314,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
           'assets/product/settings-general.webp', 'assets/product/settings-shortcut.webp',
           'assets/product/settings-sounds.webp', 'assets/product/settings-audio.webp',
           'assets/product/settings-transcription.webp', 'assets/product/settings-about.webp',
-          'assets/product/resenha-flow.mp4', 'assets/product/resenha-settings.mp4',
-          'assets/product/resenha-flow-poster.webp']) {
+          'assets/product/resenha-launch-16x9.mp4', 'assets/product/resenha-settings.mp4',
+          'assets/product/resenha-flow-poster.webp', 'assets/product/resenha-social-card.png']) {
           assert.ok(html.includes(name));
           assert.equal((await get(preview.origin, prefix + name)).status, 200);
         }

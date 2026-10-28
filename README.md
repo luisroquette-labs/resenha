@@ -1,7 +1,30 @@
+<p align="center">
+  <img src="AppStore/brand/lockup/resenha-lockup-ink-2400.png" alt="Resenha" width="520">
+</p>
+
+<p align="center"><strong>Tipo o Wispr, mas grátis e com JEV.</strong></p>
+
+<p align="center">
+  <a href="https://luisroquette-labs.github.io/resenha/">Site e download</a> ·
+  <a href="site/assets/product/resenha-launch-16x9.mp4">Demo de 27 segundos</a> ·
+  <a href="docs/PRIVACY.md">Privacidade</a> ·
+  <a href="LICENSE">MIT</a>
+</p>
+
+<p align="center">
+  <img alt="macOS 14+" src="https://img.shields.io/badge/macOS-14%2B-101114?style=flat-square">
+  <img alt="Apple Silicon" src="https://img.shields.io/badge/Apple_Silicon-arm64-42685f?style=flat-square">
+  <img alt="Licença MIT" src="https://img.shields.io/badge/licença-MIT-6ea397?style=flat-square">
+  <img alt="Grátis e open source" src="https://img.shields.io/badge/preço-grátis-ef765f?style=flat-square">
+</p>
+
 # Resenha
 
 **Fale. O Resenha escreve.** Ditado push-to-talk nativo para macOS, gratuito,
 local e de código aberto. Requer Apple Silicon e macOS 14 ou posterior.
+
+> Segure o atalho, fale e solte. O Whisper transcreve no próprio Mac; o JEV
+> opcional avalia somente texto e alternativas locais. Em dúvida, o original vence.
 
 Windows: há um EXE Beta público e explicitamente não assinado para testes. Ele
 pode acionar o SmartScreen. A distribuição final para leigos será o MSIX da
