@@ -10,9 +10,16 @@
   <meta property="og:locale" content="pt_BR">
   <meta property="og:title" content="Resenha — tipo o Wispr, mas grátis e com JEV">
   <meta property="og:description" content="Ditado local para Mac com inteligência contextual opcional e sem limite semanal de palavras.">
+  <meta property="og:image" content="https://luisroquette-labs.github.io/resenha/assets/product/resenha-social-card.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Resenha — tipo o Wispr, mas grátis e com JEV">
+  <meta name="twitter:description" content="Ditado local para Mac, gratuito e open source, com inteligência contextual opcional.">
+  <meta name="twitter:image" content="https://luisroquette-labs.github.io/resenha/assets/product/resenha-social-card.png">
   <meta name="theme-color" content="#f1eee4">
   <link rel="icon" href="assets/brand/resenha-app-icon.png">
-  <link rel="stylesheet" href="styles.css?v=20261004-3">
+  <link rel="stylesheet" href="styles.css?v=20261005-1">
   <script type="module" src="analytics.mjs?v=20261004-1"></script>
   <script type="module" src="release.mjs?v=20261024-2"></script>
   <script type="module" src="media.mjs?v=20261003-2"></script>
@@ -42,12 +49,12 @@
         <p class="hero-lead">O Whisper transcreve no Mac. Se você ativar, o JEV avalia o contexto sem receber seu áudio. Ele usa sua própria chave e o OpenRouter pode cobrar o consumo diretamente na sua conta.</p>
         <div class="hero-actions">
           <a class="button" href="#download">Baixar grátis <span aria-hidden="true">↘</span></a>
-          <a class="text-link" href="alternativa-wispr-flow/">Comparar com Wispr Flow →</a>
+          <a class="text-link" href="#demo">Ver em 27 segundos ↓</a>
         </div>
       </div>
 
-      <div class="hero-stage" aria-label="Demonstração visual do Resenha transcrevendo uma frase">
-        <p class="hero-stamp" aria-label="Grátis e open source"><span>R$ 0</span>OPEN SOURCE</p>
+      <div class="hero-stage" role="group" aria-label="Demonstração visual do Resenha transcrevendo uma frase">
+        <p class="hero-stamp"><span>R$ 0</span>OPEN SOURCE</p>
         <div class="sound-rings" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
         <div class="editor-window">
           <div class="window-bar" aria-hidden="true"><span></span><span></span><span></span><b>rascunho.txt</b></div>
@@ -84,7 +91,7 @@
           <p class="comparison-lead">O plano gratuito do Wispr Flow informa um limite semanal no desktop. O Resenha não impõe franquia: ele roda no seu próprio Mac, sob licença MIT.</p>
           <a class="button button-light" href="alternativa-wispr-flow/">Ver a comparação completa <span aria-hidden="true">↘</span></a>
         </div>
-        <div class="comparison-card" aria-label="Resumo da comparação entre Resenha e Wispr Flow">
+        <div class="comparison-card" role="group" aria-label="Resumo da comparação entre Resenha e Wispr Flow">
           <div class="comparison-head"><span>O que muda</span><b>Resenha</b><b>Wispr Flow Free</b></div>
           <div><span>Limite semanal</span><strong>Não impõe</strong><span>2.000 palavras no desktop</span></div>
           <div><span>Preço</span><strong>Grátis</strong><span>Grátis com limite</span></div>
@@ -116,13 +123,13 @@
           <p>Vídeos e capturas gerados com os próprios componentes SwiftUI do aplicativo.</p>
         </div>
 
-        <figure class="product-film" data-reveal>
+        <figure class="product-film" id="demo" data-reveal>
           <div class="film-frame">
-            <video autoplay muted loop playsinline controls preload="metadata" poster="assets/product/resenha-flow-poster.webp" aria-label="Demonstração do fluxo de ditado do Resenha">
-              <source src="assets/product/resenha-flow.mp4" type="video/mp4">
+            <video autoplay muted loop playsinline controls preload="metadata" poster="assets/product/resenha-flow-poster.webp" aria-label="Filme de lançamento do Resenha mostrando ditado local e ajustes de contexto">
+              <source src="assets/product/resenha-launch-16x9.mp4" type="video/mp4">
             </video>
           </div>
-          <figcaption><span>01 / FLUXO COMPLETO</span><h3>Da voz ao cursor em oito segundos.</h3><p>Demonstração do HUD nativo nos estados Ouvindo, Transcrevendo e Inserindo.</p></figcaption>
+          <figcaption><span>01 / FILME DE LANÇAMENTO</span><h3>Vinte e sete segundos. Nenhuma promessa escondida.</h3><p>Interface real: ditado, inserção no cursor, ajustes de contexto e a fronteira entre Whisper local e JEV opcional.</p></figcaption>
         </figure>
 
         <figure class="product-film settings-film" data-reveal>
@@ -130,7 +137,7 @@
           <figcaption><span>02 / TOUR DOS AJUSTES</span><h3>Seis áreas. Nenhuma bagunça.</h3><p>Geral, atalho, sons, áudio, transcrição e informações do aplicativo.</p></figcaption>
         </figure>
 
-        <div class="screen-gallery" id="telas" aria-label="Galeria das telas do Resenha">
+        <div class="screen-gallery" id="telas" role="region" tabindex="0" aria-label="Galeria das telas do Resenha">
           <figure><div><img src="assets/product/settings-general.webp" alt="Tela Geral dos ajustes do Resenha"></div><figcaption><b>01</b> Geral</figcaption></figure>
           <figure><div><img src="assets/product/settings-shortcut.webp" alt="Tela de personalização do atalho do Resenha"></div><figcaption><b>02</b> Atalho</figcaption></figure>
           <figure><div><img src="assets/product/settings-sounds.webp" alt="Biblioteca de sons rápidos do Resenha"></div><figcaption><b>03</b> Sons</figcaption></figure>
@@ -190,12 +197,13 @@
       <div class="download-card">
         <div class="download-icon"><img src="assets/brand/resenha-app-icon.png" alt="Ícone do Resenha" width="128" height="128"></div>
         <div class="download-copy">
-          <p class="kicker">Versão 1.1 para macOS</p>
+          <p class="kicker">Resenha para desktop</p>
           <h2 id="download-title">Fale quanto quiser.</h2>
           <p>Grátis, open source, sem limite semanal e otimizado para Apple Silicon. Requer macOS 14 ou posterior.</p>
         </div>
         <div class="download-actions">
           <div class="release-slot" data-release-channel="macos"><strong>Baixar para macOS</strong><span>DMG assinado e notarizado pela Apple.</span></div>
+          <div class="release-slot beta-release" data-release-channel="windowsBeta"><strong>Baixar para Windows — Beta</strong><span>Versão de teste não assinada. O Windows pode exibir o SmartScreen.</span></div>
           <div class="release-slot secondary-release" data-release-channel="source"><strong>Ver código no GitHub</strong><span>Licença MIT e desenvolvimento público.</span></div>
         </div>
       </div>
@@ -210,14 +218,14 @@
         <details><summary>Posso escolher o atalho?</summary><p>Sim. Grave qualquer tecla ou combinação dentro do próprio Resenha, inclusive Option direita isolada.</p></details>
         <details><summary>O Resenha é uma alternativa ao Wispr Flow?</summary><p>Sim, para quem procura ditado no Mac sem assinatura, sem conta e sem limite semanal. O Resenha é local e open source; não tenta reproduzir todos os recursos em nuvem e de equipe do Wispr Flow.</p></details>
         <details><summary>Quais idiomas estão disponíveis?</summary><p>Português do Brasil, inglês e espanhol. Em PT-BR, o vocabulário pessoal ajuda a preservar nomes, siglas e palavras em inglês.</p></details>
-        <details><summary>Existe versão para Windows?</summary><p>O foco da versão 1.0 é macOS com Apple Silicon. Windows continua no roteiro, mas ainda não tem data pública.</p></details>
+        <details><summary>Existe versão para Windows?</summary><p>Sim, existe uma Beta nativa para Windows 10/11 x64. Ela ainda não é assinada e pode exibir o SmartScreen. A versão final continuará em validação até concluir assinatura, scan e testes físicos.</p></details>
       </div>
     </section>
   </main>
 
   <footer class="site-footer shell">
     <a class="brand" href="#inicio" aria-label="Resenha, voltar ao início"><img src="assets/brand/resenha-mark.svg" alt="" width="36" height="36"><span>resenha.</span></a>
-    <p>Feito em português.<br><span>Áudio processado no seu Mac.</span></p>
+    <p>Feito em português.<br><span>Processado no seu computador.</span></p>
     <div><a href="#privacidade">Privacidade</a><a href="#codigo">MIT</a></div>
   </footer>
 </body>
