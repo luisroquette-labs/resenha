@@ -11,6 +11,9 @@ Status: preparado; publicação condicionada ao instalador público verificado.
 - Tópicos: `AI Dictation Apps`, `Mac`, `Open Source`
 - Thumbnail: `AppStore/brand/app-icon/resenha-app-icon-1024.png`
 - Galeria: `AppStore/screenshots/pt-BR/01-fale-solte-continue.png`, `AppStore/screenshots/pt-BR/03-atalho-global.png`, `AppStore/screenshots/pt-BR/06-privacidade-local.png`
+- Filme principal: `site/assets/product/resenha-launch-16x9.mp4`
+- Corte vertical para X: `site/assets/product/resenha-launch-9x16.mp4`
+- Social card: `site/assets/product/resenha-social-card.png`
 
 ### Descrição curta
 
@@ -31,6 +34,8 @@ Repository: https://github.com/luisroquette-labs/resenha
 ## Calendário editorial
 
 `T` é o dia do Product Hunt. Horários em America/Sao_Paulo.
+
+Prioridade de distribuição: X primeiro; Product Hunt concentra o pico de lançamento; LinkedIn recebe as peças técnicas de maior permanência.
 
 | Momento | Canal | Horário | Peça |
 |---|---|---:|---|
