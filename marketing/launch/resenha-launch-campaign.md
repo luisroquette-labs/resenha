@@ -1,6 +1,14 @@
 # Resenha — Product Hunt e campanha social
 
-Status: preparado; publicação condicionada ao instalador público verificado.
+Status: campanha social agendada; lançamento do Product Hunt preparado para 03/11/2026.
+
+## Execução verificada em 28/10/2026
+
+- `@thedoomguy_ai`: 17 posts distintos, às 10:15.
+- `@luisroquette`: 17 posts distintos, às 18:20.
+- LinkedIn de Luis Fernando Roquette: 17 posts distintos, às 08:40; filme de lançamento às 11:40.
+- Cadência: 29/10 a 04/11 diariamente; 05, 07, 09 e 11/11; 13 e 17/11; 19, 21, 23 e 25/11.
+- Filme: 03/11 no X das duas contas e no LinkedIn.
 
 ## Product Hunt
 
@@ -8,7 +16,7 @@ Status: preparado; publicação condicionada ao instalador público verificado.
 - Tagline: `Local voice typing with contextual AI, free`
 - URL: `https://luisroquette-labs.github.io/resenha/`
 - Preço: `Free`
-- Tópicos: `AI Dictation Apps`, `Mac`, `Open Source`
+- Categorias: `AI Dictation Apps`, `Note and writing apps`, `Writing assistants`
 - Thumbnail: `AppStore/brand/app-icon/resenha-app-icon-1024.png`
 - Galeria: `AppStore/screenshots/pt-BR/01-fale-solte-continue.png`, `AppStore/screenshots/pt-BR/03-atalho-global.png`, `AppStore/screenshots/pt-BR/06-privacidade-local.png`
 - Filme principal: `site/assets/product/resenha-launch-16x9.mp4`
@@ -33,20 +41,18 @@ Repository: https://github.com/luisroquette-labs/resenha
 
 ## Calendário editorial
 
-`T` é o dia do Product Hunt. Horários em America/Sao_Paulo.
+`T` é 03/11/2026, dia do Product Hunt. Horários em America/Sao_Paulo.
 
 Prioridade de distribuição: X primeiro; Product Hunt concentra o pico de lançamento; LinkedIn recebe as peças técnicas de maior permanência.
 
-| Momento | Canal | Horário | Peça |
-|---|---|---:|---|
-| T-3 | X | 10:15 | Lista editorial de repositórios |
-| T-2 | LinkedIn | 08:40 | Problema e arquitetura local |
-| T-1 | X | 18:20 | Demonstração curta |
-| T | Product Hunt | 05:01 | Lançamento |
-| T | X | 09:10 | Produto disponível |
-| T | LinkedIn | 11:40 | História da construção |
-| T+2 | X | 12:15 | Como o JEV decide pelo contexto |
-| T+4 | LinkedIn | 09:20 | Privacidade e BYOK |
+| Período | Datas | Canal | Horário | Frequência |
+|---|---|---|---:|---|
+| Semana 1 | 29/10–04/11 | X `@thedoomguy_ai` | 10:15 | diária |
+| Semana 1 | 29/10–04/11 | X `@luisroquette` | 18:20 | diária |
+| Semana 1 | 29/10–04/11 | LinkedIn | 08:40 | diária; 03/11 às 11:40 |
+| Semana 2 | 05, 07, 09 e 11/11 | três canais | horários acima | dia sim, dia não |
+| Semana 3 | 13 e 17/11 | três canais | horários acima | 2 publicações |
+| Semana 4 | 19, 21, 23 e 25/11 | três canais | horários acima | 4 publicações |
 
 ## Posts para X
 
