@@ -1,4 +1,4 @@
-# Resenha 1.1.1 — ficha de submissão
+# Resenha 1.2.0 — ficha de submissão
 
 ## Identidade
 
@@ -7,8 +7,8 @@
 - Bundle ID: `br.com.luisroquette.Resenha`
 - SKU: `resenha-macos-1`
 - Plataforma: macOS
-- Versão: `1.1.1`
-- Build: `20261029`
+- Versão: `1.2.0`
+- Build: `20261101`
 - Preço: grátis
 - Disponibilidade: todos os territórios elegíveis
 - Lançamento: manual após aprovação

@@ -1,7 +1,7 @@
 # Política de Privacidade do Resenha
 
 **Vigência:** 24 de outubro de 2026
-**Aplicável à versão macOS:** 1.1.1; **Windows:** versão pública 0.1.0 e atualização 0.2.0 em preparação
+**Aplicável à versão macOS:** 1.2.0; **Windows:** versão pública 0.1.0 e atualização 0.2.0 em preparação
 
 Resenha é um aplicativo de ditado local para macOS. Não criamos contas, não
 operamos um backend do produto e não exibimos anúncios. O áudio permanece no
