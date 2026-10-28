@@ -7,9 +7,9 @@
 **Depends on:** 03
 **Parallel with:** 04 and 05
 **Note:** This changes shared contextual-correction contracts and repeated transport concurrency. Use doubles only; no paid call or personal text transmission is authorized here.
-**Goal:** Evaluate eligible changed revisions through bounded typed Jev choices while keeping local preview/finalization non-blocking and preserving the original on every uncertain path.
+**Goal:** Evaluate eligible changed revisions through bounded typed Jev choices while keeping local preview/finalization non-blocking and preserving the original on every uncertain path. Local code may enumerate safe literal alternatives mechanically, but Jev is the sole semantic authority for keep/replace.
 
-Modify `Sources/WhisperKey/ContinuousContextSession.swift` and `Sources/WhisperKey/ContextualCorrections.swift`. Extend requests/results with immutable revision/window identity and apply only locally supplied literal alternatives from confirmed examples. Admit work no faster than every 500 ms, with one active request and one replaceable pending snapshot. Keep 0.90 confidence/probability thresholds, 200 ms hard decision deadline and 4096-byte payload ceiling.
+Modify `Sources/WhisperKey/ContinuousContextSession.swift` and `Sources/WhisperKey/ContextualCorrections.swift`. Extend requests/results with immutable revision/window identity and apply only locally supplied literal alternatives from acoustic evidence, vocabulary or confirmed examples. Deterministic code must not decide semantic fit; it only bounds and validates the alternatives that Jev evaluates. Run fuzzy enumeration off the MainActor, bound it to 600 characters, 200 terms, four-word/64-character terms and 4,096 edit-similarity evaluations per revision, then revalidate revision/policy/store authority before transport. Admit work no faster than every 500 ms, with one active request and one replaceable pending snapshot. Keep 0.90 confidence/probability thresholds, 200 ms hard decision deadline and 4096-byte payload ceiling.
 
 #### Expected Output
 

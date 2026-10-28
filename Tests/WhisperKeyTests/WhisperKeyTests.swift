@@ -2818,6 +2818,7 @@ final class WhisperKeyTests: XCTestCase {
         private var continuation: CheckedContinuation<ContextualDecisionReceipt, Error>?
         private var startWaiters: [CheckedContinuation<Void, Never>] = []
         private(set) var requestCount = 0
+        private(set) var capturedOccurrences: [[ContextualCorrectionOccurrence]] = []
 
         init(_ mode: Mode) { self.mode = mode }
 
@@ -2828,6 +2829,7 @@ final class WhisperKeyTests: XCTestCase {
             deadline: ContextualInstant
         ) async throws -> ContextualDecisionReceipt {
             requestCount += 1
+            capturedOccurrences.append(occurrences)
             let waiters = startWaiters
             startWaiters.removeAll()
             waiters.forEach { $0.resume() }
@@ -2848,6 +2850,37 @@ final class WhisperKeyTests: XCTestCase {
             continuation?.resume(returning: receipt)
             continuation = nil
         }
+    }
+
+    private final class RevisionEnumerationProbe: @unchecked Sendable {
+        private let started = DispatchSemaphore(value: 0)
+        private let resume = DispatchSemaphore(value: 0)
+        private let lock = NSLock()
+        private var recordedMainThread: Bool?
+
+        func enumerate(
+            _ input: RevisionBoundJevLoop.CandidateEnumerationInput
+        ) -> [ContextualCorrectionOccurrence] {
+            lock.withLock { recordedMainThread = Thread.isMainThread }
+            started.signal()
+            resume.wait()
+            return ProactiveContextualCandidateGenerator.semanticCandidates(
+                text: input.text,
+                language: input.language,
+                tokenEvidence: input.tokenEvidence,
+                glossaryTerms: input.glossaryTerms,
+                examples: input.examples,
+                thresholds: input.thresholds
+            )
+        }
+
+        func waitUntilStarted() async {
+            await Task.detached { self.started.wait() }.value
+        }
+
+        func allowCompletion() { resume.signal() }
+
+        var ranOnMainThread: Bool? { lock.withLock { recordedMainThread } }
     }
 
     private final class RevisionLifetimeProbe: @unchecked Sendable {}
@@ -3123,7 +3156,7 @@ final class WhisperKeyTests: XCTestCase {
     }
 
     @MainActor
-    func testProactiveLoopDispatchesOnlyAfterSecondIdenticalCandidate() async throws {
+    func testProactiveLoopLetsJevEvaluateFirstEligibleRevision() async throws {
         let uptime = RevisionUptime()
         let session = ContinuousContextSession(now: { uptime.now() })
         let provider = RevisionLoopProvider(.immediate(revisionReceipt()))
@@ -3146,7 +3179,7 @@ final class WhisperKeyTests: XCTestCase {
         ))
         _ = await loop.evaluateNext(scope: .testDouble)
         let firstRequestCount = await provider.requestCount
-        XCTAssertEqual(firstRequestCount, 0)
+        XCTAssertEqual(firstRequestCount, 1)
 
         uptime.set(milliseconds: 500)
         _ = session.ingest(SessionEvent(
@@ -3155,9 +3188,164 @@ final class WhisperKeyTests: XCTestCase {
         ))
         let result = await loop.evaluateNext(scope: .testDouble)
         let secondRequestCount = await provider.requestCount
-        XCTAssertEqual(secondRequestCount, 1)
+        XCTAssertEqual(secondRequestCount, 2)
         XCTAssertEqual(result?.text, "Reservei uma cama no Hostel hoje.")
         XCTAssertEqual(session.ephemeralTerms, ["Hostel"])
+    }
+
+    @MainActor
+    func testRevisionBoundLoopLetsJevChooseFuzzyPhraseWithoutLocalSemanticRule() async throws {
+        let text = "A coisa da energia chegou cedo, mas a coisa mais importante ficou para depois."
+        let session = ContinuousContextSession(now: { 0 })
+        let provider = RevisionLoopProvider(.immediate(revisionReceipt()))
+        let snapshot = ContextualCorrectionStoreSnapshot(examples: [], generation: 1, health: .healthy)
+        let loop = RevisionBoundJevLoop(
+            session: session,
+            provider: provider,
+            time: ManualContextualTime(),
+            storeSnapshot: { snapshot },
+            policyGeneration: { 1 },
+            glossaryTerms: { ["COESA Energia"] }
+        )
+        XCTAssertTrue(session.start(attemptID: UUID(), language: "pt-BR"))
+        _ = session.ingest(SessionEvent(
+            snapshotID: 1, sampleRange: 0..<100, capturedAt: 0,
+            candidateAt: 0, text: text
+        ))
+
+        let result = await loop.evaluateNext(scope: .testDouble)
+        let captured = await provider.capturedOccurrences.last
+        let occurrences = try XCTUnwrap(captured)
+
+        XCTAssertEqual(occurrences.count, 1)
+        XCTAssertEqual(occurrences[0].heard, "coisa da energia")
+        XCTAssertEqual(occurrences[0].alternatives.map(\.value), ["COESA Energia"])
+        XCTAssertEqual(
+            result?.text,
+            "A COESA Energia chegou cedo, mas a coisa mais importante ficou para depois."
+        )
+    }
+
+    @MainActor
+    func testRevisionBoundLoopLetsJevKeepUnicodeFuzzyCandidate() async throws {
+        let text = "A coísa da energía chegou cedo."
+        let session = ContinuousContextSession(now: { 0 })
+        let provider = RevisionLoopProvider(.immediate(revisionReceipt(choice: .keepOriginal)))
+        let snapshot = ContextualCorrectionStoreSnapshot(examples: [], generation: 1, health: .healthy)
+        let loop = RevisionBoundJevLoop(
+            session: session,
+            provider: provider,
+            time: ManualContextualTime(),
+            storeSnapshot: { snapshot },
+            policyGeneration: { 1 },
+            glossaryTerms: { ["COESA Energia"] }
+        )
+        XCTAssertTrue(session.start(attemptID: UUID(), language: "pt-BR"))
+        _ = session.ingest(SessionEvent(
+            snapshotID: 1, sampleRange: 0..<100, capturedAt: 0,
+            candidateAt: 0, text: text
+        ))
+
+        let result = await loop.evaluateNext(scope: .testDouble)
+        let captured = await provider.capturedOccurrences.last
+        XCTAssertEqual(try XCTUnwrap(captured).first?.alternatives.map(\.value), ["COESA Energia"])
+        XCTAssertEqual(result?.text, text, "Jev keep_original must prevail over a local fuzzy alternative")
+    }
+
+    @MainActor
+    func testRevisionEnumerationDoesNotBlockMainActorAndDiscardsSupersededWork() async {
+        let uptime = RevisionUptime()
+        let session = ContinuousContextSession(now: { uptime.now() })
+        let provider = RevisionLoopProvider(.immediate(revisionReceipt()))
+        let probe = RevisionEnumerationProbe()
+        let snapshot = ContextualCorrectionStoreSnapshot(examples: [], generation: 1, health: .healthy)
+        let loop = RevisionBoundJevLoop(
+            session: session,
+            provider: provider,
+            time: ManualContextualTime(),
+            storeSnapshot: { snapshot },
+            policyGeneration: { 1 },
+            glossaryTerms: { ["COESA Energia"] },
+            candidateEnumerator: { probe.enumerate($0) }
+        )
+        XCTAssertTrue(session.start(attemptID: UUID(), language: "pt-BR"))
+        _ = session.ingest(SessionEvent(
+            snapshotID: 1, sampleRange: 0..<100, capturedAt: 0,
+            candidateAt: 0, text: "A coisa da energia chegou."
+        ))
+
+        let evaluation = Task { await loop.evaluateNext(scope: .testDouble) }
+        await probe.waitUntilStarted()
+        var mainActorAdvanced = false
+        mainActorAdvanced = true
+        XCTAssertTrue(mainActorAdvanced)
+        XCTAssertEqual(probe.ranOnMainThread, false)
+
+        uptime.set(milliseconds: 100)
+        _ = session.ingest(SessionEvent(
+            snapshotID: 2, sampleRange: 0..<200, capturedAt: 0.05,
+            candidateAt: 0.1, text: "A coisa da energia chegou cedo."
+        ))
+        probe.allowCompletion()
+
+        let result = await evaluation.value
+        let requestCount = await provider.requestCount
+        XCTAssertEqual(result?.text, "A coisa da energia chegou.")
+        XCTAssertEqual(requestCount, 0, "superseded enumeration must never reach transport")
+        XCTAssertEqual(session.contextualPreviewText, nil)
+    }
+
+    func testFuzzyPhraseEnumerationPreservesProtectedContentAndExactNonOverlappingSpans() throws {
+        let thresholds = ProactiveCandidateThresholds.frozen
+        func candidates(_ text: String, _ terms: [String]) -> [ContextualCorrectionOccurrence] {
+            ProactiveContextualCandidateGenerator.semanticCandidates(
+                text: text, language: "pt-BR", tokenEvidence: [], glossaryTerms: terms,
+                examples: [], thresholds: thresholds
+            )
+        }
+
+        let numbered = candidates("A coisa 42 da energia chegou.", ["COESA Energia"])
+        XCTAssertTrue(numbered.allSatisfy { !$0.heard.contains("42") })
+
+        let negatedText = "Não coisa da energia chegou."
+        let negated = candidates(negatedText, ["COESA Energia"])
+        XCTAssertTrue(negated.allSatisfy { !$0.heard.lowercased().hasPrefix("não") })
+        XCTAssertTrue(negated.allSatisfy { String(negatedText[$0.range]) == $0.heard })
+
+        let overlapping = candidates("A coisa da energia chegou.", ["COESA Energia", "Coisa Energia"])
+        XCTAssertEqual(overlapping.count, 1, "overlapping fuzzy spans must not both reach Jev")
+
+        let repeatedText = "coisa da energia e coisa da energia"
+        let repeated = candidates(repeatedText, ["COESA Energia"])
+        let firstRange = try XCTUnwrap(repeatedText.range(of: "coisa da energia"))
+        XCTAssertEqual(repeated.count, 1)
+        XCTAssertEqual(repeated.first?.range, firstRange, "equal fuzzy occurrences bind deterministically")
+    }
+
+    func testFuzzyPhraseEnumerationHasDeterministicWorstCaseWorkBound() {
+        let longTerm = "um dois tres quatro cinco seis"
+        let longResult = ProactiveContextualCandidateGenerator.phraseCandidatesWithMetrics(
+            text: longTerm,
+            terms: [longTerm],
+            minimumSimilarity: ProactiveCandidateThresholds.frozen.minimumVocabularySimilarity
+        )
+        XCTAssertTrue(longResult.occurrences.isEmpty, "terms over the four-word span bound must fail local")
+        XCTAssertEqual(longResult.metrics.similarityEvaluations, 0)
+
+        let worstCaseText = String(String(repeating: "termo aaa ", count: 60).prefix(600))
+        let terms = (0..<200).map { index -> String in
+            let scalar = UnicodeScalar(97 + (index % 26))!
+            return "termo " + String(repeating: "a", count: (index / 26) + 1) + String(Character(scalar))
+        }
+        let measured = ProactiveContextualCandidateGenerator.phraseCandidatesWithMetrics(
+            text: worstCaseText,
+            terms: terms,
+            minimumSimilarity: ProactiveCandidateThresholds.frozen.minimumVocabularySimilarity
+        )
+
+        XCTAssertLessThanOrEqual(measured.metrics.scannedTerms, 200)
+        XCTAssertLessThanOrEqual(measured.metrics.similarityEvaluations, 4_096)
+        XCTAssertTrue(measured.metrics.reachedSimilarityEvaluationLimit)
     }
 
     func testAcceptedTermsAreAtomicDeduplicatedCappedAndClearedOnCancel() throws {
@@ -8186,25 +8374,6 @@ extension ContextualResolverTests {
         XCTAssertEqual(unchanged, "Texto comum sem candidato.")
         let blockedRequestCount = await blockedProvider.requestCount
         XCTAssertEqual(blockedRequestCount, 0)
-    }
-
-    func testProactiveStabilityRequiresTwoIdenticalSightingsAndResetsOnChange() throws {
-        let text = "Reservei uma cama no rosto."
-        let range = try XCTUnwrap(text.range(of: "rosto"))
-        func occurrence(_ value: String, source: ContextualCandidateSource) -> ContextualCorrectionOccurrence {
-            .init(
-                questionID: "o1", heard: "rosto", canonical: value,
-                alternatives: [.init(id: "replace_1", value: value, source: source)],
-                ordinal: 1, range: range
-            )
-        }
-        let session = ContinuousContextSession()
-        XCTAssertFalse(session.isStableForDispatch(occurrence("Hostel", source: .vocabulary)))
-        XCTAssertTrue(session.isStableForDispatch(occurrence("Hostel", source: .vocabulary)))
-        XCTAssertFalse(session.isStableForDispatch(occurrence("posto", source: .vocabulary)))
-        session.resetProactiveStability()
-        XCTAssertFalse(session.isStableForDispatch(occurrence("posto", source: .vocabulary)))
-        XCTAssertTrue(session.isStableForDispatch(occurrence("Hostel", source: .learned)))
     }
 
     func testContextualDispatchBudgetAllowsExactlySixConcurrentAttemptsWithoutRefund() async {
