@@ -36,6 +36,38 @@ private actor NoopSyntheticDiagnosticProvider: SyntheticDiagnosticDecisionProvid
     }
 }
 
+private final class DecisionsURLProtocolProbe: @unchecked Sendable {
+    private let lock = NSLock()
+    private var requests: [(path: String, timeout: TimeInterval)] = []
+
+    func reset() { lock.withLock { requests = [] } }
+    func record(_ request: URLRequest) {
+        lock.withLock { requests.append((request.url!.lastPathComponent, request.timeoutInterval)) }
+    }
+    func snapshot() -> [String: TimeInterval] {
+        lock.withLock { Dictionary(uniqueKeysWithValues: requests) }
+    }
+}
+
+private final class DecisionsURLProtocolStub: URLProtocol {
+    static let probe = DecisionsURLProtocolProbe()
+
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+    override func startLoading() {
+        Self.probe.record(request)
+        let response = HTTPURLResponse(
+            url: request.url!, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: nil
+        )!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Data(request.url!.lastPathComponent.utf8))
+        client?.urlProtocolDidFinishLoading(self)
+    }
+
+    override func stopLoading() { }
+}
+
 @MainActor
 private final class TestSettingsComposition {
     let store: ContextualCorrectionStore
@@ -5634,6 +5666,47 @@ final class ContextualTransportCorpusTests: XCTestCase {
         XCTAssertEqual(new.snapshot(), .init(acceptedBytes: 3, queuedChunkCount: 1, cancelCount: 0))
         XCTAssertEqual(oldCancellations.read(), 1)
         XCTAssertEqual(newCancellations.read(), 0)
+    }
+
+    func testURLSessionTransportReusesSecureSessionWithPerRequestDeadlines() async throws {
+        DecisionsURLProtocolStub.probe.reset()
+        let time = ManualContextualTime()
+        let configuration = URLSessionDecisionsStreamingTransport.secureConfiguration()
+        XCTAssertNil(configuration.urlCache)
+        XCTAssertNil(configuration.httpCookieStorage)
+        XCTAssertNil(configuration.urlCredentialStorage)
+        XCTAssertFalse(configuration.httpShouldSetCookies)
+        configuration.protocolClasses = [DecisionsURLProtocolStub.self]
+        let sessionCreations = LockedInteger()
+        let transport = URLSessionDecisionsStreamingTransport(
+            time: time,
+            configuration: configuration,
+            sessionFactory: { configuration, delegate in
+                sessionCreations.increment()
+                return URLSession(
+                    configuration: configuration, delegate: delegate, delegateQueue: nil
+                )
+            }
+        )
+
+        func response(path: String, seconds: Int) async throws -> String {
+            let stream = try await transport.open(
+                URLRequest(url: URL(string: "https://local.invalid/\(path)")!),
+                maximumResponseBytes: 8,
+                deadline: .init(offset: .seconds(seconds))
+            )
+            var body = Data()
+            while let chunk = try await stream.nextChunk() { body.append(chunk) }
+            return String(decoding: body, as: UTF8.self)
+        }
+
+        async let first = response(path: "first", seconds: 1)
+        async let second = response(path: "second", seconds: 2)
+        let responses = try await [first, second]
+
+        XCTAssertEqual(responses, ["first", "second"])
+        XCTAssertEqual(sessionCreations.read(), 1)
+        XCTAssertEqual(DecisionsURLProtocolStub.probe.snapshot(), ["first": 1, "second": 2])
     }
 
     func testRevisionCandidateValidationProtectsNumbersNegationsAndIdentifiers() {
