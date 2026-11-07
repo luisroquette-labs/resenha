@@ -1,0 +1,44 @@
+name: Swift preflight
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/ci.yml'
+      - '.gitmodules'
+      - 'Package.swift'
+      - 'project.yml'
+      - 'Config/**'
+      - 'Frameworks/**'
+      - 'Resources/**'
+      - 'Sources/**'
+      - 'Tests/**'
+      - 'Vendor/**'
+      - 'WhisperKey.xcodeproj/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: swift-preflight-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: macos-15
+    timeout-minutes: 15
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - name: Run canonical Swift preflight
+        run: |
+          xcodebuild \
+            -project WhisperKey.xcodeproj \
+            -scheme WhisperKey \
+            -destination 'platform=macOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO test
