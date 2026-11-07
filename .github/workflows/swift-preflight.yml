@@ -5,6 +5,10 @@ on:
     paths:
       - '.github/workflows/swift-preflight.yml'
       - 'Package.swift'
+      - 'project.yml'
+      - 'Config/**'
+      - 'Frameworks/**'
+      - 'Resources/**'
       - 'Sources/**'
       - 'Tests/**'
       - 'WhisperKey.xcodeproj/**'
@@ -20,12 +24,15 @@ jobs:
   test:
     runs-on: macos-15
     timeout-minutes: 15
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Run canonical Swift preflight
-        run: >-
-          xcodebuild test -quiet
-          -project WhisperKey.xcodeproj
-          -scheme WhisperKey
-          -destination 'platform=macOS'
+        run: |
+          xcodebuild \
+            -project WhisperKey.xcodeproj \
+            -scheme WhisperKey \
+            -destination 'platform=macOS' \
+            -derivedDataPath build test
