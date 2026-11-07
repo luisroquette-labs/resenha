@@ -1944,10 +1944,13 @@ final class WhisperKeyTests: XCTestCase {
 
     @MainActor
     func testFeedbackMenuOldActionsAndRoutineStatusCannotChangeCurrentEditor() throws {
+        let suiteName = "ResenhaFeedbackMenuTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
         let app = AppDelegate()
         app.observeCoordinator(DictationCoordinator(permissions: PermissionService(), panel: app.panel))
         let menu = NativeMenuController(delegate: app)
-        menu.configure()
+        menu.configure(defaults: defaults)
         let original = UUID()
         app.panel.offerFeedback(.init(id: original, targetApplication: nil, text: "Transcrição concluída.", language: .portuguese))
         menu.updateFeedback(approvalToken: app.panel.approvalActionToken, correctionToken: app.panel.correctionActionToken)
