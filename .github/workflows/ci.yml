@@ -3,7 +3,7 @@ name: Swift preflight
 on:
   pull_request:
     paths:
-      - '.github/workflows/swift-preflight.yml'
+      - '.github/workflows/ci.yml'
       - '.gitmodules'
       - 'Package.swift'
       - 'project.yml'
