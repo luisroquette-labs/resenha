@@ -40,4 +40,5 @@ jobs:
             -project WhisperKey.xcodeproj \
             -scheme WhisperKey \
             -destination 'platform=macOS' \
-            -derivedDataPath build test
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO test
