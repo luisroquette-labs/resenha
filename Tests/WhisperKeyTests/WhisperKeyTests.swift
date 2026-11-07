@@ -944,10 +944,17 @@ final class WhisperKeyTests: XCTestCase {
         let suiteName = "ResenhaLFRToolsTests.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
+        let app = AppDelegate()
+        let menu = NativeMenuController(delegate: app)
 
         XCTAssertTrue(NativeMenuController.shouldShowStatusItem(defaults: defaults))
+        menu.configure(defaults: defaults)
+        XCTAssertTrue(menu.hasStatusItem)
+
         defaults.set(true, forKey: NativeMenuController.lfrToolsHidesMenuBarIconKey)
         XCTAssertFalse(NativeMenuController.shouldShowStatusItem(defaults: defaults))
+        menu.synchronizeLFRToolsIntegration(defaults: defaults)
+        XCTAssertFalse(menu.hasStatusItem)
     }
 
     func testStaleAudioCleanupKeepsFreshAndUnrelatedFiles() throws {
