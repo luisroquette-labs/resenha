@@ -940,20 +940,16 @@ final class WhisperKeyTests: XCTestCase {
     }
 
     @MainActor
-    func testLFRToolsIntegrationCanHideOnlyTheResenhaStatusItem() throws {
-        let suiteName = "ResenhaLFRToolsTests.\(UUID().uuidString)"
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
-        defer { defaults.removePersistentDomain(forName: suiteName) }
+    func testLFRToolsIntegrationCanHideOnlyTheResenhaStatusItem() {
         let app = AppDelegate()
         let menu = NativeMenuController(delegate: app)
 
-        XCTAssertTrue(NativeMenuController.shouldShowStatusItem(defaults: defaults))
-        menu.configure(defaults: defaults)
+        XCTAssertTrue(NativeMenuController.shouldShowStatusItem(lfrToolsInstalled: false))
+        XCTAssertFalse(NativeMenuController.shouldShowStatusItem(lfrToolsInstalled: true))
+        menu.configure(lfrToolsInstalled: false)
         XCTAssertTrue(menu.hasStatusItem)
 
-        defaults.set(true, forKey: NativeMenuController.lfrToolsHidesMenuBarIconKey)
-        XCTAssertFalse(NativeMenuController.shouldShowStatusItem(defaults: defaults))
-        menu.synchronizeLFRToolsIntegration(defaults: defaults)
+        menu.synchronizeLFRToolsIntegration()
         XCTAssertFalse(menu.hasStatusItem)
     }
 
@@ -1950,7 +1946,7 @@ final class WhisperKeyTests: XCTestCase {
         let app = AppDelegate()
         app.observeCoordinator(DictationCoordinator(permissions: PermissionService(), panel: app.panel))
         let menu = NativeMenuController(delegate: app)
-        menu.configure(defaults: defaults)
+        menu.configure(lfrToolsInstalled: false)
         let original = UUID()
         app.panel.offerFeedback(.init(id: original, targetApplication: nil, text: "Transcrição concluída.", language: .portuguese))
         menu.updateFeedback(approvalToken: app.panel.approvalActionToken, correctionToken: app.panel.correctionActionToken)

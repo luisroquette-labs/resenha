@@ -27,7 +27,7 @@ enum ResenhaBrand {
 
 @MainActor
 final class NativeMenuController {
-    static let lfrToolsHidesMenuBarIconKey = "resenha.lfrToolsHidesMenuBarIcon"
+    static let lfrToolsBundleIdentifier = "com.luisroquette.ThinQMenuBar"
     static let lfrToolsHideStatusItemNotification = Notification.Name("br.com.luisroquette.Resenha.lfrToolsHideStatusItem")
 
     private weak var delegate: AppDelegate?
@@ -65,8 +65,10 @@ final class NativeMenuController {
         }
     }
 
-    static func shouldShowStatusItem(defaults: UserDefaults = .standard) -> Bool {
-        !defaults.bool(forKey: lfrToolsHidesMenuBarIconKey)
+    static func shouldShowStatusItem(lfrToolsInstalled: Bool? = nil) -> Bool {
+        !(lfrToolsInstalled ?? (NSWorkspace.shared.urlForApplication(
+            withBundleIdentifier: lfrToolsBundleIdentifier
+        ) != nil))
     }
 
     func update(_ presentation: MenuStatusPresentation, isRequestingPermission: Bool) {
@@ -103,8 +105,8 @@ final class NativeMenuController {
         renderedSnapshot = nil
     }
 
-    func configure(defaults: UserDefaults = .standard) {
-        guard statusItem == nil, Self.shouldShowStatusItem(defaults: defaults) else { return }
+    func configure(lfrToolsInstalled: Bool? = nil) {
+        guard statusItem == nil, Self.shouldShowStatusItem(lfrToolsInstalled: lfrToolsInstalled) else { return }
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         statusItem.button?.image = ResenhaBrand.menuBarImage()
         let menu = NSMenu()
@@ -159,12 +161,8 @@ final class NativeMenuController {
         statusItem.menu = menu
     }
 
-    func synchronizeLFRToolsIntegration(defaults: UserDefaults = .standard) {
-        if Self.shouldShowStatusItem(defaults: defaults) {
-            configure(defaults: defaults)
-        } else {
-            hideStatusItem()
-        }
+    func synchronizeLFRToolsIntegration() {
+        hideStatusItem()
     }
 
     var hasStatusItem: Bool { statusItem != nil }
