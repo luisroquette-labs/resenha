@@ -939,6 +939,17 @@ final class WhisperKeyTests: XCTestCase {
         window.orderOut(nil)
     }
 
+    @MainActor
+    func testLFRToolsIntegrationCanHideOnlyTheResenhaStatusItem() throws {
+        let suiteName = "ResenhaLFRToolsTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        XCTAssertTrue(NativeMenuController.shouldShowStatusItem(defaults: defaults))
+        defaults.set(true, forKey: NativeMenuController.lfrToolsHidesMenuBarIconKey)
+        XCTAssertFalse(NativeMenuController.shouldShowStatusItem(defaults: defaults))
+    }
+
     func testStaleAudioCleanupKeepsFreshAndUnrelatedFiles() throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("ResenhaAudioCleanupTests-\(UUID().uuidString)", isDirectory: true)

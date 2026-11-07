@@ -27,6 +27,8 @@ enum ResenhaBrand {
 
 @MainActor
 final class NativeMenuController {
+    static let lfrToolsHidesMenuBarIconKey = "resenha.lfrToolsHidesMenuBarIcon"
+
     private weak var delegate: AppDelegate?
     private var statusItem: NSStatusItem!
     private var statusMenuItem: NSMenuItem!
@@ -45,6 +47,10 @@ final class NativeMenuController {
     private var settingsNavigationFailures: Set<RequiredPermission> = []
 
     init(delegate: AppDelegate) { self.delegate = delegate }
+
+    static func shouldShowStatusItem(defaults: UserDefaults = .standard) -> Bool {
+        !defaults.bool(forKey: lfrToolsHidesMenuBarIconKey)
+    }
 
     func update(_ presentation: MenuStatusPresentation, isRequestingPermission: Bool) {
         let snapshot = presentation.snapshot
@@ -81,6 +87,7 @@ final class NativeMenuController {
     }
 
     func configure() {
+        guard Self.shouldShowStatusItem() else { return }
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         statusItem.button?.image = ResenhaBrand.menuBarImage()
         let menu = NSMenu()
