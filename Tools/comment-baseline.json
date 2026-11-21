@@ -11,7 +11,7 @@
   "Scripts/windows-docs.test.mjs": 1,
   "Tests/WhisperKeyTests/WhisperKeyTests.swift": 12,
   "Tools/site-audit/audit.mjs": 5,
-  "Windows/Directory.Packages.props": 1,
+  "Windows/Directory.Packages.props": 3,
   "Windows/Resenha.Core.Tests/ShortcutTests.cs": 5,
   "Windows/Resenha.Core.Tests/TestDoubles.cs": 2,
   "Windows/Resenha.Core/AudioPolicy.cs": 2,

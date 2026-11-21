@@ -12,6 +12,10 @@ FILES = subprocess.check_output(["git", "ls-files", "--cached", "--others", "--e
 counts = {}
 
 
+def comment_lines(text, start, end):
+    return [start] + [i + 1 for i in range(start, end - 1) if text[i] == "\n"]
+
+
 def slash_comments(text, style):
     found = []
     pairs = {"(": ")", "[": "]", "{": "}"}
@@ -94,7 +98,7 @@ def slash_comments(text, style):
                 i = len(text) if end < 0 else end + 1
                 continue
             if text.startswith("/*", i):
-                found.append(i)
+                start = i
                 depth = 1
                 i += 2
                 while i < len(text) and depth:
@@ -106,6 +110,7 @@ def slash_comments(text, style):
                         i += 2
                     else:
                         i += 1
+                found.extend(comment_lines(text, start, i))
                 continue
             if style == "js" and char == "/" and (
                 previous in "=([{:,;!?&|"
@@ -162,6 +167,7 @@ assert not slash_comments('var value = """https://example.test/a//b""";', "cshar
 assert not slash_comments('var value = @"a"" // literal";', "csharp")
 assert slash_comments('var value = """text"""; // remove', "csharp")
 assert slash_comments('a { color: red; /* remove */ }', "css")
+assert len(slash_comments('/* one\n two */', "cpp")) == 2
 assert not hash_comments('#!/usr/bin/env bash\necho "# literal"\n')
 assert not hash_comments('echo "\\\" # literal"\n')
 assert not hash_comments('echo foo\\ #literal\n')
@@ -189,7 +195,7 @@ for name in FILES:
     elif path.suffix == ".css":
         offsets = slash_comments(text, "css")
     elif path.suffix in {".html", ".svg", ".xml", ".xaml", ".plist", ".csproj", ".props", ".entitlements", ".xcprivacy"}:
-        offsets = [match.start() for match in re.finditer(r"<!--[\s\S]*?-->", text)]
+        offsets = [offset for match in re.finditer(r"<!--[\s\S]*?-->", text) for offset in comment_lines(text, match.start(), match.end())]
         for block in re.finditer(r"<(style|script)\b[^>]*>(.*?)</\1>", text, re.I | re.S):
             style = "css" if block.group(1).lower() == "style" else "js"
             start = block.start(2)
