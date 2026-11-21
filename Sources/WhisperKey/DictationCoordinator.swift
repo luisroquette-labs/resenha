@@ -395,7 +395,6 @@ final class DictationCoordinator {
         if showsHUD() { onCompleted?(completion) }
     }
 
-    // Called only after insertStaged returns successfully; identity is checked after its suspension.
     func completeInsertion(
         attemptID: UUID,
         isCancelled: Bool,

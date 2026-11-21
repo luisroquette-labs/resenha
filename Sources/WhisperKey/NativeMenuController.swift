@@ -181,7 +181,6 @@ final class NativeMenuController {
     private func feedbackItem(_ old: NSMenuItem?, token: UUID?) -> NSMenuItem? {
         guard let old, let menu = old.menu else { return old }
         guard old.representedObject as? UUID != token else { return old }
-        // Replace the item so an already queued action keeps its original session token.
         let item = NSMenuItem(title: old.title, action: old.action, keyEquivalent: "")
         item.target = delegate
         item.representedObject = token
@@ -283,7 +282,6 @@ final class NativeMenuController {
         menu.addItem(NativeMenuText.item("Causa: \(error.title)"))
         if let diagnostic = error.diagnostic {
             menu.addItem(withTitle: "Diagnóstico", action: nil, keyEquivalent: "").isEnabled = false
-            // Each item fits on screen; native menu scrolling exposes the complete safe path.
             var remainder = diagnostic[...]
             while !remainder.isEmpty {
                 let end = remainder.index(remainder.startIndex, offsetBy: min(180, remainder.count))

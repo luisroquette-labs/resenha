@@ -218,7 +218,6 @@ struct FloatingStatusView: View {
     static let approveLabel = "Transcrição correta"
     static let correctLabel = "Corrigir transcrição"
     @ObservedObject var model: FloatingPanelModel
-    // Internal capture overrides; production uses the native environment values below.
     var fixtureContrast: ColorSchemeContrast? = nil
     var fixtureReduceTransparency: Bool? = nil
     var fixtureReduceMotion: Bool? = nil
@@ -434,7 +433,6 @@ struct TranscriptionCorrectionView: View {
     var isSaveEnabled: Bool
     var onSave: () -> Void
     var onCancel: () -> Void
-    // Capture overrides mirror the HUD; production reads the native accessibility environment.
     var fixtureContrast: ColorSchemeContrast? = nil
     var fixtureReduceTransparency: Bool? = nil
     var fixtureReduceMotion: Bool? = nil

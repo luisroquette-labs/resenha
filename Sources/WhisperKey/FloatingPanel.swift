@@ -568,7 +568,6 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
             ? "Solte e pressione novamente para ditar"
             : "Volte ao campo de texto. Solte e pressione novamente para ditar")
         if hasFeedback {
-            // Only the recovery action remains; closing has already erased both fields.
             present(guidance, target: .standalone(nil))
         } else {
             showTemporarily(guidance)
@@ -688,7 +687,6 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
         for index in 0..<2 {
             let overlay = FeedbackTargetPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel],
                                               backing: .buffered, defer: false)
-            // A fully clear window is skipped by WindowServer mouse routing.
             overlay.backgroundColor = NSColor.black.withAlphaComponent(0.01)
             overlay.isOpaque = false
             overlay.hasShadow = false
@@ -709,8 +707,6 @@ final class FloatingPanelController: NSObject, NSWindowDelegate {
             }
             overlay.contentView = button
             feedbackTargets.append(overlay)
-            // Keep independent screen-space windows: attaching the transparent HUD's
-            // children before their first order can leave WindowServer bounds parent-relative.
             overlay.collectionBehavior = panel.collectionBehavior
         }
         positionFeedbackTargets()
