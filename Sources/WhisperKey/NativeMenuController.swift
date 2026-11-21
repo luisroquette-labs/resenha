@@ -27,7 +27,11 @@ enum ResenhaBrand {
 
 @MainActor
 final class NativeMenuController {
+    static let lfrToolsBundleIdentifier = "com.luisroquette.ThinQMenuBar"
+    static let lfrToolsHideStatusItemNotification = Notification.Name("br.com.luisroquette.Resenha.lfrToolsHideStatusItem")
+
     private weak var delegate: AppDelegate?
+    private var lfrToolsObserver: NSObjectProtocol?
     private var statusItem: NSStatusItem!
     private var statusMenuItem: NSMenuItem!
     private var permissionsMenuItem: NSMenuItem!
@@ -44,7 +48,28 @@ final class NativeMenuController {
     private var recordingStep = -1
     private var settingsNavigationFailures: Set<RequiredPermission> = []
 
-    init(delegate: AppDelegate) { self.delegate = delegate }
+    init(delegate: AppDelegate) {
+        self.delegate = delegate
+        lfrToolsObserver = DistributedNotificationCenter.default().addObserver(
+            forName: Self.lfrToolsHideStatusItemNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.hideStatusItem() }
+        }
+    }
+
+    deinit {
+        if let lfrToolsObserver {
+            DistributedNotificationCenter.default().removeObserver(lfrToolsObserver)
+        }
+    }
+
+    static func shouldShowStatusItem(lfrToolsInstalled: Bool? = nil) -> Bool {
+        !(lfrToolsInstalled ?? (NSWorkspace.shared.urlForApplication(
+            withBundleIdentifier: lfrToolsBundleIdentifier
+        ) != nil))
+    }
 
     func update(_ presentation: MenuStatusPresentation, isRequestingPermission: Bool) {
         let snapshot = presentation.snapshot
@@ -80,7 +105,8 @@ final class NativeMenuController {
         renderedSnapshot = nil
     }
 
-    func configure() {
+    func configure(lfrToolsInstalled: Bool? = nil) {
+        guard statusItem == nil, Self.shouldShowStatusItem(lfrToolsInstalled: lfrToolsInstalled) else { return }
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         statusItem.button?.image = ResenhaBrand.menuBarImage()
         let menu = NSMenu()
@@ -133,6 +159,18 @@ final class NativeMenuController {
         quitItem.target = delegate
         quitItem.image = menuSymbol("power")
         statusItem.menu = menu
+    }
+
+    func synchronizeLFRToolsIntegration() {
+        hideStatusItem()
+    }
+
+    var hasStatusItem: Bool { statusItem != nil }
+
+    private func hideStatusItem() {
+        guard let statusItem else { return }
+        NSStatusBar.system.removeStatusItem(statusItem)
+        self.statusItem = nil
     }
 
     func updateFeedback(approvalToken: UUID?, correctionToken: UUID?) {

@@ -939,6 +939,20 @@ final class WhisperKeyTests: XCTestCase {
         window.orderOut(nil)
     }
 
+    @MainActor
+    func testLFRToolsIntegrationCanHideOnlyTheResenhaStatusItem() {
+        let app = AppDelegate()
+        let menu = NativeMenuController(delegate: app)
+
+        XCTAssertTrue(NativeMenuController.shouldShowStatusItem(lfrToolsInstalled: false))
+        XCTAssertFalse(NativeMenuController.shouldShowStatusItem(lfrToolsInstalled: true))
+        menu.configure(lfrToolsInstalled: false)
+        XCTAssertTrue(menu.hasStatusItem)
+
+        menu.synchronizeLFRToolsIntegration()
+        XCTAssertFalse(menu.hasStatusItem)
+    }
+
     func testStaleAudioCleanupKeepsFreshAndUnrelatedFiles() throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("ResenhaAudioCleanupTests-\(UUID().uuidString)", isDirectory: true)
@@ -1926,10 +1940,13 @@ final class WhisperKeyTests: XCTestCase {
 
     @MainActor
     func testFeedbackMenuOldActionsAndRoutineStatusCannotChangeCurrentEditor() throws {
+        let suiteName = "ResenhaFeedbackMenuTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
         let app = AppDelegate()
         app.observeCoordinator(DictationCoordinator(permissions: PermissionService(), panel: app.panel))
         let menu = NativeMenuController(delegate: app)
-        menu.configure()
+        menu.configure(lfrToolsInstalled: false)
         let original = UUID()
         app.panel.offerFeedback(.init(id: original, targetApplication: nil, text: "Transcrição concluída.", language: .portuguese))
         menu.updateFeedback(approvalToken: app.panel.approvalActionToken, correctionToken: app.panel.correctionActionToken)
