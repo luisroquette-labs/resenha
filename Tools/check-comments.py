@@ -159,6 +159,73 @@ def hash_comments(text):
     return found
 
 
+def powershell_comments(text):
+    found = []
+    quote = None
+    i = 0
+    while i < len(text):
+        if quote:
+            if text[i] == "`" and quote == '"':
+                i += 2
+            elif text[i] == quote:
+                if quote == "'" and text.startswith("''", i):
+                    i += 2
+                else:
+                    quote = None
+                    i += 1
+            else:
+                i += 1
+        elif text.startswith("<#", i):
+            end = text.find("#>", i + 2)
+            end = len(text) if end < 0 else end + 2
+            found.extend(comment_lines(text, i, end))
+            i = end
+        elif text[i] == "#":
+            found.append(i)
+            end = text.find("\n", i)
+            i = len(text) if end < 0 else end + 1
+        elif text[i] in ("'", '"'):
+            quote = text[i]
+            i += 1
+        else:
+            i += 1
+    return found
+
+
+def inno_comments(text):
+    found = []
+    in_code = False
+    offset = 0
+    for line in text.splitlines(keepends=True):
+        if re.match(r"\s*\[Code\]\s*$", line, re.I):
+            in_code = True
+        elif re.match(r"\s*\[[^]]+\]\s*$", line):
+            in_code = False
+        if re.match(r"\s*;", line):
+            found.append(offset + len(line) - len(line.lstrip()))
+        offset += len(line)
+    if in_code or "[Code]" in text:
+        code = re.split(r"(?im)^\s*\[Code\]\s*$", text, maxsplit=1)[-1]
+        code_start = len(text) - len(code)
+        found.extend(code_start + offset for offset in slash_comments(code, "cpp"))
+        masked = list(code)
+        quote = None
+        for i, char in enumerate(code):
+            if quote:
+                if char == quote:
+                    quote = None
+                if char != "\n":
+                    masked[i] = " "
+            elif char in ("'", '"'):
+                quote = char
+                masked[i] = " "
+        plain = "".join(masked)
+        for pattern in (r"\(\*[\s\S]*?\*\)", r"\{[^{}]*\}"):
+            for match in re.finditer(pattern, plain):
+                found.extend(code_start + offset for offset in comment_lines(plain, match.start(), match.end()))
+    return found
+
+
 assert not slash_comments('auto url = "https://example.test/a//b";', "cpp")
 assert slash_comments('auto x = 1; // remove', "cpp")
 assert slash_comments("constexpr int n = 1'000; // remove", "cpp")
@@ -173,6 +240,13 @@ assert not hash_comments('echo "\\\" # literal"\n')
 assert not hash_comments('echo foo\\ #literal\n')
 assert hash_comments('echo foo\\  # real comment\n')
 assert hash_comments('# remove\n')
+assert powershell_comments('<#new comment#>\n')
+assert len(powershell_comments('<#old\nnew#>')) == 2
+assert not powershell_comments('"<# literal #>"\n')
+assert powershell_comments('Write-Output 1 # remove\n')
+assert inno_comments('; remove\n[Code]\n{ reason }\n')
+assert inno_comments('[Code]\n(* reason *)\n')
+assert not inno_comments('[Code]\nValue := \'{app}\';\n')
 
 
 for name in FILES:
@@ -181,7 +255,7 @@ for name in FILES:
     path = ROOT / name
     if not path.is_file():
         continue
-    text = path.read_text() if path.suffix in {".swift", ".ino", ".h", ".hpp", ".c", ".cpp", ".cs", ".js", ".mjs", ".css", ".html", ".py", ".sh", ".ps1", ".yml", ".yaml", ".svg", ".xml", ".xaml", ".plist", ".csproj", ".props", ".entitlements", ".xcprivacy", ".modulemap"} else ""
+    text = path.read_text() if path.suffix in {".swift", ".ino", ".h", ".hpp", ".c", ".cpp", ".cs", ".js", ".mjs", ".css", ".html", ".py", ".sh", ".ps1", ".yml", ".yaml", ".svg", ".xml", ".xaml", ".plist", ".csproj", ".props", ".entitlements", ".xcprivacy", ".modulemap", ".iss", ".manifest"} or name.endswith(".xml.template") else ""
     if path.suffix == ".swift":
         offsets = slash_comments(text, "swift")
         if name == "Package.swift" and re.match(r"// swift-tools-version: \d+\.\d+(?:\.\d+)?(?:\n|$)", text):
@@ -194,7 +268,7 @@ for name in FILES:
         offsets = slash_comments(text, "js")
     elif path.suffix == ".css":
         offsets = slash_comments(text, "css")
-    elif path.suffix in {".html", ".svg", ".xml", ".xaml", ".plist", ".csproj", ".props", ".entitlements", ".xcprivacy"}:
+    elif path.suffix in {".html", ".svg", ".xml", ".xaml", ".plist", ".csproj", ".props", ".entitlements", ".xcprivacy", ".manifest"} or name.endswith(".xml.template"):
         offsets = [offset for match in re.finditer(r"<!--[\s\S]*?-->", text) for offset in comment_lines(text, match.start(), match.end())]
         for block in re.finditer(r"<(style|script)\b[^>]*>(.*?)</\1>", text, re.I | re.S):
             style = "css" if block.group(1).lower() == "style" else "js"
@@ -202,7 +276,11 @@ for name in FILES:
             offsets.extend(start + offset for offset in slash_comments(block.group(2), style))
     elif path.suffix == ".py":
         offsets = [token.start[0] for token in tokenize.generate_tokens(io.StringIO(text).readline) if token.type == tokenize.COMMENT and not (token.start[0] == 1 and token.string.startswith("#!"))]
-    elif path.suffix in {".sh", ".ps1", ".yml", ".yaml"}:
+    elif path.suffix == ".ps1":
+        offsets = powershell_comments(text)
+    elif path.suffix == ".iss":
+        offsets = inno_comments(text)
+    elif path.suffix in {".sh", ".yml", ".yaml"}:
         offsets = hash_comments(text)
     else:
         continue
