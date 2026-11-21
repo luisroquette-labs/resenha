@@ -1,19 +1,8 @@
 name: Swift preflight
 
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/ci.yml'
-      - '.gitmodules'
-      - 'Package.swift'
-      - 'project.yml'
-      - 'Config/**'
-      - 'Frameworks/**'
-      - 'Resources/**'
-      - 'Sources/**'
-      - 'Tests/**'
-      - 'Vendor/**'
-      - 'WhisperKey.xcodeproj/**'
+  push:
+    tags: ['v*']
 
 permissions:
   contents: read
