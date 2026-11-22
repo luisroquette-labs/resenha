@@ -56,7 +56,6 @@ final class TranscriptHistory {
             try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: fileURL.path)
             return true
         } catch {
-            // Clipboard remains the primary recovery path; transcript content is never logged.
             return false
         }
     }

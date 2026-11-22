@@ -179,7 +179,6 @@ struct WhisperTranscriber: Sendable {
         )
     }
 
-    // Consumes the captured WAV; callers that need a reusable fixture must pass a copy.
     func transcribe(
         audioURL: URL,
         language: TranscriptionLanguage = .portuguese,
@@ -740,7 +739,6 @@ final class EmbeddedWhisperEngine: @unchecked Sendable {
                 }
             }
         }
-        // whisper.cpp uses -6/-8/-9 for encode/decode failure and abort alike.
         try control.check()
         guard status == 0 else { throw WhisperError.failed(status, "embedded whisper.cpp inference failed") }
 
@@ -870,14 +868,12 @@ struct TranscriptionGlossary: Equatable, Sendable {
     static let maximumCorrectionFieldBytes = maximumCorrectionFieldCharacters * 16
 
     static func acceptsCorrectionField(_ text: String) -> Bool {
-        // Bound bytes first: a single grapheme can contain an unbounded combining sequence.
         text.utf8.prefix(maximumCorrectionFieldBytes + 1).count <= maximumCorrectionFieldBytes
             && text.prefix(maximumCorrectionFieldCharacters + 1).count <= maximumCorrectionFieldCharacters
     }
 
     static func feedbackVocabularyCandidate(heard: String, canonical: String, existingText: String) -> CorrectionCandidate {
         guard acceptsCorrectionField(heard), acceptsCorrectionField(canonical) else { return .invalid(.lineLimit) }
-        // Check before trimming so a pasted trailing newline cannot change the rule grammar.
         guard ![heard, canonical].contains(where: {
             $0.rangeOfCharacter(from: .newlines) != nil || $0.contains("=")
         }) else { return .invalid(.invalidCharacters) }
@@ -898,7 +894,6 @@ struct TranscriptionGlossary: Equatable, Sendable {
         for rawLine in rawLines {
             let parsed = Self(text: rawLine)
             if !parsed.terms.isEmpty { acceptedCount += 1 }
-            // Inspect unbounded lines too: an ignored or truncated conflict must remain visible.
             let parts = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
                 .split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
                 .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
