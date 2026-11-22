@@ -50,7 +50,6 @@ export function resolveDestination(channel, record) {
   let url;
   try { url = new URL(raw); } catch { return inactive(); }
   if (url.protocol !== 'https:' || url.username || url.password || url.port || url.search || url.hash) return inactive();
-  // Encoded separators and dot segments are not authored release destinations.
   if (/%|(?:^|\/)\.{1,2}(?:\/|$)/u.test(raw.slice(raw.indexOf('://') + 3))) return inactive();
   const repo = '[A-Za-z0-9_-]+/[A-Za-z0-9_.-]+';
   const permitted = channel === 'source'
