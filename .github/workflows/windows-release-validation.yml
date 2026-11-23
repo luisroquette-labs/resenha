@@ -52,7 +52,6 @@ concurrency:
 jobs:
   native-validation:
     if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'windows-release-validation'
-    # v143 is the committed native toolchain; windows-2025 moved to VS 2026.
     runs-on: windows-2022
     timeout-minutes: 35
     steps:

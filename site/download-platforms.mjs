@@ -6,7 +6,6 @@ export const DOWNLOAD_PLATFORMS = Object.freeze({
     redirectUrl: 'https://cfgauss.com.br/t/formredirect-0a702231-3472-412f-8e3b-00ecfa481100',
     embedOrigin: 'https://cfgauss.com.br', artifactExtension: '.dmg',
   }),
-  // Populated only from a separately provisioned and verified CF Gauss form.
   windows: null,
 });
 

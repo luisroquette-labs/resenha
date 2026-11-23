@@ -1,13 +1,12 @@
 {
   ".github/workflows/site-tests.yml": 1,
   ".github/workflows/windows-contracts.yml": 1,
-  ".github/workflows/windows-release-validation.yml": 6,
+  ".github/workflows/windows-release-validation.yml": 5,
   "AppStore/brand/lockup/resenha-lockup-ink.svg": 3,
   "Scripts/export-app-store-screenshots.sh": 4,
   "Scripts/fixtures/windows-release/synthetic-fixture.mjs": 2,
   "Scripts/release-install.test.sh": 3,
   "Scripts/site.test.mjs": 1,
-  "Scripts/validate-release-dmg.sh": 2,
   "Scripts/windows-docs.test.mjs": 1,
   "Tests/WhisperKeyTests/WhisperKeyTests.swift": 12,
   "Tools/site-audit/audit.mjs": 5,
@@ -32,7 +31,5 @@
   "Windows/Resenha.Platform/WhisperCliTranscriber.cs": 9,
   "Windows/Resenha.TargetBroker/FocusProbe.cs": 1,
   "docs/brand/concepts/resenha-lockup-v2.svg": 3,
-  "site/analytics.mjs": 1,
-  "site/download-platforms.mjs": 1,
-  "site/release.mjs": 1
+  "site/analytics.mjs": 1
 }
